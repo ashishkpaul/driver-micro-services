@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  driver-service:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=driver_user
+      - DB_PASSWORD=driver_password
+      - DB_NAME=driver_service
+      - VENDURE_WEBHOOK_URL=${VENDURE_WEBHOOK_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - VENDURE_WEBHOOK_SECRET=${VENDURE_WEBHOOK_SECRET}
+      - DRIVER_WEBHOOK_SECRET=${DRIVER_WEBHOOK_SECRET}
+    depends_on:
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=driver_user
+      - POSTGRES_PASSWORD=driver_password
+      - POSTGRES_DB=driver_service
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+volumes:
+  postgres_data:
