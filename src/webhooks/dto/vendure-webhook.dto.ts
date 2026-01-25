@@ -10,30 +10,30 @@ import {
 
 export class DeliveryAssignedDto {
   @IsUUID()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @IsUUID()
-  channelId: string;
+  channelId!: string;
 
   @IsUUID()
-  driverId: string;
+  driverId!: string;
 
   @IsUUID()
-  assignmentId: string;
+  assignmentId!: string;
 
   @IsString()
-  assignedAt: string;
+  assignedAt!: string;
 }
 
 export class DeliveryPickedUpDto {
   @IsUUID()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @IsUUID()
-  channelId: string;
+  channelId!: string;
 
   @IsString()
-  pickupProofUrl: string;
+  pickupProofUrl!: string;
 
   @IsOptional()
   @IsString()
@@ -42,13 +42,13 @@ export class DeliveryPickedUpDto {
 
 export class DeliveryDeliveredDto {
   @IsUUID()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @IsUUID()
-  channelId: string;
+  channelId!: string;
 
   @IsString()
-  deliveryProofUrl: string;
+  deliveryProofUrl!: string;
 
   @IsOptional()
   @IsNumber()
@@ -65,13 +65,13 @@ export class DeliveryDeliveredDto {
 
 export class DeliveryFailedDto {
   @IsUUID()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @IsUUID()
-  channelId: string;
+  channelId!: string;
 
   @IsObject()
-  failure: {
+  failure!: {
     code: 'DRIVER_REJECTED' | 'DRIVER_OFFLINE' | 'PICKUP_FAILED' | 'DELIVERY_FAILED' | 'TIMEOUT' | 'MANUAL_CANCEL';
     reason: string;
     occurredAt: string;

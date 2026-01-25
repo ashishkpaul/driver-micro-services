@@ -6,7 +6,6 @@ import { DeliveryEvent } from './entities/delivery-event.entity';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
 import { WebhooksService } from '../webhooks/webhooks.service';
-import { DeliveryAssignedDto, DeliveryPickedUpDto, DeliveryDeliveredDto, DeliveryFailedDto } from '../webhooks/dto/vendure-webhook.dto';
 
 @Injectable()
 export class DeliveriesService {

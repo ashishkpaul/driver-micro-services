@@ -16,17 +16,17 @@ import { IsNotEmpty, IsUUID, IsNumber, IsOptional, IsEnum } from 'class-validato
 @Index(['driverId'])
 export class Delivery {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
   @IsNotEmpty()
   @IsUUID()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @Column()
   @IsNotEmpty()
   @IsUUID()
-  channelId: string;
+  channelId!: string;
 
   @Column({ nullable: true })
   @IsUUID()
@@ -35,23 +35,23 @@ export class Delivery {
 
   @Column({ default: 'PENDING' })
   @IsEnum(['PENDING', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'])
-  status: 'PENDING' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
+  status!: 'PENDING' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
 
   @Column('decimal', { precision: 10, scale: 8 })
   @IsNumber()
-  pickupLat: number;
+  pickupLat!: number;
 
   @Column('decimal', { precision: 11, scale: 8 })
   @IsNumber()
-  pickupLon: number;
+  pickupLon!: number;
 
   @Column('decimal', { precision: 10, scale: 8 })
   @IsNumber()
-  dropLat: number;
+  dropLat!: number;
 
   @Column('decimal', { precision: 11, scale: 8 })
   @IsNumber()
-  dropLon: number;
+  dropLon!: number;
 
   @Column({ nullable: true })
   pickupProofUrl?: string;
@@ -78,11 +78,11 @@ export class Delivery {
   failedAt?: Date;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @OneToMany(() => DeliveryEvent, (event) => event.delivery)
-  events: DeliveryEvent[];
+  events!: DeliveryEvent[];
 }

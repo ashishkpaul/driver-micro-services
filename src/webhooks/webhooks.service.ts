@@ -38,7 +38,8 @@ export class WebhooksService {
       
       this.logger.log(`Successfully sent ${eventType} webhook for seller order ${payload.sellerOrderId}`);
     } catch (error) {
-      this.logger.error(`Failed to send ${eventType} webhook:`, error.message);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to send ${eventType} webhook:`, errorMessage);
       // In production, implement retry logic with exponential backoff
     }
   }

@@ -6,34 +6,34 @@ import { Type } from 'class-transformer';
 
 class PickupLocationDto {
   @IsNumber()
-  lat: number;
+  lat!: number;
 
   @IsNumber()
-  lon: number;
+  lon!: number;
 }
 
 class DropLocationDto {
   @IsNumber()
-  lat: number;
+  lat!: number;
 
   @IsNumber()
-  lon: number;
+  lon!: number;
 }
 
 class SellerOrderReadyPayloadDto {
   @IsUUID()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @IsUUID()
-  channelId: string;
+  channelId!: string;
 
   @ValidateNested()
   @Type(() => PickupLocationDto)
-  pickup: PickupLocationDto;
+  pickup!: PickupLocationDto;
 
   @ValidateNested()
   @Type(() => DropLocationDto)
-  drop: DropLocationDto;
+  drop!: DropLocationDto;
 }
 
 @Controller('events')
@@ -83,7 +83,7 @@ export class EventsController {
       this.logger.error(`Failed to process seller order ${payload.sellerOrderId}:`, error);
       return {
         status: 'error',
-        message: error.message,
+        message: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }

@@ -1,21 +1,28 @@
 import { Injectable } from '@nestjs/common';
-import { HealthIndicator, HealthIndicatorResult } from '@nestjs/terminus';
+import { HealthIndicatorResult } from '@nestjs/terminus';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
 @Injectable()
-export class TypeOrmHealthIndicator extends HealthIndicator {
-  constructor(@InjectDataSource() private connection: DataSource) {
-    super();
-  }
+export class TypeOrmHealthIndicator {
+  constructor(@InjectDataSource() private connection: DataSource) {}
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
       // TypeORM-safe health check
       await this.connection.manager.query('SELECT 1');
-      return this.getStatus(key, true);
+      return {
+        [key]: {
+          status: 'up',
+        },
+      };
     } catch (error) {
-      return this.getStatus(key, false, { message: error.message });
+      return {
+        [key]: {
+          status: 'down',
+          message: error instanceof Error ? error.message : String(error),
+        },
+      };
     }
   }
 }

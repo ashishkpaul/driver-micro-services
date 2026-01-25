@@ -4,19 +4,19 @@ import { IsNotEmpty, IsPhoneNumber, IsBoolean, IsOptional, IsNumber, Min, Max } 
 @Entity('drivers')
 export class Driver {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @Column({ unique: true })
   @IsPhoneNumber()
-  phone: string;
+  phone!: string;
 
   @Column({ default: true })
   @IsBoolean()
-  isActive: boolean;
+  isActive!: boolean;
 
   @Column({ nullable: true })
   @IsOptional()
@@ -34,7 +34,7 @@ export class Driver {
 
   @Index()
   @Column({ default: 'AVAILABLE' })
-  status: 'AVAILABLE' | 'BUSY' | 'OFFLINE';
+  status!: 'AVAILABLE' | 'BUSY' | 'OFFLINE';
 
   @Column({ nullable: true })
   vehicleType?: string;
@@ -43,10 +43,10 @@ export class Driver {
   vehicleNumber?: string;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @Column({ nullable: true })
   lastActiveAt?: Date;

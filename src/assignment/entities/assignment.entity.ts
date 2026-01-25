@@ -4,16 +4,16 @@ import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index } from 
 @Index(['sellerOrderId', 'driverId'])
 export class Assignment {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @Column()
-  driverId: string;
+  driverId!: string;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   // ⚠️ V1 RULE: No status, no acceptance workflow
   // Status is derived from Delivery.status

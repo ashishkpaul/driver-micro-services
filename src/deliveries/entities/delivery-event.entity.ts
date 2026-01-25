@@ -14,19 +14,19 @@ import { IsNotEmpty, IsEnum, IsOptional, IsUUID } from 'class-validator';
 @Index(['sellerOrderId'])
 export class DeliveryEvent {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
   @IsUUID()
-  deliveryId: string;
+  deliveryId!: string;
 
   @Column()
   @IsUUID()
-  sellerOrderId: string;
+  sellerOrderId!: string;
 
   @Column()
   @IsEnum(['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'])
-  eventType: 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
+  eventType!: 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
 
   @Column({ type: 'jsonb', nullable: true })
   metadata?: any;
@@ -41,8 +41,8 @@ export class DeliveryEvent {
   failureReason?: string;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @ManyToOne(() => Delivery, (delivery) => delivery.events, { onDelete: 'CASCADE' })
-  delivery: Delivery;
+  delivery!: Delivery;
 }
