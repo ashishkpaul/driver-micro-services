@@ -1,9 +1,24 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
-import { IsNotEmpty, IsPhoneNumber, IsBoolean, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from "typeorm";
+import {
+  IsNotEmpty,
+  IsPhoneNumber,
+  IsBoolean,
+  IsOptional,
+  IsNumber,
+  Min,
+  Max,
+} from "class-validator";
 
-@Entity('drivers')
+@Entity("drivers")
 export class Driver {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   @Column()
@@ -33,8 +48,8 @@ export class Driver {
   currentLon?: number;
 
   @Index()
-  @Column({ default: 'AVAILABLE' })
-  status!: 'AVAILABLE' | 'BUSY' | 'OFFLINE';
+  @Column({ default: "AVAILABLE" })
+  status!: "AVAILABLE" | "BUSY" | "OFFLINE";
 
   @Column({ nullable: true })
   vehicleType?: string;

@@ -1,8 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService, HttpHealthIndicator } from '@nestjs/terminus';
-import { TypeOrmHealthIndicator } from './typeorm.health';
+import { Controller, Get } from "@nestjs/common";
+import {
+  HealthCheck,
+  HealthCheckService,
+  HttpHealthIndicator,
+} from "@nestjs/terminus";
+import { TypeOrmHealthIndicator } from "./typeorm.health";
 
-@Controller('health')
+@Controller("health")
 export class HealthController {
   constructor(
     private health: HealthCheckService,
@@ -13,8 +17,6 @@ export class HealthController {
   @Get()
   @HealthCheck()
   check() {
-    return this.health.check([
-      () => this.db.isHealthy('database'),
-    ]);
+    return this.health.check([() => this.db.isHealthy("database")]);
   }
 }

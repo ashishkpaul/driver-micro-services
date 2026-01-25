@@ -1,9 +1,15 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  Index,
+} from "typeorm";
 
-@Entity('assignments')
-@Index(['sellerOrderId', 'driverId'])
+@Entity("assignments")
+@Index(["sellerOrderId", "driverId"])
 export class Assignment {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   @Column()

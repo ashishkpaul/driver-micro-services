@@ -1,19 +1,9 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
-  Patch, 
-  Param, 
-  Query, 
-  HttpCode, 
-  HttpStatus 
-} from '@nestjs/common';
-import { DeliveriesService } from './deliveries.service';
-import { CreateDeliveryDto } from './dto/create-delivery.dto';
-import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
+import { Controller, Get, Post, Body, Patch, Param } from "@nestjs/common";
+import { DeliveriesService } from "./deliveries.service";
+import { CreateDeliveryDto } from "./dto/create-delivery.dto";
+import { UpdateDeliveryStatusDto } from "./dto/update-delivery-status.dto";
 
-@Controller('deliveries')
+@Controller("deliveries")
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}
 
@@ -27,32 +17,36 @@ export class DeliveriesController {
     return this.deliveriesService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
+  @Get(":id")
+  findOne(@Param("id") id: string) {
     return this.deliveriesService.findOne(id);
   }
 
-  @Get('seller-order/:sellerOrderId')
-  findBySellerOrderId(@Param('sellerOrderId') sellerOrderId: string) {
+  @Get("seller-order/:sellerOrderId")
+  findBySellerOrderId(@Param("sellerOrderId") sellerOrderId: string) {
     return this.deliveriesService.findBySellerOrderId(sellerOrderId);
   }
 
-  @Get('seller-order/:sellerOrderId/history')
-  getDeliveryHistory(@Param('sellerOrderId') sellerOrderId: string) {
+  @Get("seller-order/:sellerOrderId/history")
+  getDeliveryHistory(@Param("sellerOrderId") sellerOrderId: string) {
     return this.deliveriesService.getDeliveryHistory(sellerOrderId);
   }
 
-  @Patch(':id/assign')
+  @Patch(":id/assign")
   assignDriver(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() body: { driverId: string; assignmentId: string },
   ) {
-    return this.deliveriesService.assignDriver(id, body.driverId, body.assignmentId);
+    return this.deliveriesService.assignDriver(
+      id,
+      body.driverId,
+      body.assignmentId,
+    );
   }
 
-  @Patch(':id/status')
+  @Patch(":id/status")
   updateStatus(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() updateDeliveryStatusDto: UpdateDeliveryStatusDto,
   ) {
     return this.deliveriesService.updateStatus(id, updateDeliveryStatusDto);

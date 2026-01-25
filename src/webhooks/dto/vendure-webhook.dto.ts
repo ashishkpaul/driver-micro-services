@@ -1,12 +1,10 @@
 import {
-  IsEnum,
   IsString,
   IsUUID,
   IsOptional,
   IsObject,
   IsNumber,
-} from 'class-validator';
-
+} from "class-validator";
 
 export class DeliveryAssignedDto {
   @IsUUID()
@@ -72,7 +70,13 @@ export class DeliveryFailedDto {
 
   @IsObject()
   failure!: {
-    code: 'DRIVER_REJECTED' | 'DRIVER_OFFLINE' | 'PICKUP_FAILED' | 'DELIVERY_FAILED' | 'TIMEOUT' | 'MANUAL_CANCEL';
+    code:
+      | "DRIVER_REJECTED"
+      | "DRIVER_OFFLINE"
+      | "PICKUP_FAILED"
+      | "DELIVERY_FAILED"
+      | "TIMEOUT"
+      | "MANUAL_CANCEL";
     reason: string;
     occurredAt: string;
   };

@@ -1,21 +1,27 @@
-import { 
-  Entity, 
-  Column, 
-  PrimaryGeneratedColumn, 
-  CreateDateColumn, 
-  UpdateDateColumn, 
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
   Index,
-  OneToMany 
-} from 'typeorm';
-import { DeliveryEvent } from './delivery-event.entity';
-import { IsNotEmpty, IsUUID, IsNumber, IsOptional, IsEnum } from 'class-validator';
+  OneToMany,
+} from "typeorm";
+import { DeliveryEvent } from "./delivery-event.entity";
+import {
+  IsNotEmpty,
+  IsUUID,
+  IsNumber,
+  IsOptional,
+  IsEnum,
+} from "class-validator";
 
-@Entity('deliveries')
-@Index(['sellerOrderId'])
-@Index(['status'])
-@Index(['driverId'])
+@Entity("deliveries")
+@Index(["sellerOrderId"])
+@Index(["status"])
+@Index(["driverId"])
 export class Delivery {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   @Column()
@@ -33,23 +39,38 @@ export class Delivery {
   @IsOptional()
   driverId?: string;
 
-  @Column({ default: 'PENDING' })
-  @IsEnum(['PENDING', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'])
-  status!: 'PENDING' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
+  @Column({ default: "PENDING" })
+  @IsEnum([
+    "PENDING",
+    "ASSIGNED",
+    "PICKED_UP",
+    "IN_TRANSIT",
+    "DELIVERED",
+    "FAILED",
+    "CANCELLED",
+  ])
+  status!:
+    | "PENDING"
+    | "ASSIGNED"
+    | "PICKED_UP"
+    | "IN_TRANSIT"
+    | "DELIVERED"
+    | "FAILED"
+    | "CANCELLED";
 
-  @Column('decimal', { precision: 10, scale: 8 })
+  @Column("decimal", { precision: 10, scale: 8 })
   @IsNumber()
   pickupLat!: number;
 
-  @Column('decimal', { precision: 11, scale: 8 })
+  @Column("decimal", { precision: 11, scale: 8 })
   @IsNumber()
   pickupLon!: number;
 
-  @Column('decimal', { precision: 10, scale: 8 })
+  @Column("decimal", { precision: 10, scale: 8 })
   @IsNumber()
   dropLat!: number;
 
-  @Column('decimal', { precision: 11, scale: 8 })
+  @Column("decimal", { precision: 11, scale: 8 })
   @IsNumber()
   dropLon!: number;
 

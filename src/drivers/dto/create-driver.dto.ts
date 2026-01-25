@@ -1,4 +1,9 @@
-import { IsString, IsPhoneNumber, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsPhoneNumber,
+  IsOptional,
+  IsBoolean,
+} from "class-validator";
 
 export class CreateDriverDto {
   @IsString()

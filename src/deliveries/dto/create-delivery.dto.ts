@@ -1,4 +1,4 @@
-import { IsUUID, IsNumber } from 'class-validator';
+import { IsUUID, IsNumber } from "class-validator";
 
 export class CreateDeliveryDto {
   @IsUUID()

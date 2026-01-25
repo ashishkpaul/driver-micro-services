@@ -1,6 +1,6 @@
-import { IsEnum } from 'class-validator';
+import { IsEnum } from "class-validator";
 
 export class UpdateDriverStatusDto {
-  @IsEnum(['AVAILABLE', 'BUSY', 'OFFLINE'])
-  status: 'AVAILABLE' | 'BUSY' | 'OFFLINE';
+  @IsEnum(["AVAILABLE", "BUSY", "OFFLINE"])
+  status: "AVAILABLE" | "BUSY" | "OFFLINE";
 }

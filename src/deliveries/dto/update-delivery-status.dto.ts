@@ -1,8 +1,21 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from "class-validator";
 
 export class UpdateDeliveryStatusDto {
-  @IsEnum(['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'])
-  status: 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' | 'CANCELLED';
+  @IsEnum([
+    "ASSIGNED",
+    "PICKED_UP",
+    "IN_TRANSIT",
+    "DELIVERED",
+    "FAILED",
+    "CANCELLED",
+  ])
+  status:
+    | "ASSIGNED"
+    | "PICKED_UP"
+    | "IN_TRANSIT"
+    | "DELIVERED"
+    | "FAILED"
+    | "CANCELLED";
 
   @IsOptional()
   @IsString()

@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { DriversService } from '../drivers/drivers.service';
-import { DeliveriesService } from '../deliveries/deliveries.service';
-import { Assignment } from './entities/assignment.entity';
-import { Driver } from '../drivers/entities/driver.entity';
-import { WebhooksService } from '../webhooks/webhooks.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { DriversService } from "../drivers/drivers.service";
+import { DeliveriesService } from "../deliveries/deliveries.service";
+import { Assignment } from "./entities/assignment.entity";
+import { Driver } from "../drivers/entities/driver.entity";
+import { WebhooksService } from "../webhooks/webhooks.service";
 
 @Injectable()
 export class AssignmentService {
@@ -37,13 +37,17 @@ export class AssignmentService {
       dropLon,
     });
 
-    this.logger.log(`Created delivery ${delivery.id} for seller order ${sellerOrderId}`);
+    this.logger.log(
+      `Created delivery ${delivery.id} for seller order ${sellerOrderId}`,
+    );
 
     // 2. Find and assign driver
     const driver = await this.findNearestAvailableDriver(pickupLat, pickupLon);
-    
+
     if (!driver) {
-      this.logger.warn(`No available drivers found for seller order ${sellerOrderId}`);
+      this.logger.warn(
+        `No available drivers found for seller order ${sellerOrderId}`,
+      );
       return delivery.id;
     }
 
@@ -54,13 +58,19 @@ export class AssignmentService {
     });
 
     await this.assignmentRepository.save(assignment);
-    this.logger.log(`Created assignment ${assignment.id} for driver ${driver.id}`);
+    this.logger.log(
+      `Created assignment ${assignment.id} for driver ${driver.id}`,
+    );
 
     // 4. Assign driver to delivery
-    await this.deliveriesService.assignDriver(delivery.id, driver.id, assignment.id);
+    await this.deliveriesService.assignDriver(
+      delivery.id,
+      driver.id,
+      assignment.id,
+    );
 
     // 5. Update driver status
-    await this.driversService.updateStatus(driver.id, 'BUSY');
+    await this.driversService.updateStatus(driver.id, "BUSY");
 
     // 6. Emit DELIVERY_ASSIGNED_V1 to Vendure
     await this.webhooksService.emitDeliveryAssigned({
@@ -71,7 +81,9 @@ export class AssignmentService {
       assignedAt: new Date().toISOString(),
     });
 
-    this.logger.log(`Successfully assigned driver ${driver.id} to delivery ${delivery.id}`);
+    this.logger.log(
+      `Successfully assigned driver ${driver.id} to delivery ${delivery.id}`,
+    );
     return delivery.id;
   }
 
@@ -80,7 +92,7 @@ export class AssignmentService {
     pickupLon: number,
   ): Promise<(Driver & { currentLat: number; currentLon: number }) | null> {
     const availableDrivers = await this.driversService.findAvailable();
-    
+
     if (availableDrivers.length === 0) {
       return null;
     }
@@ -88,11 +100,13 @@ export class AssignmentService {
     // Calculate distance for each driver
     const driversWithDistance = availableDrivers
       .filter(
-        (driver): driver is Driver & { currentLat: number; currentLon: number } =>
-          typeof driver.currentLat === 'number' &&
-          typeof driver.currentLon === 'number'
+        (
+          driver,
+        ): driver is Driver & { currentLat: number; currentLon: number } =>
+          typeof driver.currentLat === "number" &&
+          typeof driver.currentLon === "number",
       )
-      .map(driver => ({
+      .map((driver) => ({
         driver,
         distance: this.driversService.calculateDistance(
           driver.currentLat,
@@ -113,7 +127,7 @@ export class AssignmentService {
   async getAssignmentHistory(sellerOrderId: string): Promise<Assignment[]> {
     return await this.assignmentRepository.find({
       where: { sellerOrderId },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
     });
   }
 }

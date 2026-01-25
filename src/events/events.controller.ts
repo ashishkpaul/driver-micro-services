@@ -1,8 +1,15 @@
-import { Controller, Post, Body, Headers, BadRequestException, Logger } from '@nestjs/common';
-import { AssignmentService } from '../assignment/assignment.service';
-import { ConfigService } from '@nestjs/config';
-import { IsUUID, IsNumber, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  BadRequestException,
+  Logger,
+} from "@nestjs/common";
+import { AssignmentService } from "../assignment/assignment.service";
+import { ConfigService } from "@nestjs/config";
+import { IsUUID, IsNumber, ValidateNested } from "class-validator";
+import { Type } from "class-transformer";
 
 class PickupLocationDto {
   @IsNumber()
@@ -36,7 +43,7 @@ class SellerOrderReadyPayloadDto {
   drop!: DropLocationDto;
 }
 
-@Controller('events')
+@Controller("events")
 export class EventsController {
   private readonly logger = new Logger(EventsController.name);
   private readonly expectedSecret: string | undefined;
@@ -45,18 +52,18 @@ export class EventsController {
     private assignmentService: AssignmentService,
     private configService: ConfigService,
   ) {
-    this.expectedSecret = this.configService.get('VENDURE_WEBHOOK_SECRET');
+    this.expectedSecret = this.configService.get("VENDURE_WEBHOOK_SECRET");
   }
 
-  @Post('seller-order-ready')
+  @Post("seller-order-ready")
   async onSellerOrderReady(
     @Body() payload: SellerOrderReadyPayloadDto,
-    @Headers('X-Webhook-Secret') secret: string,
+    @Headers("X-Webhook-Secret") secret: string,
   ) {
     // Validate webhook secret
     if (secret !== this.expectedSecret) {
       this.logger.warn(`Invalid webhook secret received: ${secret}`);
-      throw new BadRequestException('Invalid webhook secret');
+      throw new BadRequestException("Invalid webhook secret");
     }
 
     this.logger.log(`Received seller order ready: ${payload.sellerOrderId}`);
@@ -72,18 +79,23 @@ export class EventsController {
         payload.drop.lon,
       );
 
-      this.logger.log(`Successfully processed seller order ${payload.sellerOrderId}, delivery ID: ${deliveryId}`);
-      
-      return { 
-        status: 'success', 
+      this.logger.log(
+        `Successfully processed seller order ${payload.sellerOrderId}, delivery ID: ${deliveryId}`,
+      );
+
+      return {
+        status: "success",
         deliveryId,
-        message: 'Delivery assigned successfully' 
+        message: "Delivery assigned successfully",
       };
     } catch (error) {
-      this.logger.error(`Failed to process seller order ${payload.sellerOrderId}:`, error);
+      this.logger.error(
+        `Failed to process seller order ${payload.sellerOrderId}:`,
+        error,
+      );
       return {
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        status: "error",
+        message: error instanceof Error ? error.message : "Unknown error",
       };
     }
   }

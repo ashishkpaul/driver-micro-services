@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Driver } from './entities/driver.entity';
-import { CreateDriverDto } from './dto/create-driver.dto';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Driver } from "./entities/driver.entity";
+import { CreateDriverDto } from "./dto/create-driver.dto";
 
 @Injectable()
 export class DriversService {
@@ -18,7 +18,7 @@ export class DriversService {
 
   async findAll(): Promise<Driver[]> {
     return await this.driverRepository.find({
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
     });
   }
 
@@ -26,9 +26,9 @@ export class DriversService {
     return await this.driverRepository.find({
       where: {
         isActive: true,
-        status: 'AVAILABLE',
+        status: "AVAILABLE",
       },
-      order: { lastActiveAt: 'DESC' },
+      order: { lastActiveAt: "DESC" },
     });
   }
 
@@ -48,7 +48,10 @@ export class DriversService {
     return await this.driverRepository.save(driver);
   }
 
-  async updateStatus(id: string, status: 'AVAILABLE' | 'BUSY' | 'OFFLINE'): Promise<Driver> {
+  async updateStatus(
+    id: string,
+    status: "AVAILABLE" | "BUSY" | "OFFLINE",
+  ): Promise<Driver> {
     const driver = await this.findOne(id);
     driver.status = status;
     driver.lastActiveAt = new Date();
@@ -63,19 +66,26 @@ export class DriversService {
   }
 
   // Haversine distance calculation (km)
-  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
     const R = 6371; // Earth's radius in km
     const dLat = this.toRad(lat2 - lat1);
     const dLon = this.toRad(lon2 - lon1);
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) *
+        Math.cos(this.toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
 
   private toRad(value: number): number {
-    return value * Math.PI / 180;
+    return (value * Math.PI) / 180;
   }
 }
