@@ -7,12 +7,20 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "build": "nest build",
+    "quality": "./scripts/check-quality.sh",
+    "lint": "eslint 'src/**/*.ts' --fix",
+    "lint:check": "eslint 'src/**/*.ts'",
+    "type-check": "tsc --noEmit --strict",
+    "security": "npm audit --audit-level=critical",
+    "deprecated": "npx depcheck",
+    "audit:fix": "npm audit fix --only=prod",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:run": "npm run typeorm migration:run -- -d ./src/config/data-source.ts",
     "migration:generate": "npm run typeorm migration:generate -- -d ./src/config/data-source.ts",
     "migration:create": "npm run typeorm migration:create",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
