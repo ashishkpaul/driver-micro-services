@@ -5,16 +5,22 @@ import { Delivery } from './entities/delivery.entity';
 import { DeliveryEvent } from './entities/delivery-event.entity';
 import { CreateDeliveryDto } from './dto/create-delivery.dto';
 import { UpdateDeliveryStatusDto } from './dto/update-delivery-status.dto';
+import { WebhooksService } from '../webhooks/webhooks.service';
+import { DeliveryAssignedDto, DeliveryPickedUpDto, DeliveryDeliveredDto, DeliveryFailedDto } from '../webhooks/dto/vendure-webhook.dto';
 
 @Injectable()
 export class DeliveriesService {
   private readonly logger = new Logger(DeliveriesService.name);
+
+  // Only these states are emitted to Vendure:
+  private readonly VENDURE_V1_STATES = ['ASSIGNED', 'PICKED_UP', 'DELIVERED', 'FAILED'] as const;
 
   constructor(
     @InjectRepository(Delivery)
     private deliveryRepository: Repository<Delivery>,
     @InjectRepository(DeliveryEvent)
     private deliveryEventRepository: Repository<DeliveryEvent>,
+    private webhooksService: WebhooksService,
   ) {}
 
   async create(createDeliveryDto: CreateDeliveryDto): Promise<Delivery> {
@@ -56,7 +62,7 @@ export class DeliveriesService {
     return delivery;
   }
 
-  async assignDriver(deliveryId: string, driverId: string): Promise<Delivery> {
+  async assignDriver(deliveryId: string, driverId: string, assignmentId: string): Promise<Delivery> {
     const delivery = await this.findOne(deliveryId);
     
     delivery.driverId = driverId;
@@ -67,7 +73,16 @@ export class DeliveriesService {
       deliveryId: delivery.id,
       sellerOrderId: delivery.sellerOrderId,
       eventType: 'ASSIGNED',
-      metadata: { driverId },
+      metadata: { driverId, assignmentId },
+    });
+
+    // Emit ASSIGNED event to Vendure (v1-allowed state)
+    await this.emitToVendureIfAllowed('ASSIGNED', {
+      sellerOrderId: delivery.sellerOrderId,
+      channelId: delivery.channelId,
+      driverId,
+      assignmentId,
+      assignedAt: delivery.assignedAt.toISOString(),
     });
     
     return await this.deliveryRepository.save(delivery);
@@ -86,15 +101,39 @@ export class DeliveriesService {
       case 'PICKED_UP':
         delivery.pickedUpAt = new Date();
         delivery.pickupProofUrl = updateDto.proofUrl;
+        // Emit PICKED_UP event to Vendure (v1-allowed state)
+        await this.emitToVendureIfAllowed('PICKED_UP', {
+          sellerOrderId: delivery.sellerOrderId,
+          channelId: delivery.channelId,
+          pickupProofUrl: updateDto.proofUrl,
+          pickedUpAt: delivery.pickedUpAt.toISOString(),
+        });
         break;
       case 'DELIVERED':
         delivery.deliveredAt = new Date();
         delivery.deliveryProofUrl = updateDto.proofUrl;
+        // Emit DELIVERED event to Vendure (v1-allowed state)
+        await this.emitToVendureIfAllowed('DELIVERED', {
+          sellerOrderId: delivery.sellerOrderId,
+          channelId: delivery.channelId,
+          deliveryProofUrl: updateDto.proofUrl,
+          deliveredAt: delivery.deliveredAt.toISOString(),
+        });
         break;
       case 'FAILED':
         delivery.failedAt = new Date();
         delivery.failureCode = updateDto.failureCode;
         delivery.failureReason = updateDto.failureReason;
+        // Emit FAILED event to Vendure (v1-allowed state)
+        await this.emitToVendureIfAllowed('FAILED', {
+          sellerOrderId: delivery.sellerOrderId,
+          channelId: delivery.channelId,
+          failure: {
+            code: updateDto.failureCode || 'UNKNOWN',
+            reason: updateDto.failureReason || 'Unknown failure',
+            occurredAt: delivery.failedAt.toISOString(),
+          },
+        });
         break;
     }
     
@@ -116,6 +155,29 @@ export class DeliveriesService {
       where: { sellerOrderId },
       order: { createdAt: 'ASC' },
     });
+  }
+
+  private async emitToVendureIfAllowed(
+    status: string, 
+    data: any
+  ): Promise<void> {
+    if (this.VENDURE_V1_STATES.includes(status as any)) {
+      switch (status) {
+        case 'ASSIGNED':
+          await this.webhooksService.emitDeliveryAssigned(data);
+          break;
+        case 'PICKED_UP':
+          await this.webhooksService.emitDeliveryPickedUp(data);
+          break;
+        case 'DELIVERED':
+          await this.webhooksService.emitDeliveryDelivered(data);
+          break;
+        case 'FAILED':
+          await this.webhooksService.emitDeliveryFailed(data);
+          break;
+      }
+    }
+    // Silently drop IN_TRANSIT, PENDING, etc.
   }
 
   private async createEvent(eventData: Partial<DeliveryEvent>): Promise<DeliveryEvent> {

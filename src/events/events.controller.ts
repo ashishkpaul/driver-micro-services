@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Headers, BadRequestException, Logger } from '@nestjs/common';
 import { AssignmentService } from '../assignment/assignment.service';
 import { ConfigService } from '@nestjs/config';
-import { IsUUID, IsNumber, ValidateNested, IsObject } from 'class-validator';
+import { IsUUID, IsNumber, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PickupLocationDto {
@@ -62,7 +62,7 @@ export class EventsController {
     this.logger.log(`Received seller order ready: ${payload.sellerOrderId}`);
 
     try {
-      // Create delivery and assign driver
+      // Create delivery and assign driver (v1: immediate assignment, no acceptance workflow)
       const deliveryId = await this.assignmentService.createAndAssignDelivery(
         payload.sellerOrderId,
         payload.channelId,
@@ -88,21 +88,7 @@ export class EventsController {
     }
   }
 
-  @Post('assignment-response')
-  async onAssignmentResponse(
-    @Body() body: { assignmentId: string; status: 'ACCEPTED' | 'REJECTED'; rejectionReason?: string },
-    @Headers('X-Webhook-Secret') secret: string,
-  ) {
-    if (secret !== this.expectedSecret) {
-      throw new BadRequestException('Invalid webhook secret');
-    }
-
-    await this.assignmentService.handleAssignmentResponse(
-      body.assignmentId,
-      body.status,
-      body.rejectionReason,
-    );
-
-    return { status: 'processed' };
-  }
+  // ⚠️ V1 RULE: No driver acceptance workflow
+  // The assignment-response endpoint has been removed in v1
+  // Assignment is immediate and final
 }

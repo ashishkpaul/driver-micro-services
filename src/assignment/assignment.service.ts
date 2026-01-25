@@ -47,31 +47,17 @@ export class AssignmentService {
       return delivery.id;
     }
 
-    // 3. Create assignment record
+    // 3. Create assignment record (v1-simplified: no status, no acceptance workflow)
     const assignment = this.assignmentRepository.create({
       sellerOrderId,
-      channelId,
       driverId: driver.id,
-      distanceToPickup: this.driversService.calculateDistance(
-        driver.currentLat,
-        driver.currentLon,
-        pickupLat,
-        pickupLon,
-      ),
-      distancePickupToDrop: this.driversService.calculateDistance(
-        pickupLat,
-        pickupLon,
-        dropLat,
-        dropLon,
-      ),
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
     });
 
     await this.assignmentRepository.save(assignment);
     this.logger.log(`Created assignment ${assignment.id} for driver ${driver.id}`);
 
     // 4. Assign driver to delivery
-    await this.deliveriesService.assignDriver(delivery.id, driver.id);
+    await this.deliveriesService.assignDriver(delivery.id, driver.id, assignment.id);
 
     // 5. Update driver status
     await this.driversService.updateStatus(driver.id, 'BUSY');
@@ -102,11 +88,10 @@ export class AssignmentService {
     // Calculate distance for each driver
     const driversWithDistance = availableDrivers
       .filter(
-  (driver): driver is Driver & { currentLat: number; currentLon: number } =>
-    typeof driver.currentLat === 'number' &&
-    typeof driver.currentLon === 'number'
-)
-
+        (driver): driver is Driver & { currentLat: number; currentLon: number } =>
+          typeof driver.currentLat === 'number' &&
+          typeof driver.currentLon === 'number'
+      )
       .map(driver => ({
         driver,
         distance: this.driversService.calculateDistance(
@@ -122,45 +107,7 @@ export class AssignmentService {
       return null;
     }
 
-    return driversWithDistance[0].driver as Driver & { currentLat: number; currentLon: number };
-  }
-
-  async handleAssignmentResponse(
-    assignmentId: string,
-    status: 'ACCEPTED' | 'REJECTED',
-    rejectionReason?: string,
-  ): Promise<void> {
-    const assignment = await this.assignmentRepository.findOne({
-      where: { id: assignmentId },
-    });
-
-    if (!assignment) {
-      throw new Error(`Assignment ${assignmentId} not found`);
-    }
-
-    assignment.status = status;
-    assignment.rejectionReason = rejectionReason;
-
-    await this.assignmentRepository.save(assignment);
-
-    if (status === 'REJECTED') {
-      // Handle driver rejection - could trigger reassignment in v2
-      this.logger.warn(`Assignment ${assignmentId} rejected: ${rejectionReason}`);
-      
-      // Update driver status back to available
-      await this.driversService.updateStatus(assignment.driverId, 'AVAILABLE');
-      
-      // Emit failure event
-      await this.webhooksService.emitDeliveryFailed({
-        sellerOrderId: assignment.sellerOrderId,
-        channelId: assignment.channelId,
-        failure: {
-          code: 'DRIVER_REJECTED',
-          reason: rejectionReason || 'Driver rejected assignment',
-          occurredAt: new Date().toISOString(),
-        },
-      });
-    }
+    return driversWithDistance[0].driver;
   }
 
   async getAssignmentHistory(sellerOrderId: string): Promise<Assignment[]> {

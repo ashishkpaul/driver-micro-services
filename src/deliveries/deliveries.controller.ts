@@ -45,9 +45,9 @@ export class DeliveriesController {
   @Patch(':id/assign')
   assignDriver(
     @Param('id') id: string,
-    @Body() body: { driverId: string },
+    @Body() body: { driverId: string; assignmentId: string },
   ) {
-    return this.deliveriesService.assignDriver(id, body.driverId);
+    return this.deliveriesService.assignDriver(id, body.driverId, body.assignmentId);
   }
 
   @Patch(':id/status')

@@ -5,21 +5,17 @@ import { DataSource } from 'typeorm';
 
 @Injectable()
 export class TypeOrmHealthIndicator extends HealthIndicator {
-  constructor(@InjectDataSource() private dataSource: DataSource) {
+  constructor(@InjectDataSource() private connection: DataSource) {
     super();
   }
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
-      await this.dataSource.query('SELECT 1');
-      return { [key]: { status: 'up' } };
+      // TypeORM-safe health check
+      await this.connection.manager.query('SELECT 1');
+      return this.getStatus(key, true);
     } catch (error) {
-      return {
-        [key]: {
-          status: 'down',
-          message: error.message,
-        },
-      };
+      return this.getStatus(key, false, { message: error.message });
     }
   }
 }

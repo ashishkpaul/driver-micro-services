@@ -10,26 +10,12 @@ export class Assignment {
   sellerOrderId: string;
 
   @Column()
-  channelId: string;
-
-  @Column()
   driverId: string;
-
-  @Column({ default: 'PENDING' })
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  distanceToPickup?: number; // in km
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  distancePickupToDrop?: number; // in km
-
-  @Column({ nullable: true })
-  rejectionReason?: string;
-
-  @Column({ nullable: true })
-  expiresAt?: Date;
 
   @CreateDateColumn()
   createdAt: Date;
+
+  // ⚠️ V1 RULE: No status, no acceptance workflow
+  // Status is derived from Delivery.status
+  // Assignment is immediate and final in v1
 }
