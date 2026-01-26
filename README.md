@@ -55,6 +55,7 @@
 └── tsconfig.json
 
 15 directories, 37 files
+```
 
 # **File Descriptions**
 
