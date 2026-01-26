@@ -70,14 +70,53 @@ npm install
 ```
 
 ### **2. Set Up PostgreSQL Database**
+
+#### **Option A: Using Docker (Recommended)**
+
+If you are using the provided `docker-compose.yml`, you need to initialize the specific database and user defined in your `.env`.
+
+```bash
+# 1. Access the running Postgres container
+sudo docker exec -it postgres_db psql -U admin -d mydatabase
+
+# 2. Create the application user
+CREATE USER driver_user WITH PASSWORD 'driver_password';
+
+# 3. Create the application database
+CREATE DATABASE driver_service OWNER driver_user;
+
+# 4. Grant schema permissions (Required for Postgres 15+)
+\c driver_service
+GRANT ALL ON SCHEMA public TO driver_user;
+
+# 5. Exit psql
+\q
+
+```
+
+**Verify the connection:**
+
+```bash
+# Try logging in directly as the new user
+sudo docker exec -it postgres_db psql -U driver_user -d driver_service
+
+```
+
+#### **Option B: Manual Installation (Local Postgres)**
+
+If running Postgres directly on your host machine:
+
 ```bash
 # Connect to PostgreSQL
 psql -U postgres
 
-# Create database and user
-CREATE DATABASE driver_service;
+# Run setup commands
 CREATE USER driver_user WITH PASSWORD 'driver_password';
+CREATE DATABASE driver_service OWNER driver_user;
 GRANT ALL PRIVILEGES ON DATABASE driver_service TO driver_user;
+\c driver_service
+GRANT ALL ON SCHEMA public TO driver_user;
+
 ```
 
 ### **3. Run Database Migrations**
