@@ -1,3 +1,61 @@
+# Project Directory Structure
+
+```text
+.
+├── docker-compose.yml
+├── eslint.config.js
+├── jest.config.js
+├── LICENSE
+├── package.json
+├── README.md
+├── src
+│   ├── app.module.ts
+│   ├── assignment
+│   │   ├── assignment.module.ts
+│   │   ├── assignment.service.ts
+│   │   └── entities
+│   │       └── assignment.entity.ts
+│   ├── config
+│   │   ├── database.config.ts
+│   │   └── data-source.ts
+│   ├── deliveries
+│   │   ├── deliveries.controller.ts
+│   │   ├── deliveries.module.ts
+│   │   ├── deliveries.service.ts
+│   │   ├── dto
+│   │   │   ├── create-delivery.dto.ts
+│   │   │   └── update-delivery-status.dto.ts
+│   │   └── entities
+│   │       ├── delivery.entity.ts
+│   │       └── delivery-event.entity.ts
+│   ├── drivers
+│   │   ├── drivers.controller.ts
+│   │   ├── drivers.module.ts
+│   │   ├── drivers.service.ts
+│   │   ├── dto
+│   │   │   ├── create-driver.dto.ts
+│   │   │   ├── update-driver-location.dto.ts
+│   │   │   └── update-driver-status.dto.ts
+│   │   └── entities
+│   │       └── driver.entity.ts
+│   ├── events
+│   │   ├── events.controller.ts
+│   │   └── events.module.ts
+│   ├── health
+│   │   ├── health.controller.ts
+│   │   ├── health.module.ts
+│   │   └── typeorm.health.ts
+│   ├── main.ts
+│   └── webhooks
+│       ├── dto
+│       │   └── vendure-webhook.dto.ts
+│       ├── webhooks.controller.ts
+│       ├── webhooks.module.ts
+│       └── webhooks.service.ts
+└── tsconfig.json
+
+15 directories, 37 files
+
 # **File Descriptions**
 
 ## **Root Directory Files**
