@@ -29,18 +29,18 @@ export class Driver {
   @IsPhoneNumber()
   phone!: string;
 
-  @Column({ default: true })
+  @Column({ name: "is_active", default: true })
   @IsBoolean()
   isActive!: boolean;
 
-  @Column({ nullable: true })
+  @Column({ name: "current_lat", nullable: true, type: "numeric" })
   @IsOptional()
   @IsNumber()
   @Min(-90)
   @Max(90)
   currentLat?: number;
 
-  @Column({ nullable: true })
+  @Column({ name: "current_lon", nullable: true, type: "numeric" })
   @IsOptional()
   @IsNumber()
   @Min(-180)
@@ -51,18 +51,18 @@ export class Driver {
   @Column({ default: "AVAILABLE" })
   status!: "AVAILABLE" | "BUSY" | "OFFLINE";
 
-  @Column({ nullable: true })
+  @Column({ name: "vehicle_type", nullable: true })
   vehicleType?: string;
 
-  @Column({ nullable: true })
+  @Column({ name: "vehicle_number", nullable: true })
   vehicleNumber?: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: "last_active_at", nullable: true })
   lastActiveAt?: Date;
 }

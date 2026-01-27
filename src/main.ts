@@ -3,7 +3,7 @@ import { AppModule } from "./app.module";
 import { ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
-import compression from "compression";
+import * as compression from "compression";
 import { Logger } from "winston";
 import { WinstonModule } from "nest-winston";
 import * as winston from "winston";
@@ -39,8 +39,13 @@ async function bootstrap() {
   // Security & middleware
   app.use(helmet());
   app.use(compression());
+  const origins = configService
+    .get<string>("CORS_ORIGINS", "")
+    .split(",")
+    .filter(Boolean);
+
   app.enableCors({
-    origin: configService.get("CORS_ORIGINS", "").split(","),
+    origin: origins.length ? origins : true,
     credentials: true,
   });
 
@@ -52,15 +57,6 @@ async function bootstrap() {
       transform: true,
     }),
   );
-
-  // Health check endpoint
-  app.getHttpAdapter().get("/health", (req, res) => {
-    res.json({
-      status: "healthy",
-      service: "driver-service",
-      version: "1.0.0",
-    });
-  });
 
   await app.listen(configService.get("PORT", 3001));
   logger.info(

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "outDir": "./dist-migrations",
+    "moduleResolution": "node"
+  },
+  "include": ["src/config/data-source.ts", "src/**/*.entity.ts", "src/migrations/*.ts"]
+}
