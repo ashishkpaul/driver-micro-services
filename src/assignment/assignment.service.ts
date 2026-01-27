@@ -91,7 +91,7 @@ export class AssignmentService {
     pickupLat: number,
     pickupLon: number,
   ): Promise<(Driver & { currentLat: number; currentLon: number }) | null> {
-    const availableDrivers = await this.driversService.findAvailable();
+    const availableDrivers = await this.driversService.findAvailable(pickupLat, pickupLon, 5);
 
     if (availableDrivers.length === 0) {
       return null;

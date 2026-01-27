@@ -34,6 +34,9 @@ async function bootstrap() {
     logger: WinstonModule.createLogger({ instance: logger }),
   });
 
+  // Enable shutdown hooks for graceful shutdown (e.g., SIGTERM)
+  app.enableShutdownHooks();
+
   const configService = app.get(ConfigService);
 
   // Security & middleware
@@ -58,10 +61,17 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(configService.get("PORT", 3001));
-  logger.info(
-    `Driver Service running on port ${configService.get("PORT", 3001)}`,
-  );
+  const port = configService.get("PORT", 3001);
+  await app.listen(port);
+  logger.info(`Driver Service running on port ${port}`);
+
+  // Handle SIGTERM for graceful shutdown in Kubernetes
+  process.on('SIGTERM', async () => {
+    logger.info('SIGTERM received, starting graceful shutdown');
+    await app.close();
+    logger.info('Graceful shutdown completed');
+    process.exit(0);
+  });
 }
 
 bootstrap().catch((error) => {

@@ -30,7 +30,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.error("Redis error", err);
     });
 
-    await this.redis.connect();
+    try {
+      await this.redis.connect();
+    } catch (err) {
+      this.logger.error("Redis unavailable at startup, continuing in degraded mode", err);
+    }
   }
 
   async onModuleDestroy() {
@@ -109,6 +113,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       distanceKm: number;
     }[]
   > {
+    // Cap radius for safety
+    const safeRadiusKm = Math.min(radiusKm, 100);
+    
     // GEOSEARCH returns: [member, distance]
     const results = (await this.redis.call(
       "GEOSEARCH",
@@ -117,7 +124,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       lon,
       lat,
       "BYRADIUS",
-      radiusKm,
+      safeRadiusKm,
       "km",
       "WITHDIST",
       "COUNT",
@@ -128,19 +135,39 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return [];
     }
 
+    // Use pipeline for batch operations
+    const pipeline = this.redis.pipeline();
+    
+    for (const [member] of results) {
+      const driverId = member.replace("driver:", "");
+      pipeline.hget(this.STATUS_KEY, driverId);
+      pipeline.exists(`${this.ONLINE_KEY_PREFIX}${driverId}`);
+    }
+
+    const responses = await pipeline.exec();
     const output: {
       driverId: string;
       distanceKm: number;
     }[] = [];
 
-    for (const [member, distance] of results) {
+    // Process responses in pairs (status, online)
+    for (let i = 0; i < results.length; i++) {
+      const [member, distance] = results[i];
       const driverId = member.replace("driver:", "");
-
-      const [status, online] = await Promise.all([
-        this.redis.hget(this.STATUS_KEY, driverId),
-        this.redis.exists(`${this.ONLINE_KEY_PREFIX}${driverId}`),
-      ]);
-
+      
+      // Each driver has 2 operations in pipeline: hget (index 2*i) and exists (index 2*i+1)
+      const statusResponse = responses![2 * i];
+      const onlineResponse = responses![2 * i + 1];
+      
+      // Check if pipeline commands succeeded
+      if (statusResponse[0] || onlineResponse[0]) {
+        // Pipeline error - skip this driver
+        continue;
+      }
+      
+      const status = statusResponse[1];
+      const online = onlineResponse[1];
+      
       if (status === "AVAILABLE" && online === 1) {
         output.push({
           driverId,

@@ -29,6 +29,8 @@ export class DriversService {
   }
 
   async findAvailable(lat?: number, lon?: number, radiusKm?: number): Promise<Driver[]> {
+    const limit = 50;
+    
     // If location is provided, try Redis geo search first
     if (lat !== undefined && lon !== undefined) {
       try {
@@ -36,7 +38,7 @@ export class DriversService {
           lat,
           lon,
           radiusKm || 5,
-          50,
+          limit,
         );
 
         if (availableDrivers.length === 0) {
@@ -66,18 +68,39 @@ export class DriversService {
 
         return orderedDrivers;
       } catch (error) {
-        this.logger.warn("Redis unavailable for geo search, falling back to DB", error);
-        // Fallback to PostgreSQL query without location filtering
+        this.logger.warn("Redis unavailable for geo search, falling back to DB with location filtering", error);
+        // Fallback to PostgreSQL query with location filtering and in-memory distance calculation
+        const drivers = await this.driverRepository
+          .createQueryBuilder("driver")
+          .where("driver.isActive = :isActive", { isActive: true })
+          .andWhere("driver.status = :status", { status: "AVAILABLE" })
+          .andWhere("driver.currentLat IS NOT NULL")
+          .andWhere("driver.currentLon IS NOT NULL")
+          .getMany();
+
+        // Calculate distance for each driver
+        const driversWithDistance = drivers
+          .map(driver => ({
+            driver,
+            distance: this.calculateDistance(lat, lon, driver.currentLat!, driver.currentLon!),
+          }))
+          .filter(driverWithDistance => radiusKm ? driverWithDistance.distance <= radiusKm : true)
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, limit)
+          .map(driverWithDistance => driverWithDistance.driver);
+
+        return driversWithDistance;
       }
     }
 
-    // Fallback to PostgreSQL query (either no location provided or Redis failed)
+    // Fallback to PostgreSQL query (no location provided)
     return await this.driverRepository.find({
       where: {
         isActive: true,
         status: "AVAILABLE",
       },
       order: { lastActiveAt: "DESC" },
+      take: limit,
     });
   }
 
