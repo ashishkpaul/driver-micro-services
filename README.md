@@ -1,10 +1,30 @@
-# Driver Management & Delivery Orchestration Microservice
+Perfect — your current README is already *very* strong. What I’m giving you below is a **complete, GA-grade, internally consistent replacement** that:
+
+* Matches **INSTALLATION-CONFIGURATION.md**
+* Reflects **Redis + PM2 cluster reality**
+* Uses **port 3001 consistently**
+* Is safe for **new devs, SREs, and auditors**
+* Does **not over-document** (README ≠ install guide)
+
+You can **copy-paste this file verbatim**.
+
+---
+
+# **Driver Management & Delivery Orchestration Microservice**
 
 ## Overview
 
-This repository contains the **Driver Management & Delivery Orchestration Microservice** for Vendure-based commerce systems. It is a **production-ready NestJS service** responsible for managing drivers, tracking real-time availability, and assigning the nearest available driver to delivery orders.
+This repository contains the **Driver Management & Delivery Orchestration Microservice** for Vendure-based commerce systems.
+
+It is a **production-ready NestJS service** responsible for:
+
+* Managing delivery drivers
+* Tracking real-time availability and location
+* Assigning the **nearest available driver** to delivery orders
 
 The service is **GA-ready (v1.0.0)** and designed for **horizontal scalability**, **operational safety**, and **correctness under load**.
+
+> **Default Port:** `3001`
 
 ---
 
@@ -15,28 +35,35 @@ The service is **GA-ready (v1.0.0)** and designed for **horizontal scalability**
 * Register and manage delivery drivers
 * Track real-time driver location and heartbeat
 * Redis-backed **GEO-based nearest-driver search**
-* Strict availability invariants (BUSY/OFFLINE drivers are never returned)
+* Strict availability invariants
+  *(BUSY / OFFLINE drivers are never returned)*
+
+---
 
 ### ⚡ Performance & Scalability
 
-* Redis GEO indexes for O(log N) proximity search
-* Redis pipelines to eliminate N+1 query patterns
-* PM2 **cluster mode** for multi-core utilization
-* Graceful degradation when Redis is unavailable
+* Redis GEO indexes for **O(log N)** proximity search
+* Redis pipelines to eliminate **N+1 query patterns**
+* **PM2 cluster mode** for multi-core utilization
+* Stateless workers with shared Redis/PostgreSQL backing
+
+---
 
 ### 🧠 Correctness Guarantees
 
 * PostgreSQL remains the **source of truth**
-* Redis is a **performance and availability layer only**
+* Redis is a **performance & availability layer only**
 * Strong invariants enforced by automated tests
-* Safe fallback logic when Redis is down
+* Safe fallback logic when Redis is unavailable
+
+---
 
 ### 🧪 Production Safety
 
-* Health checks for DB and Redis
-* Graceful shutdown (SIGTERM-aware)
+* Health checks for **PostgreSQL and Redis**
+* Graceful shutdown (**SIGTERM-aware**)
 * Docker healthcheck wired to `/health`
-* Memory limits and restart policies
+* Memory limits and restart policies via PM2
 
 ---
 
@@ -52,7 +79,7 @@ Vendure ──▶ Events/Webhooks ──▶ Driver Service ──▶ Redis (GEO 
 
 * **Framework**: NestJS
 * **Database**: PostgreSQL + TypeORM
-* **Cache / Geo Search**: Redis (GEO)
+* **Availability & Geo Search**: Redis (GEO)
 * **Process Manager**: PM2 (cluster mode)
 * **Containerization**: Docker
 * **Testing**: Jest
@@ -94,29 +121,39 @@ Vendure ──▶ Events/Webhooks ──▶ Driver Service ──▶ Redis (GEO 
 * Location updates
 * Availability and status transitions
 
+---
+
 ### Assignment Module
 
 * Nearest-driver selection
-* Redis GEO–based lookup
-* PostgreSQL fallback with distance calculation
+* **Redis GEO-based lookup**
+* **PostgreSQL fallback with distance calculation** when Redis is unavailable
+
+---
 
 ### Redis Module
 
-* GEO index for available drivers
-* Status and online heartbeat tracking
-* Strict availability invariants
+* GEO index for **available drivers only**
+* Driver status tracking
+* Online heartbeat with TTL
+* Pipeline-optimized batch operations
+
+---
 
 ### Deliveries Module
 
 * Delivery creation and state transitions
-* Assignment linking
+* Driver assignment linkage
 * Delivery event tracking
+
+---
 
 ### Health Module
 
-* `/health` endpoint
-* Database connectivity checks
-* Redis connectivity checks
+* `GET /health`
+* PostgreSQL connectivity check
+* Redis connectivity check
+* Used by Docker, PM2, and orchestration systems
 
 ---
 
@@ -124,11 +161,12 @@ Vendure ──▶ Events/Webhooks ──▶ Driver Service ──▶ Redis (GEO 
 
 | Redis Key         | Responsibility             |
 | ----------------- | -------------------------- |
-| `drivers:geo`     | **Only AVAILABLE drivers** |
+| `drivers:geo`     | **ONLY AVAILABLE drivers** |
 | `drivers:status`  | AVAILABLE / BUSY / OFFLINE |
-| `driver:online:*` | TTL-based heartbeat        |
+| `driver:online:*` | TTL-based online heartbeat |
 
-**Invariant:** BUSY or OFFLINE drivers are immediately removed from the GEO set.
+**Invariant:**
+BUSY or OFFLINE drivers are **immediately removed** from the GEO set.
 
 This invariant is enforced by:
 
@@ -146,12 +184,16 @@ npm install
 npm run start:dev
 ```
 
+---
+
 ### Production (PM2 Cluster)
 
 ```bash
 npm run build
 pm2 start ecosystem.config.cjs
 ```
+
+---
 
 ### Verify
 
@@ -160,21 +202,47 @@ pm2 list
 curl http://localhost:3001/health
 ```
 
+Expected:
+
+```json
+{
+  "status": "ok",
+  "info": {
+    "database": { "status": "up" },
+    "redis": { "status": "up" }
+  }
+}
+```
+
 ---
 
 ## Environment Variables
 
 ```env
+# Application
 PORT=3001
+NODE_ENV=production
+
+# Database
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=vendure
-DB_USERNAME=vendure
+DB_NAME=driver_service
+DB_USERNAME=driver_user
 DB_PASSWORD=********
+DB_SYNCHRONIZE=false
+
+# Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=********
+
+# Webhooks
+VENDURE_WEBHOOK_SECRET=********
+DRIVER_WEBHOOK_SECRET=********
 ```
+
+> Full installation and environment setup instructions are documented in
+> **INSTALLATION-CONFIGURATION.md**
 
 ---
 
@@ -185,19 +253,30 @@ npm test
 npm run test:cov
 ```
 
-Critical Redis invariants are covered by unit tests:
+Critical Redis invariants covered by tests:
 
 * GEO set consistency
-* Status transitions
-* Pipeline usage
+* Status transitions (AVAILABLE → BUSY / OFFLINE)
+* Pipeline usage (no N+1 calls)
 * Radius safety limits
+
+---
+
+## Production Deployment Notes
+
+* Designed for **PM2 cluster mode**
+* No in-memory state (safe horizontal scaling)
+* Redis shared across all workers
+* Graceful shutdown supported (SIGTERM)
+
+For full deployment steps, see **INSTALLATION-CONFIGURATION.md**.
 
 ---
 
 ## Release Status
 
-* **Current GA Version**: `v1.0.0`
-* **Stability**: Production-ready
+* **Current Version**: `v1.0.0`
+* **Stability**: General Availability (GA)
 * **Backward Compatibility**: Guaranteed for v1 APIs
 
 ---
@@ -214,3 +293,14 @@ Critical Redis invariants are covered by unit tests:
 ## License
 
 MIT License
+
+---
+
+If you want next, I can:
+
+* Diff this against your previous README
+* Update `INSTALLATION-CONFIGURATION.md` headers to reference this README
+* Generate **release notes for v1.0.0**
+* Produce a **GA checklist for ops**
+
+You’ve done this *properly*.
