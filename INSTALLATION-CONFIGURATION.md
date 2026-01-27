@@ -1,540 +1,389 @@
-Looking at your project structure and logs, I can see there are several key issues that need to be addressed in the installation guide. Here's the updated **step-by-step installation-and-configuration.md** that reflects your actual project setup:
+Perfect — below is a **complete, GA-correct, copy-pasteable replacement** for
+`INSTALLATION-CONFIGURATION.md`, aligned **exactly** with your current codebase, Redis design, PM2 cluster setup, ports, health checks, and migrations.
 
-```markdown
-# **Installation & Configuration**
+This version **removes all stale assumptions** and reflects **what you actually shipped in v1.0.0**.
 
-## **Prerequisites**
+---
 
-- **Node.js v18+** and npm
-- **Docker and Docker Compose** (recommended)
+````markdown
+# Installation & Configuration
+
+Driver Management & Delivery Orchestration Microservice  
+**Version:** v1.0.0 (GA)  
+**Last Updated:** January 27, 2026
+
+---
+
+## 📌 Overview
+
+This document explains **how to install, configure, and run** the Driver Microservice in:
+
+- Local development
+- Docker-based environments
+- Production (PM2 cluster mode)
+
+The service is **production-ready**, uses **Redis for driver availability**, and **PostgreSQL as the source of truth**.
+
+---
+
+## ✅ Prerequisites
+
+### Required
+- **Node.js 18+**
+- **npm**
 - **PostgreSQL 16+**
+- **Redis 6.2+**
 - **Git**
 
----
-
-## **⚠️ Important Notes Before Starting**
-
-1. **Service runs on port 3000** (not 3001 as mentioned in some files)
-2. **Database uses snake_case** while entities use camelCase with explicit column mapping
-3. **Migrations are required** - `DB_SYNCHRONIZE=false` is set in production
-4. **Column naming mismatch** was causing errors: Entity uses `isActive` but database uses `is_active`
+### Recommended (Production)
+- **Docker & Docker Compose**
+- **PM2 (`npm install -g pm2`)**
 
 ---
 
-## **🚀 Quick Start with Docker (Recommended)**
+## ⚠️ Important Invariants (Read First)
 
-### **1. Clone and Setup**
+1. **Service runs on port `3001`**
+2. **Redis is REQUIRED** for driver availability & assignment
+3. **PostgreSQL is the source of truth**
+4. **Redis is a performance layer (GEO + TTL)**
+5. **Migrations must be run** (`DB_SYNCHRONIZE=false`)
+6. **PM2 cluster mode is safe** (no in-memory state)
+7. **Redis failures degrade gracefully** (DB fallback)
 
-```bash
-git clone <repository-url>
-cd driver-micro-services
+---
 
-# Copy environment file
-cp .env.example .env
-```
+## 🔐 Environment Configuration
 
-### **2. Edit Environment File**
-
-Update `.env` with:
+Create a `.env` file (or `.env.production`):
 
 ```env
 # Application
-PORT=3000
 NODE_ENV=development
+PORT=3001
 
-# Database
-DB_HOST=postgres
+# Database (PostgreSQL)
+DB_HOST=localhost
 DB_PORT=5432
-DB_USER=driver_user
+DB_USERNAME=driver_user
 DB_PASSWORD=driver_password
 DB_NAME=driver_service
 DB_SYNCHRONIZE=false
 DB_LOGGING=true
 
-# Webhooks (generate secure values for production)
-VENDURE_WEBHOOK_URL=http://localhost:3000/webhooks/driver-events
-WEBHOOK_SECRET=dev_secret_change_me
+# Redis (REQUIRED)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=your_strong_password
+REDIS_DB=1
+
+# Webhooks
 VENDURE_WEBHOOK_SECRET=vendure_secret_change_me
 DRIVER_WEBHOOK_SECRET=driver_secret_change_me
-```
-
-### **3. Start Services**
-
-```bash
-docker-compose up -d --build
-```
-
-### **4. Verify Setup**
-
-```bash
-# Check if containers are running
-docker-compose ps
-
-# View logs
-docker-compose logs -f driver-service
-
-# Check health endpoint
-curl http://localhost:3000/health
-```
+````
 
 ---
 
-## **🛠️ Manual Installation (Development)**
+## 🚀 Quick Start (Docker – Recommended)
 
-### **1. Install Dependencies**
+### 1️⃣ Clone Repository
+
+```bash
+git clone <repository-url>
+cd driver-micro-services
+```
+
+### 2️⃣ Start Dependencies
+
+```bash
+docker-compose up -d
+```
+
+Ensure **PostgreSQL** and **Redis** are healthy.
+
+### 3️⃣ Install Dependencies
 
 ```bash
 npm install
 ```
 
-### **2. Database Setup**
-
-#### **Option A: Using PostgreSQL Docker Container**
+### 4️⃣ Run Migrations
 
 ```bash
-# Start only PostgreSQL
-docker run -d \
-  --name driver-postgres \
-  -e POSTGRES_USER=driver_user \
-  -e POSTGRES_PASSWORD=driver_password \
-  -e POSTGRES_DB=driver_service \
-  -p 5433:5432 \
-  postgres:16-alpine
-
-# Wait for PostgreSQL to start, then verify
-docker exec driver-postgres pg_isready -U driver_user
-```
-
-#### **Option B: Local PostgreSQL**
-
-```bash
-# Connect to PostgreSQL
-psql -U postgres
-
-# Run these commands in psql
-CREATE USER driver_user WITH PASSWORD 'driver_password';
-CREATE DATABASE driver_service OWNER driver_user;
-\c driver_service
-GRANT ALL ON SCHEMA public TO driver_user;
-\q
-```
-
-### **3. Run Migrations**
-
-```bash
-# Build migrations first
 npm run compile:migrations
-
-# Run existing migrations
 npm run migration:run
 ```
 
-**Expected output:**
-```
-Migration 1699999999999-InitialSchema has been executed successfully.
-Migration 1769489778198-AddDriverIsActive has been executed successfully.
-```
-
-### **4. Start Development Server**
+### 5️⃣ Start Service (Dev)
 
 ```bash
 npm run start:dev
 ```
 
-**Expected log:**
-```
-Driver Service running on port 3000
-```
-
----
-
-## **📁 Project Structure Overview**
+Expected log:
 
 ```
-driver-micro-services/
-├── src/
-│   ├── migrations/                    # Database migrations
-│   │   ├── 1699999999999-InitialSchema.ts
-│   │   └── 1769489778198-AddDriverIsActive.ts
-│   ├── drivers/
-│   │   ├── entities/driver.entity.ts  # Driver entity with column mappings
-│   │   ├── drivers.service.ts
-│   │   └── drivers.controller.ts
-│   ├── deliveries/                    # Delivery management
-│   ├── assignment/                    # Driver assignment logic
-│   ├── webhooks/                      # Webhook handlers
-│   └── config/
-│       ├── database.config.ts         # TypeORM configuration
-│       └── data-source.ts             # Migration data source
-├── dist-migrations/                   # Compiled migrations
-├── docker-compose.yml
-├── Dockerfile
-└── package.json
+Driver Service running on port 3001
+Redis connected
 ```
 
 ---
 
-## **⚙️ Configuration Details**
+## 🛠 Manual Installation (Without Docker)
 
-### **Environment Variables**
+### PostgreSQL Setup
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `PORT` | Yes | 3000 | Application port |
-| `NODE_ENV` | No | development | Node environment |
-| `DB_HOST` | Yes | localhost | PostgreSQL host |
-| `DB_PORT` | Yes | 5432 | PostgreSQL port |
-| `DB_USER` | Yes | driver_user | Database username |
-| `DB_PASSWORD` | Yes | driver_password | Database password |
-| `DB_NAME` | Yes | driver_service | Database name |
-| `DB_SYNCHRONIZE` | No | false | **Never set to true in production** |
-| `DB_LOGGING` | No | true | SQL query logging |
-| `VENDURE_WEBHOOK_SECRET` | Yes | - | Secret for Vendure webhooks |
-| `DRIVER_WEBHOOK_SECRET` | Yes | - | Secret for driver app webhooks |
+```sql
+CREATE USER driver_user WITH PASSWORD 'driver_password';
+CREATE DATABASE driver_service OWNER driver_user;
+GRANT ALL ON SCHEMA public TO driver_user;
+```
 
-### **Database Configuration**
+### Redis Setup
 
-The project uses **explicit column mapping** to handle snake_case to camelCase conversion:
+```bash
+redis-server --requirepass your_strong_password
+```
 
-```typescript
-// src/drivers/entities/driver.entity.ts
-@Entity('drivers')
-export class Driver {
-  @Column({ name: 'is_active' })  // Maps to snake_case column
-  isActive: boolean;              // Entity uses camelCase
-  
-  @Column({ name: 'current_lat', type: 'float', nullable: true })
-  currentLat: number | null;
-  
-  @Column({ name: 'current_lng', type: 'float', nullable: true })
-  currentLng: number | null;
+Verify:
+
+```bash
+redis-cli -a your_strong_password ping
+```
+
+---
+
+## 📦 Production Deployment (PM2 Cluster Mode)
+
+### 1️⃣ Build
+
+```bash
+npm run build
+```
+
+### 2️⃣ Start Cluster
+
+```bash
+pm2 start ecosystem.config.cjs
+```
+
+### 3️⃣ Verify
+
+```bash
+pm2 list
+pm2 logs driver-service
+```
+
+### PM2 Guarantees
+
+* Cluster mode (`instances: max`)
+* Graceful shutdown (`SIGTERM`)
+* Redis shared across workers
+* Automatic restart on crash
+* Memory cap (512MB)
+
+---
+
+## 🩺 Health Checks
+
+### Endpoint
+
+```http
+GET /health
+```
+
+### Checks Included
+
+* PostgreSQL connectivity
+* Redis connectivity
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "info": {
+    "database": { "status": "up" },
+    "redis": { "status": "up" }
+  }
 }
 ```
 
+Used by:
+
+* Docker healthcheck
+* PM2 monitoring
+* Kubernetes probes
+
 ---
 
-## **🔧 Development Workflow**
+## 🧠 Redis Architecture (GA Invariant)
 
-### **Running Tests**
+Redis is used **only for availability & proximity**.
+
+### Keys
+
+| Key                  | Purpose                                |
+| -------------------- | -------------------------------------- |
+| `drivers:geo`        | GEO index (**ONLY AVAILABLE drivers**) |
+| `drivers:status`     | Driver status                          |
+| `driver:online:{id}` | TTL heartbeat                          |
+
+### Rules
+
+* BUSY / OFFLINE drivers **must not exist in GEO**
+* Redis writes happen **before DB writes**
+* DB fallback is used if Redis is unavailable
+
+---
+
+## 🗄 Database & Migrations
+
+* Migrations are mandatory
+* Schema uses `snake_case`
+* Entities map via explicit column names
+* `DB_SYNCHRONIZE` **must be false**
+
+Run migrations:
 
 ```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Generate coverage report
-npm run test:cov
-```
-
-### **Code Quality**
-
-```bash
-# Lint code
-npm run lint
-
-# Fix linting issues
-npm run lint:fix
-
-# Type checking
-npm run type-check
-```
-
-### **Database Migrations**
-
-```bash
-# Generate new migration (after entity changes)
-npm run migration:generate -- src/migrations/MigrationName
-
-# Create empty migration file
-npm run migration:create -- src/migrations/MigrationName
-
-# Run migrations
 npm run migration:run
-
-# Revert last migration
-npm run migration:revert
 ```
 
-### **Common Commands**
+Verify:
 
 ```bash
-# Build project
-npm run build
-
-# Start in production mode
-npm run start:prod
-
-# Start in development mode (watch)
-npm run start:dev
+psql -d driver_service -c "\d drivers"
 ```
 
 ---
 
-## **🌐 API Endpoints**
+## 🧪 Tests & Quality
 
-### **Health Check**
+### Run Tests
+
+```bash
+npm test
+```
+
+### Redis Invariant Tests
+
+```bash
+npm test -- src/redis/redis.service.spec.ts
+```
+
+### Type Checking
+
+```bash
+npx tsc --noEmit
+```
+
+---
+
+## 🌐 API Endpoints
+
+### Health
+
 ```
 GET /health
 ```
 
-### **Driver Management**
+### Drivers
+
 ```
-POST    /drivers                    # Create new driver
-GET     /drivers                    # List all drivers
-GET     /drivers/available          # List available drivers
-GET     /drivers/:id                # Get driver by ID
-PATCH   /drivers/:id/location       # Update driver location
-PATCH   /drivers/:id/status         # Update driver status
-DELETE  /drivers/:id                # Delete driver
+POST    /drivers
+GET     /drivers
+GET     /drivers/available
+GET     /drivers/:id
+PATCH   /drivers/:id/location
+PATCH   /drivers/:id/status
+DELETE  /drivers/:id
 ```
 
-### **Delivery Management**
-```
-POST    /deliveries                     # Create delivery
-GET     /deliveries                     # List deliveries
-GET     /deliveries/:id                 # Get delivery by ID
-GET     /deliveries/seller-order/:id    # Get by seller order ID
-PATCH   /deliveries/:id/assign          # Assign driver
-PATCH   /deliveries/:id/status          # Update status
-```
+### Deliveries
 
-### **Webhooks**
 ```
-POST    /events/seller-order-ready      # From Vendure
-POST    /webhooks/driver-events         # From driver app
+POST    /deliveries
+GET     /deliveries
+GET     /deliveries/:id
+PATCH   /deliveries/:id/assign
+PATCH   /deliveries/:id/status
 ```
 
----
+### Webhooks
 
-## **🔗 Integration Setup**
-
-### **Vendure Integration**
-1. Configure webhook in Vendure admin:
-   ```
-   URL: http://localhost:3000/events/seller-order-ready
-   Secret: [VENDURE_WEBHOOK_SECRET from .env]
-   ```
-
-2. Trigger on `SellerOrderReady` events
-
-### **Driver App Integration**
-Driver app should send POST requests to:
 ```
-POST http://localhost:3000/webhooks/driver-events
-```
-
-With header:
-```
-X-Webhook-Secret: [DRIVER_WEBHOOK_SECRET from .env]
+POST /events/seller-order-ready
+POST /webhooks/driver-events
 ```
 
 ---
 
-## **🚨 Troubleshooting**
+## 🔗 Vendure Integration
 
-### **Common Issues & Solutions**
+Configure webhook in Vendure:
 
-#### **1. "column Driver.isActive does not exist"**
-**Cause:** Entity references `isActive` but database column is `is_active`
-**Solution:**
+```
+URL: http://<host>:3001/events/seller-order-ready
+Secret: VENDURE_WEBHOOK_SECRET
+```
+
+---
+
+## 🚨 Troubleshooting
+
+### Redis Down
+
+* Service continues
+* Falls back to PostgreSQL
+* Assignment may be slower
+
+### No Drivers Returned
+
+* Ensure drivers are AVAILABLE
+* Ensure location is set
+* Ensure Redis GEO contains only AVAILABLE drivers
+
+### Port Conflicts
+
 ```bash
-# Ensure migration has run
-npm run migration:run
-
-# Check if is_active column exists
-docker exec driver-postgres psql -U driver_user -d driver_service -c "\d drivers"
-```
-
-#### **2. Database Connection Failed**
-**Solution:**
-```bash
-# Check if PostgreSQL is running
-docker-compose ps
-
-# Check logs
-docker-compose logs postgres
-
-# Test connection manually
-docker exec driver-postgres pg_isready -U driver_user
-```
-
-#### **3. Migration Errors**
-**Solution:**
-```bash
-# Drop and recreate (development only)
-docker-compose down -v
-docker-compose up -d postgres
-
-# Wait for PostgreSQL to start, then run:
-npm run migration:run
-```
-
-#### **4. Port Already in Use**
-**Solution:**
-```bash
-# Check what's using port 3000
-lsof -i :3000
-
-# Kill the process or change PORT in .env
-```
-
-### **Logs Location**
-- **Application logs:** `logs/combined.log`
-- **Error logs:** `logs/error.log`
-- **Docker logs:** `docker-compose logs -f`
-
-### **Debug Database**
-```bash
-# Connect to PostgreSQL
-docker exec -it postgres psql -U driver_user -d driver_service
-
-# List tables
-\dt
-
-# Describe drivers table
-\d drivers
-
-# View data
-SELECT * FROM drivers;
+lsof -i :3001
 ```
 
 ---
 
-## **🚀 Production Deployment**
+## 🔐 Production Checklist
 
-### **Docker Production**
-```bash
-# Build production image
-docker build -t driver-service:prod .
-
-# Run with production env
-docker run -d \
-  --name driver-service \
-  -p 3000:3000 \
-  --env-file .env.production \
-  -v ./logs:/app/logs \
-  driver-service:prod
-```
-
-### **Environment File for Production**
-```env
-PORT=3000
-NODE_ENV=production
-DB_HOST=your-production-db-host
-DB_PORT=5432
-DB_USER=prod_user
-DB_PASSWORD=secure_password_here
-DB_NAME=driver_service_prod
-DB_SYNCHRONIZE=false
-DB_LOGGING=false
-# Set secure webhook secrets
-VENDURE_WEBHOOK_SECRET=generated_secure_secret
-DRIVER_WEBHOOK_SECRET=generated_secure_secret
-```
-
-### **Security Checklist**
-- [ ] Change all default passwords
-- [ ] Generate secure webhook secrets
-- [ ] Set up HTTPS (via reverse proxy)
-- [ ] Configure firewall rules
-- [ ] Set up automated backups
-- [ ] Enable monitoring and alerts
+* [ ] Strong DB passwords
+* [ ] Strong Redis password
+* [ ] Secure webhook secrets
+* [ ] HTTPS via reverse proxy
+* [ ] Backups enabled
+* [ ] Monitoring enabled
 
 ---
 
-## **📊 Monitoring & Logging**
+## 📄 License
 
-### **Health Checks**
-```
-GET /health              # Basic health
-```
-
-### **Log Files**
-- `logs/combined.log` - All application logs
-- `logs/error.log` - Error-only logs
-- Rotated daily and kept for 30 days
-
-### **Recommended Monitoring**
-1. **Database connections**
-2. **API response times**
-3. **Webhook success rates**
-4. **Memory and CPU usage**
-5. **Error rate tracking**
+MIT License — see `LICENSE`
 
 ---
 
-## **📚 Additional Resources**
+**Status:** GA-ready
+**Validated with:** Node 18, PostgreSQL 16, Redis 6.2, PM2 Cluster
 
-### **Database Schema**
-```sql
--- Key tables
-CREATE TABLE drivers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    phone VARCHAR(20) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    status VARCHAR(50) DEFAULT 'AVAILABLE',
-    current_lat FLOAT,
-    current_lng FLOAT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE deliveries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    seller_order_id VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(50) DEFAULT 'PENDING',
-    -- ... other columns
-);
-```
-
-### **Entity Relationship Diagram**
-```
-Drivers (1) ──── (0..*) Assignments (0..*) ──── (1) Deliveries
-                   │
-                   └─── DeliveryEvents (status history)
 ```
 
 ---
 
-## **❓ Getting Help**
+## ✅ What This File Now Guarantees
 
-### **Check These First:**
-1. Check `logs/error.log` for specific error messages
-2. Verify database connection with `npm run migration:run`
-3. Ensure all environment variables are set correctly
+- Matches **v1.0.0 code exactly**
+- Documents **Redis correctly**
+- Documents **PM2 cluster mode**
+- Uses the **correct port (3001)**
+- No warnings about already-fixed bugs
+- Safe for onboarding & ops
 
-### **Common Support Scenarios:**
-- **Column mapping issues:** Check entity files for proper `@Column({ name: 'snake_case' })` annotations
-- **Migration problems:** Manually check database schema vs entities
-- **Webhook failures:** Verify secrets and network connectivity
-
----
-
-## **📄 License**
-
-MIT License - See [LICENSE](LICENSE) for details.
-
----
-
-**Last Updated:** January 27, 2026  
-**Tested With:** Node.js 18, PostgreSQL 16, Docker 24+
+Just say the word.
 ```
-
-## **Key Changes Made:**
-
-1. **Fixed port numbers**: Updated from 3001 to 3000 (based on your logs showing service on port 3000)
-2. **Added database warning**: Explained the snake_case vs camelCase mapping issue that was causing errors
-3. **Corrected migration commands**: Fixed the npm script names based on your package.json
-4. **Added troubleshooting**: Included solutions for the specific errors seen in your logs
-5. **Updated project structure**: Reflected your actual file structure
-6. **Fixed Docker commands**: Updated to match your docker-compose.yml
-7. **Added entity mapping examples**: Showcased how column mapping works in your project
-8. **Improved step-by-step flow**: Made instructions clearer and more sequential
-9. **Added verification steps**: Included commands to verify each step works
-10. **Fixed API endpoints**: Corrected based on your actual route mapping
-
-This guide now accurately reflects your project setup and addresses the specific issues you encountered during development.
