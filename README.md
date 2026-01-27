@@ -1,8 +1,70 @@
-# Project Directory Structure
+# Driver Management & Delivery Orchestration Microservice
+
+## Overview
+
+This repository contains the **Driver Management & Delivery Orchestration Microservice** for Vendure-based commerce systems. It is a **production-ready NestJS service** responsible for managing drivers, tracking real-time availability, and assigning the nearest available driver to delivery orders.
+
+The service is **GA-ready (v1.0.0)** and designed for **horizontal scalability**, **operational safety**, and **correctness under load**.
+
+---
+
+## Key Capabilities
+
+### 🚚 Driver Availability & Assignment
+
+* Register and manage delivery drivers
+* Track real-time driver location and heartbeat
+* Redis-backed **GEO-based nearest-driver search**
+* Strict availability invariants (BUSY/OFFLINE drivers are never returned)
+
+### ⚡ Performance & Scalability
+
+* Redis GEO indexes for O(log N) proximity search
+* Redis pipelines to eliminate N+1 query patterns
+* PM2 **cluster mode** for multi-core utilization
+* Graceful degradation when Redis is unavailable
+
+### 🧠 Correctness Guarantees
+
+* PostgreSQL remains the **source of truth**
+* Redis is a **performance and availability layer only**
+* Strong invariants enforced by automated tests
+* Safe fallback logic when Redis is down
+
+### 🧪 Production Safety
+
+* Health checks for DB and Redis
+* Graceful shutdown (SIGTERM-aware)
+* Docker healthcheck wired to `/health`
+* Memory limits and restart policies
+
+---
+
+## Architecture Overview
+
+```
+Vendure ──▶ Events/Webhooks ──▶ Driver Service ──▶ Redis (GEO + Status)
+                                  │
+                                  └────────────▶ PostgreSQL (Source of Truth)
+```
+
+### Technology Stack
+
+* **Framework**: NestJS
+* **Database**: PostgreSQL + TypeORM
+* **Cache / Geo Search**: Redis (GEO)
+* **Process Manager**: PM2 (cluster mode)
+* **Containerization**: Docker
+* **Testing**: Jest
+
+---
+
+## Project Directory Structure
 
 ```text
 .
 ├── docker-compose.yml
+├── ecosystem.config.cjs
 ├── eslint.config.js
 ├── jest.config.js
 ├── LICENSE
@@ -10,147 +72,145 @@
 ├── README.md
 ├── src
 │   ├── app.module.ts
-│   ├── assignment
-│   │   ├── assignment.module.ts
-│   │   ├── assignment.service.ts
-│   │   └── entities
-│   │       └── assignment.entity.ts
-│   ├── config
-│   │   ├── database.config.ts
-│   │   └── data-source.ts
-│   ├── deliveries
-│   │   ├── deliveries.controller.ts
-│   │   ├── deliveries.module.ts
-│   │   ├── deliveries.service.ts
-│   │   ├── dto
-│   │   │   ├── create-delivery.dto.ts
-│   │   │   └── update-delivery-status.dto.ts
-│   │   └── entities
-│   │       ├── delivery.entity.ts
-│   │       └── delivery-event.entity.ts
-│   ├── drivers
-│   │   ├── drivers.controller.ts
-│   │   ├── drivers.module.ts
-│   │   ├── drivers.service.ts
-│   │   ├── dto
-│   │   │   ├── create-driver.dto.ts
-│   │   │   ├── update-driver-location.dto.ts
-│   │   │   └── update-driver-status.dto.ts
-│   │   └── entities
-│   │       └── driver.entity.ts
-│   ├── events
-│   │   ├── events.controller.ts
-│   │   └── events.module.ts
-│   ├── health
-│   │   ├── health.controller.ts
-│   │   ├── health.module.ts
-│   │   └── typeorm.health.ts
 │   ├── main.ts
+│   ├── assignment
+│   ├── config
+│   ├── deliveries
+│   ├── drivers
+│   ├── events
+│   ├── health
+│   ├── redis
 │   └── webhooks
-│       ├── dto
-│       │   └── vendure-webhook.dto.ts
-│       ├── webhooks.controller.ts
-│       ├── webhooks.module.ts
-│       └── webhooks.service.ts
 └── tsconfig.json
-
-15 directories, 37 files
 ```
 
-# **File Descriptions**
+---
 
-## **Root Directory Files**
-- **docker-compose.yml** - Docker configuration for running the driver service with PostgreSQL database
-- **eslint.config.js** - ESLint configuration for TypeScript with Prettier integration
-- **jest.config.js** - Jest testing configuration for unit and integration tests
-- **LICENSE** - MIT License for the project
-- **package.json** - Project dependencies and npm scripts for building, testing, and running
-- **tsconfig.json** - TypeScript compiler configuration
+## Core Modules
 
-## **Source Code Files**
+### Drivers Module
 
-### **Core Application**
-- **src/app.module.ts** - Main application module that imports all feature modules
-- **src/main.ts** - Application bootstrap file with middleware, security, and validation setup
+* Driver registration and lifecycle
+* Location updates
+* Availability and status transitions
 
-### **Configuration**
-- **src/config/database.config.ts** - TypeORM database configuration for entities
-- **src/config/data-source.ts** - TypeORM DataSource configuration for migrations
+### Assignment Module
 
-### **Health Module**
-- **src/health/health.controller.ts** - Health check endpoints for monitoring
-- **src/health/health.module.ts** - Health module definition
-- **src/health/typeorm.health.ts** - Custom health indicator for database connectivity
+* Nearest-driver selection
+* Redis GEO–based lookup
+* PostgreSQL fallback with distance calculation
 
-### **Assignment Module**
-- **src/assignment/assignment.module.ts** - Module for driver assignment logic
-- **src/assignment/assignment.service.ts** - Service to assign drivers to deliveries
-- **src/assignment/entities/assignment.entity.ts** - Entity for tracking driver assignments
+### Redis Module
 
-### **Deliveries Module**
-- **src/deliveries/deliveries.controller.ts** - REST API endpoints for delivery management
-- **src/deliveries/deliveries.module.ts** - Deliveries module definition
-- **src/deliveries/deliveries.service.ts** - Service for delivery lifecycle management
-- **src/deliveries/dto/create-delivery.dto.ts** - DTO for creating deliveries
-- **src/deliveries/dto/update-delivery-status.dto.ts** - DTO for updating delivery status
-- **src/deliveries/entities/delivery.entity.ts** - Main delivery entity
-- **src/deliveries/entities/delivery-event.entity.ts** - Entity for delivery status history
+* GEO index for available drivers
+* Status and online heartbeat tracking
+* Strict availability invariants
 
-### **Drivers Module**
-- **src/drivers/drivers.controller.ts** - REST API endpoints for driver management
-- **src/drivers/drivers.module.ts** - Drivers module definition
-- **src/drivers/drivers.service.ts** - Service for driver CRUD operations and location management
-- **src/drivers/dto/create-driver.dto.ts** - DTO for creating drivers
-- **src/drivers/dto/update-driver-location.dto.ts** - DTO for updating driver location
-- **src/drivers/dto/update-driver-status.dto.ts** - DTO for updating driver status
-- **src/drivers/entities/driver.entity.ts** - Driver entity with location and status fields
+### Deliveries Module
 
-### **Events Module**
-- **src/events/events.controller.ts** - Webhook endpoint for receiving order events from Vendure
-- **src/events/events.module.ts** - Events module definition
+* Delivery creation and state transitions
+* Assignment linking
+* Delivery event tracking
 
-### **Webhooks Module**
-- **src/webhooks/webhooks.controller.ts** - Controller for receiving webhooks from driver apps
-- **src/webhooks/webhooks.module.ts** - Webhooks module definition
-- **src/webhooks/webhooks.service.ts** - Service for sending webhooks to Vendure
-- **src/webhooks/dto/vendure-webhook.dto.ts** - DTOs for Vendure webhook payloads
+### Health Module
 
-# **Project Brief**
+* `/health` endpoint
+* Database connectivity checks
+* Redis connectivity checks
 
-## **Driver Management & Delivery Orchestration Microservice**
+---
 
-This is a **NestJS-based microservice** designed to manage drivers and orchestrate delivery assignments for an e-commerce platform (Vendure). The service acts as an intermediary between the e-commerce system and delivery personnel.
+## Redis Availability Model (GA Invariant)
 
-### **Core Functionality:**
-1. **Driver Management** - Register, track, and manage delivery drivers with real-time location updates
-2. **Delivery Orchestration** - Automatically assign the nearest available driver to new orders
-3. **Webhook Integration** - Two-way webhook communication with Vendure for order events
-4. **Delivery Lifecycle** - Track delivery status from assignment to completion/failure
+| Redis Key         | Responsibility             |
+| ----------------- | -------------------------- |
+| `drivers:geo`     | **Only AVAILABLE drivers** |
+| `drivers:status`  | AVAILABLE / BUSY / OFFLINE |
+| `driver:online:*` | TTL-based heartbeat        |
 
-### **Key Features:**
-- **V1 Simplified Workflow** - Immediate driver assignment without acceptance workflow
-- **Real-time Driver Location** - Track and use driver locations for optimal assignment
-- **Delivery Status Tracking** - Comprehensive status updates with proof of delivery/pickup
-- **Health Monitoring** - Built-in health checks for service and database
-- **Security** - Webhook secret validation, Helmet, CORS, and input validation
-- **Logging** - Winston-based structured logging to files and console
+**Invariant:** BUSY or OFFLINE drivers are immediately removed from the GEO set.
 
-### **Architecture:**
-- **NestJS Framework** - Modular, scalable architecture
-- **PostgreSQL Database** - Persistent storage with TypeORM
-- **Docker Deployment** - Containerized with PostgreSQL dependency
-- **REST APIs** - Internal management endpoints
-- **Webhook-based Events** - External system integration
+This invariant is enforced by:
 
-### **Integration Points:**
-1. **From Vendure** - Receives `seller-order-ready` events
-2. **To Vendure** - Sends delivery status updates (assigned, picked up, delivered, failed)
-3. **From Driver App** - Receives location updates and status changes
+* RedisService implementation
+* Jest regression tests
 
-### **Business Logic:**
-- Automatically finds the nearest available driver using Haversine formula
-- Updates driver status to "BUSY" when assigned
-- Maintains complete audit trail of delivery events
-- Handles delivery failures with reason codes
+---
 
-The service is production-ready with proper error handling, logging, monitoring, and follows v1 simplified rules where assignments are immediate and final without driver acceptance workflow.
+## Running the Service
+
+### Development
+
+```bash
+npm install
+npm run start:dev
+```
+
+### Production (PM2 Cluster)
+
+```bash
+npm run build
+pm2 start ecosystem.config.cjs
+```
+
+### Verify
+
+```bash
+pm2 list
+curl http://localhost:3001/health
+```
+
+---
+
+## Environment Variables
+
+```env
+PORT=3001
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=vendure
+DB_USERNAME=vendure
+DB_PASSWORD=********
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=********
+```
+
+---
+
+## Testing
+
+```bash
+npm test
+npm run test:cov
+```
+
+Critical Redis invariants are covered by unit tests:
+
+* GEO set consistency
+* Status transitions
+* Pipeline usage
+* Radius safety limits
+
+---
+
+## Release Status
+
+* **Current GA Version**: `v1.0.0`
+* **Stability**: Production-ready
+* **Backward Compatibility**: Guaranteed for v1 APIs
+
+---
+
+## Design Principles
+
+* **Correctness over cleverness**
+* **Fail safe, not fail silent**
+* **Redis accelerates, PostgreSQL decides**
+* **Every invariant must be testable**
+
+---
+
+## License
+
+MIT License
