@@ -1,11 +1,19 @@
 import { Module } from "@nestjs/common";
-import { HealthController } from "./health.controller";
 import { TerminusModule } from "@nestjs/terminus";
+import { HealthController } from "./health.controller";
 import { TypeOrmHealthIndicator } from "./typeorm.health";
+import { RedisHealthIndicator } from "./redis.health";
+import { RedisModule } from "../redis/redis.module";
 
 @Module({
-  imports: [TerminusModule],
+  imports: [
+    TerminusModule,
+    RedisModule, // 👈 REQUIRED
+  ],
   controllers: [HealthController],
-  providers: [TypeOrmHealthIndicator],
+  providers: [
+    TypeOrmHealthIndicator,
+    RedisHealthIndicator,
+  ],
 })
 export class HealthModule {}
