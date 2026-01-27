@@ -9,7 +9,7 @@ export class UpdateDeliveryStatusDto {
     "FAILED",
     "CANCELLED",
   ])
-  status:
+  status!:
     | "ASSIGNED"
     | "PICKED_UP"
     | "IN_TRANSIT"

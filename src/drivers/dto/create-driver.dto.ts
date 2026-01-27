@@ -7,10 +7,10 @@ import {
 
 export class CreateDriverDto {
   @IsString()
-  name: string;
+  name!: string;
 
   @IsPhoneNumber()
-  phone: string;
+  phone!: string;
 
   @IsOptional()
   @IsBoolean()

@@ -8,6 +8,8 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  Query,
+  BadRequestException,
 } from "@nestjs/common";
 import { DriversService } from "./drivers.service";
 import { CreateDriverDto } from "./dto/create-driver.dto";
@@ -29,8 +31,20 @@ export class DriversController {
   }
 
   @Get("available")
-  findAvailable() {
-    return this.driversService.findAvailable();
+  findAvailable(
+    @Query("lat") lat?: string,
+    @Query("lon") lon?: string,
+    @Query("radiusKm") radiusKm?: string,
+  ) {
+    // Validate that lat and lon are provided together
+    if ((lat && !lon) || (!lat && lon)) {
+      throw new BadRequestException("lat and lon must be provided together");
+    }
+
+    const latNum = lat ? parseFloat(lat) : undefined;
+    const lonNum = lon ? parseFloat(lon) : undefined;
+    const radiusKmNum = radiusKm ? parseFloat(radiusKm) : undefined;
+    return this.driversService.findAvailable(latNum, lonNum, radiusKmNum);
   }
 
   @Get(":id")
