@@ -190,4 +190,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return false;
     }
   }
+
+  /**
+   * Get the underlying Redis client for low-level operations
+   */
+  getClient(): Redis {
+    return this.redis;
+  }
 }

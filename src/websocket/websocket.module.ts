@@ -6,9 +6,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { WebSocketGatewayHandler } from './websocket.gateway';
 import { WebSocketService } from './websocket.service';
 import { WebSocketJwtGuard } from './websocket.guard';
+import { WebSocketMetricsService } from './websocket-metrics.service';
 
 import { DriversModule } from '../drivers/drivers.module';
 import { DeliveriesModule } from '../deliveries/deliveries.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Global()
 @Module({
@@ -18,12 +20,14 @@ import { DeliveriesModule } from '../deliveries/deliveries.module';
     }),
     DriversModule,
     DeliveriesModule,
+    RedisModule,
   ],
   providers: [
     WebSocketGatewayHandler,
     WebSocketService,
     WebSocketJwtGuard,
+    WebSocketMetricsService,
   ],
-  exports: [WebSocketService],
+  exports: [WebSocketService, WebSocketMetricsService],
 })
 export class WebSocketModule {}

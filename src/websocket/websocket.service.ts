@@ -7,11 +7,16 @@ import {
   ProofAcceptedEvent,
   LocationAckEvent,
 } from './interfaces/websocket.interface';
+import { WebSocketMetricsService } from './websocket-metrics.service';
 
 @Injectable()
 export class WebSocketService {
   private readonly logger = new Logger(WebSocketService.name);
   private server!: Server;
+
+  constructor(
+    private readonly metrics: WebSocketMetricsService,
+  ) {}
 
   bindServer(server: Server) {
     this.server = server;
@@ -21,19 +26,23 @@ export class WebSocketService {
     return `driver:${driverId}`;
   }
 
-  emitDeliveryAssigned(driverId: string, event: DeliveryAssignedEvent) {
+  async emitDeliveryAssigned(driverId: string, event: DeliveryAssignedEvent) {
     this.server.to(this.room(driverId)).emit('DELIVERY_ASSIGNED_V1', event);
+    await this.metrics.messageSent(driverId);
   }
 
-  emitProofAccepted(driverId: string, event: ProofAcceptedEvent) {
+  async emitProofAccepted(driverId: string, event: ProofAcceptedEvent) {
     this.server.to(this.room(driverId)).emit('PROOF_ACCEPTED_V1', event);
+    await this.metrics.messageSent(driverId);
   }
 
-  emitLocationAck(driverId: string, event: LocationAckEvent) {
+  async emitLocationAck(driverId: string, event: LocationAckEvent) {
     this.server.to(this.room(driverId)).emit('LOCATION_ACK_V1', event);
+    await this.metrics.messageSent(driverId);
   }
 
-  emitError(driverId: string, code: string, message: string) {
+  async emitError(driverId: string, code: string, message: string) {
     this.server.to(this.room(driverId)).emit('ERROR_V1', { code, message });
+    await this.metrics.messageSent(driverId);
   }
 }

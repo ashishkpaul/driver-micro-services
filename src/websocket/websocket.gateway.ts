@@ -26,6 +26,7 @@ import {
 import { handleLocationUpdate } from './events/location.handler';
 import { handleProofUploaded } from './events/proof.handler';
 import { handleDriverStatus } from './events/delivery.handler';
+import { WebSocketMetricsService } from './websocket-metrics.service';
 
 @WebSocketGateway({
   namespace: '/driver',
@@ -44,6 +45,7 @@ export class WebSocketGatewayHandler
     private readonly wsService: WebSocketService,
     private readonly driversService: DriversService,
     private readonly deliveriesService: DeliveriesService,
+    private readonly metrics: WebSocketMetricsService,
   ) {}
 
   afterInit(server: Server) {
@@ -60,6 +62,7 @@ export class WebSocketGatewayHandler
     }
 
     client.join(`driver:${driverId}`);
+    await this.metrics.onConnect(driverId);
     await this.driversService.updateStatus(driverId, 'AVAILABLE');
 
     this.logger.log(`Driver ${driverId} connected`);
@@ -69,6 +72,10 @@ export class WebSocketGatewayHandler
     const driverId = client.data.driverId;
     if (!driverId) return;
 
+    // Record disconnect for metrics
+    await this.metrics.onDisconnect(driverId);
+
+    // Delay OFFLINE status update to handle reconnection scenarios
     setTimeout(async () => {
       const stillConnected = Array.from(this.server.sockets.sockets.values())
         .some(s => s.data?.driverId === driverId);
@@ -81,31 +88,48 @@ export class WebSocketGatewayHandler
   }
 
   @SubscribeMessage('LOCATION_UPDATE_V1')
-  handleLocation(
+  async handleLocation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: LocationUpdateEvent,
   ) {
+    const driverId = client.data.driverId;
+    if (driverId) {
+      await this.metrics.messageReceived(driverId);
+    }
     return handleLocationUpdate(client, data, this.driversService);
   }
 
   @SubscribeMessage('PROOF_UPLOADED_V1')
-  handleProof(
+  async handleProof(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: ProofUploadedEvent,
   ) {
+    const driverId = client.data.driverId;
+    if (driverId) {
+      await this.metrics.messageReceived(driverId);
+    }
     return handleProofUploaded(client, data, this.deliveriesService);
   }
 
   @SubscribeMessage('DRIVER_STATUS_V1')
-  handleStatus(
+  async handleStatus(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: DriverStatusEvent,
   ) {
+    const driverId = client.data.driverId;
+    if (driverId) {
+      await this.metrics.messageReceived(driverId);
+    }
     return handleDriverStatus(client, data, this.driversService);
   }
 
   @SubscribeMessage('PING_V1')
-  handlePing() {
+  async handlePing(@ConnectedSocket() client: Socket) {
+    const driverId = client.data.driverId;
+    if (driverId) {
+      await this.metrics.messageReceived(driverId);
+    }
+    
     return {
       timestamp: Date.now(),
       status: 'ok',
