@@ -18,6 +18,8 @@ export class WebSocketMetricsService {
     const pipeline = this.getClient().pipeline();
     pipeline.hincrby(this.driverKey(driverId), 'connects', 1);
     pipeline.hset(this.driverKey(driverId), 'lastSeenAt', Date.now());
+    // Set TTL of 24 hours to avoid Redis bloat
+    pipeline.expire(this.driverKey(driverId), 60 * 60 * 24);
     pipeline.incr('ws:connections:active');
     await pipeline.exec();
   }

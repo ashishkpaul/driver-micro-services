@@ -20,5 +20,11 @@ yarn-error.log*
 # Coverage
 coverage/
 
+# Migration builds
+dist-migrations/
+
+# Application logs
+logs/
+
 # Mac
 .DS_Store

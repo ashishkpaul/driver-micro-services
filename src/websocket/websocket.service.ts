@@ -28,21 +28,25 @@ export class WebSocketService {
 
   async emitDeliveryAssigned(driverId: string, event: DeliveryAssignedEvent) {
     this.server.to(this.room(driverId)).emit('DELIVERY_ASSIGNED_V1', event);
-    await this.metrics.messageSent(driverId);
+    // Fire-and-forget metrics to prevent Redis stalls from blocking message delivery
+    this.metrics.messageSent(driverId).catch(() => {});
   }
 
   async emitProofAccepted(driverId: string, event: ProofAcceptedEvent) {
     this.server.to(this.room(driverId)).emit('PROOF_ACCEPTED_V1', event);
-    await this.metrics.messageSent(driverId);
+    // Fire-and-forget metrics to prevent Redis stalls from blocking message delivery
+    this.metrics.messageSent(driverId).catch(() => {});
   }
 
   async emitLocationAck(driverId: string, event: LocationAckEvent) {
     this.server.to(this.room(driverId)).emit('LOCATION_ACK_V1', event);
-    await this.metrics.messageSent(driverId);
+    // Fire-and-forget metrics to prevent Redis stalls from blocking message delivery
+    this.metrics.messageSent(driverId).catch(() => {});
   }
 
   async emitError(driverId: string, code: string, message: string) {
     this.server.to(this.room(driverId)).emit('ERROR_V1', { code, message });
-    await this.metrics.messageSent(driverId);
+    // Fire-and-forget metrics to prevent Redis stalls from blocking message delivery
+    this.metrics.messageSent(driverId).catch(() => {});
   }
 }

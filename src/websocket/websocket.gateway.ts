@@ -62,7 +62,8 @@ export class WebSocketGatewayHandler
     }
 
     client.join(`driver:${driverId}`);
-    await this.metrics.onConnect(driverId);
+    // Fire-and-forget metrics to prevent Redis stalls from blocking connections
+    this.metrics.onConnect(driverId).catch(() => {});
     await this.driversService.updateStatus(driverId, 'AVAILABLE');
 
     this.logger.log(`Driver ${driverId} connected`);
@@ -72,8 +73,8 @@ export class WebSocketGatewayHandler
     const driverId = client.data.driverId;
     if (!driverId) return;
 
-    // Record disconnect for metrics
-    await this.metrics.onDisconnect(driverId);
+    // Fire-and-forget metrics to prevent Redis stalls from blocking disconnections
+    this.metrics.onDisconnect(driverId).catch(() => {});
 
     // Delay OFFLINE status update to handle reconnection scenarios
     setTimeout(async () => {
@@ -94,7 +95,8 @@ export class WebSocketGatewayHandler
   ) {
     const driverId = client.data.driverId;
     if (driverId) {
-      await this.metrics.messageReceived(driverId);
+      // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
+      this.metrics.messageReceived(driverId).catch(() => {});
     }
     return handleLocationUpdate(client, data, this.driversService);
   }
@@ -106,7 +108,8 @@ export class WebSocketGatewayHandler
   ) {
     const driverId = client.data.driverId;
     if (driverId) {
-      await this.metrics.messageReceived(driverId);
+      // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
+      this.metrics.messageReceived(driverId).catch(() => {});
     }
     return handleProofUploaded(client, data, this.deliveriesService);
   }
@@ -118,7 +121,8 @@ export class WebSocketGatewayHandler
   ) {
     const driverId = client.data.driverId;
     if (driverId) {
-      await this.metrics.messageReceived(driverId);
+      // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
+      this.metrics.messageReceived(driverId).catch(() => {});
     }
     return handleDriverStatus(client, data, this.driversService);
   }
@@ -127,7 +131,8 @@ export class WebSocketGatewayHandler
   async handlePing(@ConnectedSocket() client: Socket) {
     const driverId = client.data.driverId;
     if (driverId) {
-      await this.metrics.messageReceived(driverId);
+      // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
+      this.metrics.messageReceived(driverId).catch(() => {});
     }
     
     return {
