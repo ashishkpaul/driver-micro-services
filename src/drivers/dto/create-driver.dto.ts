@@ -9,7 +9,7 @@ export class CreateDriverDto {
   @IsString()
   name!: string;
 
-  @IsPhoneNumber()
+  @IsPhoneNumber("IN")
   phone!: string;
 
   @IsOptional()

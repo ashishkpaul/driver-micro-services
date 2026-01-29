@@ -1,11 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+
 import { DriversService } from "../drivers/drivers.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
 import { Assignment } from "./entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { WebhooksService } from "../webhooks/webhooks.service";
+import { WebSocketService } from "../websocket/websocket.service"; // ✅ NEW
 
 @Injectable()
 export class AssignmentService {
@@ -13,10 +15,11 @@ export class AssignmentService {
 
   constructor(
     @InjectRepository(Assignment)
-    private assignmentRepository: Repository<Assignment>,
-    private driversService: DriversService,
-    private deliveriesService: DeliveriesService,
-    private webhooksService: WebhooksService,
+    private readonly assignmentRepository: Repository<Assignment>,
+    private readonly driversService: DriversService,
+    private readonly deliveriesService: DeliveriesService,
+    private readonly webhooksService: WebhooksService,
+    private readonly webSocketService: WebSocketService, // ✅ NEW
   ) {}
 
   async createAndAssignDelivery(
@@ -41,7 +44,7 @@ export class AssignmentService {
       `Created delivery ${delivery.id} for seller order ${sellerOrderId}`,
     );
 
-    // 2. Find and assign driver
+    // 2. Find nearest available driver
     const driver = await this.findNearestAvailableDriver(pickupLat, pickupLon);
 
     if (!driver) {
@@ -51,13 +54,14 @@ export class AssignmentService {
       return delivery.id;
     }
 
-    // 3. Create assignment record (v1-simplified: no status, no acceptance workflow)
+    // 3. Create assignment record (v1: no acceptance workflow)
     const assignment = this.assignmentRepository.create({
       sellerOrderId,
       driverId: driver.id,
     });
 
     await this.assignmentRepository.save(assignment);
+
     this.logger.log(
       `Created assignment ${assignment.id} for driver ${driver.id}`,
     );
@@ -72,7 +76,7 @@ export class AssignmentService {
     // 5. Update driver status
     await this.driversService.updateStatus(driver.id, "BUSY");
 
-    // 6. Emit DELIVERY_ASSIGNED_V1 to Vendure
+    // 6. Emit DELIVERY_ASSIGNED_V1 to Vendure (webhook)
     await this.webhooksService.emitDeliveryAssigned({
       sellerOrderId,
       channelId,
@@ -81,9 +85,37 @@ export class AssignmentService {
       assignedAt: new Date().toISOString(),
     });
 
+    // 7. Emit DELIVERY_ASSIGNED_V1 to driver via WebSocket (✅ NEW)
+    try {
+      this.webSocketService.emitDeliveryAssigned(driver.id, {
+        deliveryId: delivery.id,
+        sellerOrderId,
+        pickupLocation: {
+          lat: pickupLat,
+          lon: pickupLon,
+        },
+        dropLocation: {
+          lat: dropLat,
+          lon: dropLon,
+        },
+        assignmentId: assignment.id,
+        assignedAt: new Date().toISOString(),
+      });
+
+      this.logger.log(
+        `Emitted DELIVERY_ASSIGNED_V1 to driver ${driver.id} via WebSocket`,
+      );
+    } catch (err) {
+      // v1 behavior: log only, no retry, no queue
+      this.logger.warn(
+        `Driver ${driver.id} not connected via WebSocket, assignment not pushed`,
+      );
+    }
+
     this.logger.log(
       `Successfully assigned driver ${driver.id} to delivery ${delivery.id}`,
     );
+
     return delivery.id;
   }
 
@@ -91,13 +123,13 @@ export class AssignmentService {
     pickupLat: number,
     pickupLon: number,
   ): Promise<(Driver & { currentLat: number; currentLon: number }) | null> {
-    const availableDrivers = await this.driversService.findAvailable(pickupLat, pickupLon, 5);
+    const availableDrivers =
+      await this.driversService.findAvailable(pickupLat, pickupLon, 5);
 
     if (availableDrivers.length === 0) {
       return null;
     }
 
-    // Calculate distance for each driver
     const driversWithDistance = availableDrivers
       .filter(
         (
@@ -124,7 +156,9 @@ export class AssignmentService {
     return driversWithDistance[0].driver;
   }
 
-  async getAssignmentHistory(sellerOrderId: string): Promise<Assignment[]> {
+  async getAssignmentHistory(
+    sellerOrderId: string,
+  ): Promise<Assignment[]> {
     return await this.assignmentRepository.find({
       where: { sellerOrderId },
       order: { createdAt: "DESC" },

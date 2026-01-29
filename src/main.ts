@@ -7,6 +7,7 @@ import * as compression from "compression";
 import { Logger } from "winston";
 import { WinstonModule } from "nest-winston";
 import * as winston from "winston";
+import { IoAdapter } from '@nestjs/platform-socket.io'; // Add this
 
 async function bootstrap() {
   // Logger setup
@@ -34,7 +35,7 @@ async function bootstrap() {
     logger: WinstonModule.createLogger({ instance: logger }),
   });
 
-  // Enable shutdown hooks for graceful shutdown (e.g., SIGTERM)
+  // Enable shutdown hooks for graceful shutdown
   app.enableShutdownHooks();
 
   const configService = app.get(ConfigService);
@@ -42,6 +43,7 @@ async function bootstrap() {
   // Security & middleware
   app.use(helmet());
   app.use(compression());
+  
   const origins = configService
     .get<string>("CORS_ORIGINS", "")
     .split(",")
@@ -51,6 +53,9 @@ async function bootstrap() {
     origin: origins.length ? origins : true,
     credentials: true,
   });
+
+  // Use Socket.IO adapter for WebSocket
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // Validation
   app.useGlobalPipes(
@@ -64,8 +69,9 @@ async function bootstrap() {
   const port = configService.get("PORT", 3001);
   await app.listen(port);
   logger.info(`Driver Service running on port ${port}`);
+  logger.info(`WebSocket server running on port ${configService.get("WEBSOCKET_PORT", 3002)}`);
 
-  // Handle SIGTERM for graceful shutdown in Kubernetes
+  // Handle SIGTERM for graceful shutdown
   process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, starting graceful shutdown');
     await app.close();

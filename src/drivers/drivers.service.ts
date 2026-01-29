@@ -112,13 +112,19 @@ export class DriversService {
     return driver;
   }
 
+  async findById(driverId: string): Promise<Driver | null> {
+    return this.driverRepository.findOne({
+      where: { id: driverId },
+    });
+  }
+
   async updateLocation(id: string, lat: number, lon: number): Promise<Driver> {
     const driver = await this.findOne(id);
     driver.currentLat = lat;
     driver.currentLon = lon;
     driver.status = "AVAILABLE";
     driver.lastActiveAt = new Date();
-    driver.isActive = true;
+    // Do NOT modify isActive - it's an admin disable flag only
 
     // Update Redis first (latency-critical)
     try {
@@ -142,11 +148,7 @@ export class DriversService {
     driver.status = status;
     driver.lastActiveAt = new Date();
 
-    if (status === "OFFLINE") {
-      driver.isActive = false;
-    } else {
-      driver.isActive = true;
-    }
+    // Do NOT modify isActive - it's an admin disable flag only
 
     // Update Redis first (latency-critical)
     try {
