@@ -6,6 +6,8 @@ import { DeliveryEvent } from "./entities/delivery-event.entity";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
 import { UpdateDeliveryStatusDto } from "./dto/update-delivery-status.dto";
 import { WebhooksService } from "../webhooks/webhooks.service";
+import { DeliveryEventsNotifier } from "./delivery-events.notifier";
+
 import {
   DeliveryAssignedDto,
   DeliveryPickedUpDto,
@@ -13,25 +15,32 @@ import {
   DeliveryFailedDto,
 } from "../webhooks/dto/vendure-webhook.dto";
 
+/**
+ * Vendure only accepts this strict subset of states.
+ * Internal delivery states MAY be broader.
+ */
+type VendureStatus =
+  | "ASSIGNED"
+  | "PICKED_UP"
+  | "DELIVERED"
+  | "FAILED";
+
 @Injectable()
 export class DeliveriesService {
   private readonly logger = new Logger(DeliveriesService.name);
 
-  // Only these states are emitted to Vendure:
-  private readonly VENDURE_V1_STATES = [
-    "ASSIGNED",
-    "PICKED_UP",
-    "DELIVERED",
-    "FAILED",
-  ] as const;
-
   constructor(
     @InjectRepository(Delivery)
-    private deliveryRepository: Repository<Delivery>,
+    private readonly deliveryRepository: Repository<Delivery>,
     @InjectRepository(DeliveryEvent)
-    private deliveryEventRepository: Repository<DeliveryEvent>,
-    private webhooksService: WebhooksService,
+    private readonly deliveryEventRepository: Repository<DeliveryEvent>,
+    private readonly webhooksService: WebhooksService,
+    private readonly notifier: DeliveryEventsNotifier, // ✅ FIXED
   ) {}
+
+  // ---------------------------------------------------------------------------
+  // CRUD
+  // ---------------------------------------------------------------------------
 
   async create(createDeliveryDto: CreateDeliveryDto): Promise<Delivery> {
     const delivery = this.deliveryRepository.create(createDeliveryDto);
@@ -74,6 +83,10 @@ export class DeliveriesService {
     return delivery;
   }
 
+  // ---------------------------------------------------------------------------
+  // Assignment
+  // ---------------------------------------------------------------------------
+
   async assignDriver(
     deliveryId: string,
     driverId: string,
@@ -85,6 +98,8 @@ export class DeliveriesService {
     delivery.status = "ASSIGNED";
     delivery.assignedAt = new Date();
 
+    await this.deliveryRepository.save(delivery);
+
     await this.createEvent({
       deliveryId: delivery.id,
       sellerOrderId: delivery.sellerOrderId,
@@ -92,8 +107,8 @@ export class DeliveriesService {
       metadata: { driverId, assignmentId },
     });
 
-    // Emit ASSIGNED event to Vendure (v1-allowed state)
-    await this.emitToVendureIfAllowed("ASSIGNED", {
+    // Emit ASSIGNED to Vendure (allowed)
+    await this.emitToVendure("ASSIGNED", {
       sellerOrderId: delivery.sellerOrderId,
       channelId: delivery.channelId,
       driverId,
@@ -101,8 +116,12 @@ export class DeliveriesService {
       assignedAt: delivery.assignedAt.toISOString(),
     });
 
-    return await this.deliveryRepository.save(delivery);
+    return delivery;
   }
+
+  // ---------------------------------------------------------------------------
+  // Status Updates (Proof-driven)
+  // ---------------------------------------------------------------------------
 
   async updateStatus(
     deliveryId: string,
@@ -112,48 +131,29 @@ export class DeliveriesService {
 
     delivery.status = updateDto.status;
 
-    // Update timestamps based on status
     switch (updateDto.status) {
       case "PICKED_UP":
         delivery.pickedUpAt = new Date();
         delivery.pickupProofUrl = updateDto.proofUrl;
-        // Emit PICKED_UP event to Vendure (v1-allowed state)
-        await this.emitToVendureIfAllowed("PICKED_UP", {
-          sellerOrderId: delivery.sellerOrderId,
-          channelId: delivery.channelId,
-          pickupProofUrl: updateDto.proofUrl,
-          pickedUpAt: delivery.pickedUpAt.toISOString(),
-        });
         break;
+
       case "DELIVERED":
         delivery.deliveredAt = new Date();
         delivery.deliveryProofUrl = updateDto.proofUrl;
-        // Emit DELIVERED event to Vendure (v1-allowed state)
-        await this.emitToVendureIfAllowed("DELIVERED", {
-          sellerOrderId: delivery.sellerOrderId,
-          channelId: delivery.channelId,
-          deliveryProofUrl: updateDto.proofUrl,
-          deliveredAt: delivery.deliveredAt.toISOString(),
-        });
         break;
+
       case "FAILED":
         delivery.failedAt = new Date();
         delivery.failureCode = updateDto.failureCode;
         delivery.failureReason = updateDto.failureReason;
-        // Emit FAILED event to Vendure (v1-allowed state)
-        await this.emitToVendureIfAllowed("FAILED", {
-          sellerOrderId: delivery.sellerOrderId,
-          channelId: delivery.channelId,
-          failure: {
-            code: updateDto.failureCode || "UNKNOWN",
-            reason: updateDto.failureReason || "Unknown failure",
-            occurredAt: delivery.failedAt.toISOString(),
-          },
-        });
         break;
     }
 
-    await this.createEvent({
+    // 1️⃣ Persist delivery first (source of truth)
+    await this.deliveryRepository.save(delivery);
+
+    // 2️⃣ Create domain event (audit + websocket trigger source)
+    const event = await this.createEvent({
       deliveryId: delivery.id,
       sellerOrderId: delivery.sellerOrderId,
       eventType: updateDto.status,
@@ -162,21 +162,66 @@ export class DeliveriesService {
       failureReason: updateDto.failureReason,
     });
 
+    // 🔔 3️⃣ Notify WebSocket layer (THIS WAS MISSING BEFORE)
+    await this.notifier.notify(event, delivery);
+
+    // 4️⃣ Emit to Vendure ONLY if the status is allowed
+    if (this.isVendureStatus(updateDto.status)) {
+      await this.emitToVendure(updateDto.status, {
+        sellerOrderId: delivery.sellerOrderId,
+        channelId: delivery.channelId,
+        pickupProofUrl: delivery.pickupProofUrl,
+        deliveryProofUrl: delivery.deliveryProofUrl,
+        pickedUpAt: delivery.pickedUpAt?.toISOString(),
+        deliveredAt: delivery.deliveredAt?.toISOString(),
+        failure:
+          updateDto.status === "FAILED"
+            ? {
+                code: updateDto.failureCode || "UNKNOWN",
+                reason: updateDto.failureReason || "Unknown failure",
+                occurredAt: delivery.failedAt?.toISOString(),
+              }
+            : undefined,
+      });
+    }
+
     this.logger.log(
       `Delivery ${deliveryId} status updated to ${updateDto.status}`,
     );
-    return await this.deliveryRepository.save(delivery);
+
+    return delivery;
   }
 
-  async getDeliveryHistory(sellerOrderId: string): Promise<DeliveryEvent[]> {
+  // ---------------------------------------------------------------------------
+  // History
+  // ---------------------------------------------------------------------------
+
+  async getDeliveryHistory(
+    sellerOrderId: string,
+  ): Promise<DeliveryEvent[]> {
     return await this.deliveryEventRepository.find({
       where: { sellerOrderId },
       order: { createdAt: "ASC" },
     });
   }
 
-  private async emitToVendureIfAllowed(
-    status: "ASSIGNED" | "PICKED_UP" | "DELIVERED" | "FAILED",
+  // ---------------------------------------------------------------------------
+  // Vendure helpers
+  // ---------------------------------------------------------------------------
+
+  private isVendureStatus(
+    status: string,
+  ): status is VendureStatus {
+    return (
+      status === "ASSIGNED" ||
+      status === "PICKED_UP" ||
+      status === "DELIVERED" ||
+      status === "FAILED"
+    );
+  }
+
+  private async emitToVendure(
+    status: VendureStatus,
     data: unknown,
   ): Promise<void> {
     switch (status) {
@@ -185,16 +230,19 @@ export class DeliveriesService {
           data as DeliveryAssignedDto,
         );
         break;
+
       case "PICKED_UP":
         await this.webhooksService.emitDeliveryPickedUp(
           data as DeliveryPickedUpDto,
         );
         break;
+
       case "DELIVERED":
         await this.webhooksService.emitDeliveryDelivered(
           data as DeliveryDeliveredDto,
         );
         break;
+
       case "FAILED":
         await this.webhooksService.emitDeliveryFailed(
           data as DeliveryFailedDto,
