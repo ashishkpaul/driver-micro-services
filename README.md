@@ -290,6 +290,53 @@ For full deployment steps, see **INSTALLATION-CONFIGURATION.md**.
 
 ---
 
+## Migration Policy
+
+### Golden Rule (Non-Negotiable)
+
+> **InitialSchema is the ONLY migration allowed to create tables.**
+> **All future migrations must be ALTER-only.**
+
+### Migration Hygiene
+
+1. **Never modify InitialSchema AFTER it has been released to production** - it is the baseline schema
+2. **Use strict CREATE statements** - remove `IF NOT EXISTS` from table creation
+3. **ALTER-only for future changes** - use `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` when needed
+4. **One migration per schema change** - atomic, reversible operations
+
+### Recommended Commands
+
+```bash
+# Build the project
+npm run build
+
+# Run migrations
+npm run typeorm -- migration:run -d dist/src/config/data-source.js
+
+# Start the application
+npm run start
+```
+
+### Fresh Clone Experience
+
+For a fresh clone, the migration process is deterministic:
+
+1. Database starts empty
+2. InitialSchema creates all tables with correct structure
+3. No manual SQL required
+4. All services start successfully
+
+### Troubleshooting
+
+If migrations fail:
+
+* **Check migration table** - ensure no duplicate entries
+* **Verify schema state** - ensure no partial table creation
+* **Reset database** - drop and recreate for clean state
+* **Never modify existing migrations** - create new ones instead
+
+---
+
 ## License
 
 MIT License
