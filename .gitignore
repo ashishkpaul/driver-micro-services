@@ -20,6 +20,9 @@ yarn-error.log*
 # Coverage
 coverage/
 
+# Dist files
+dist/
+
 # Migration builds
 dist-migrations/
 

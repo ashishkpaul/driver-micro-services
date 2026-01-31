@@ -13,4 +13,5 @@ export default new DataSource({
   entities: ['src/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
+  logging: process.env.NODE_ENV === 'test' ? false : ['error'],
 });
