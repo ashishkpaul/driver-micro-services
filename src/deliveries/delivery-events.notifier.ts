@@ -27,7 +27,7 @@ export class DeliveryEventsNotifier {
       await this.websocket.emitProofAccepted(delivery.driverId, {
         deliveryId: delivery.id,
         proofId: event.id,
-        proofType: 'DELIVERY',
+        proofType: 'DROPOFF',
         acceptedAt: event.createdAt.toISOString(),
       });
     }

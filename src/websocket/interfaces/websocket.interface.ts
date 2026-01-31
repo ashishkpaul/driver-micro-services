@@ -17,7 +17,7 @@ export interface LocationUpdateEvent {
 
 export interface ProofUploadedEvent {
   deliveryId: string;
-  proofType: 'PICKUP' | 'DELIVERY';
+  proofType: 'PICKUP' | 'DROPOFF';
   imageUrl: string;
   lat: number;
   lon: number;
@@ -55,6 +55,6 @@ export interface LocationAckEvent {
 export interface ProofAcceptedEvent {
   deliveryId: string;
   proofId: string;
-  proofType: 'PICKUP' | 'DELIVERY';
+  proofType: 'PICKUP' | 'DROPOFF';
   acceptedAt: string;
 }
