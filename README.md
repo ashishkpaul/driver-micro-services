@@ -315,7 +315,24 @@ npm run typeorm -- migration:run -d dist/src/config/data-source.js
 
 # Start the application
 npm run start
+
+# Run E2E tests (requires PostgreSQL and Redis running)
+npm run test:e2e
 ```
+
+### E2E Tests
+
+E2E tests expect:
+- PostgreSQL running on port 5432
+- Redis running on port 6379
+- Application started on ports 3001 (HTTP) and 3002 (WebSocket)
+
+Tests cover:
+- Health checks and service connectivity
+- Authentication and JWT token issuance
+- Driver management and availability
+- Assignment flow and delivery creation
+- WebSocket authentication and messaging
 
 ### Fresh Clone Experience
 
