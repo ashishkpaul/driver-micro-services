@@ -27,6 +27,7 @@ import { handleLocationUpdate } from './events/location.handler';
 import { handleProofUploaded } from './events/proof.handler';
 import { handleDriverStatus } from './events/delivery.handler';
 import { WebSocketMetricsService } from './websocket-metrics.service';
+import { DriverStatus } from '../drivers/enums/driver-status.enum';
 
 @WebSocketGateway({
   namespace: '/driver',
@@ -64,7 +65,7 @@ export class WebSocketGatewayHandler
     client.join(`driver:${driverId}`);
     // Fire-and-forget metrics to prevent Redis stalls from blocking connections
     this.metrics.onConnect(driverId).catch(() => {});
-    await this.driversService.updateStatus(driverId, 'AVAILABLE');
+    await this.driversService.updateStatus(driverId, DriverStatus.AVAILABLE);
 
     this.logger.log(`Driver ${driverId} connected`);
   }
@@ -82,7 +83,7 @@ export class WebSocketGatewayHandler
         .some(s => s.data?.driverId === driverId);
 
       if (!stillConnected) {
-        await this.driversService.updateStatus(driverId, 'OFFLINE');
+        await this.driversService.updateStatus(driverId, DriverStatus.OFFLINE);
         this.logger.log(`Driver ${driverId} marked OFFLINE`);
       }
     }, 30_000);

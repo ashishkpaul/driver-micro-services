@@ -8,6 +8,7 @@ import { Assignment } from "./entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { WebhooksService } from "../webhooks/webhooks.service";
 import { WebSocketService } from "../websocket/websocket.service"; // ✅ NEW
+import { DriverStatus } from '../drivers/enums/driver-status.enum';
 
 @Injectable()
 export class AssignmentService {
@@ -74,7 +75,7 @@ export class AssignmentService {
     );
 
     // 5. Update driver status
-    await this.driversService.updateStatus(driver.id, "BUSY");
+    await this.driversService.updateStatus(driver.id, DriverStatus.BUSY);
 
     // 6. Emit DELIVERY_ASSIGNED_V1 to Vendure (webhook)
     await this.webhooksService.emitDeliveryAssigned({

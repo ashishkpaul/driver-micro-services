@@ -1,218 +1,212 @@
-import { Injectable, NotFoundException, Logger } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import { Driver } from "./entities/driver.entity";
-import { CreateDriverDto } from "./dto/create-driver.dto";
-import { RedisService } from "../redis/redis.service";
+// src/drivers/drivers.service.ts
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Driver } from './entities/driver.entity';
+import { CreateDriverDto } from './dto/create-driver.dto';
+import { RedisService } from '../redis/redis.service';
+import { DriverStatus } from './enums/driver-status.enum';
 
 @Injectable()
 export class DriversService {
-  private readonly logger = new Logger(DriversService.name);
 
-  constructor(
-    @InjectRepository(Driver)
-    private driverRepository: Repository<Driver>,
-    private redisService: RedisService,
-  ) {}
+  /* ------------------------------------------------------------------ */
+  /* Utilities                                                           */
+  /* ------------------------------------------------------------------ */
 
-  async create(createDriverDto: CreateDriverDto): Promise<Driver> {
-    const driver = this.driverRepository.create(createDriverDto);
-    const savedDriver = await this.driverRepository.save(driver);
-    this.logger.log(`Driver created: ${savedDriver.id}`);
-    return savedDriver;
-  }
-
-  async findAll(): Promise<Driver[]> {
-    return await this.driverRepository.find({
-      order: { createdAt: "DESC" },
-    });
-  }
-
-  async findAvailable(lat?: number, lon?: number, radiusKm?: number): Promise<Driver[]> {
-    const limit = 50;
-    
-    // If location is provided, try Redis geo search first
-    if (lat !== undefined && lon !== undefined) {
-      try {
-        const availableDrivers = await this.redisService.findAvailableDrivers(
-          lat,
-          lon,
-          radiusKm || 5,
-          limit,
-        );
-
-        if (availableDrivers.length === 0) {
-          return [];
-        }
-
-        // Get driver IDs from Redis results
-        const driverIds = availableDrivers.map((driver) => driver.driverId);
-
-        // Fetch drivers from PostgreSQL
-        const drivers = await this.driverRepository
-          .createQueryBuilder("driver")
-          .where("driver.id IN (:...driverIds)", { driverIds })
-          .andWhere("driver.isActive = :isActive", { isActive: true })
-          .andWhere("driver.status = :status", { status: "AVAILABLE" })
-          .getMany();
-
-        // Return drivers in the same order as Redis results (nearest first)
-        const driverMap = new Map(drivers.map((driver) => [driver.id, driver]));
-        const orderedDrivers: Driver[] = [];
-        for (const { driverId } of availableDrivers) {
-          const driver = driverMap.get(driverId);
-          if (driver) {
-            orderedDrivers.push(driver);
-          }
-        }
-
-        return orderedDrivers;
-      } catch (error) {
-        this.logger.warn("Redis unavailable for geo search, falling back to DB with location filtering", error);
-        // Fallback to PostgreSQL query with location filtering and in-memory distance calculation
-        const drivers = await this.driverRepository
-          .createQueryBuilder("driver")
-          .where("driver.isActive = :isActive", { isActive: true })
-          .andWhere("driver.status = :status", { status: "AVAILABLE" })
-          .andWhere("driver.currentLat IS NOT NULL")
-          .andWhere("driver.currentLon IS NOT NULL")
-          .getMany();
-
-        // Calculate distance for each driver
-        const driversWithDistance = drivers
-          .map(driver => ({
-            driver,
-            distance: this.calculateDistance(lat, lon, driver.currentLat!, driver.currentLon!),
-          }))
-          .filter(driverWithDistance => radiusKm ? driverWithDistance.distance <= radiusKm : true)
-          .sort((a, b) => a.distance - b.distance)
-          .slice(0, limit)
-          .map(driverWithDistance => driverWithDistance.driver);
-
-        return driversWithDistance;
-      }
-    }
-
-    // Fallback to PostgreSQL query (no location provided)
-    return await this.driverRepository.find({
-      where: {
-        isActive: true,
-        status: "AVAILABLE",
-      },
-      order: { lastActiveAt: "DESC" },
-      take: limit,
-    });
-  }
-
-  async findOne(id: string): Promise<Driver> {
-    const driver = await this.driverRepository.findOne({ where: { id } });
-    if (!driver) {
-      throw new NotFoundException(`Driver with ID ${id} not found`);
-    }
-    return driver;
-  }
-
-  async findById(driverId: string): Promise<Driver | null> {
-    return this.driverRepository.findOne({
-      where: { id: driverId },
-    });
-  }
-
-  async updateLocation(id: string, lat: number, lon: number): Promise<Driver> {
-    const driver = await this.findOne(id);
-    driver.currentLat = lat;
-    driver.currentLon = lon;
-    driver.status = "AVAILABLE";
-    driver.lastActiveAt = new Date();
-    // Do NOT modify isActive - it's an admin disable flag only
-
-    // Update Redis first (latency-critical)
-    try {
-      await this.redisService.updateDriverLocation(id, lat, lon, 60);
-    } catch (error) {
-      this.logger.error(`Failed to update driver location in Redis: ${id}`, error);
-      // Don't throw, as PostgreSQL is source of truth
-    }
-
-    // Then update PostgreSQL
-    const updatedDriver = await this.driverRepository.save(driver);
-    return updatedDriver;
-  }
-
-  async updateStatus(
-    id: string,
-    status: "AVAILABLE" | "BUSY" | "OFFLINE",
-  ): Promise<Driver> {
-    const driver = await this.findOne(id);
-    const previousStatus = driver.status;
-    driver.status = status;
-    driver.lastActiveAt = new Date();
-
-    // Do NOT modify isActive - it's an admin disable flag only
-
-    // Update Redis first (latency-critical)
-    try {
-      if (status === "BUSY") {
-        await this.redisService.markDriverBusy(id);
-      } else if (status === "OFFLINE") {
-        await this.redisService.markDriverOffline(id);
-      } else if (status === "AVAILABLE") {
-        // If driver is becoming available, we need to have location to add to geo index
-        if (driver.currentLat && driver.currentLon) {
-          await this.redisService.updateDriverLocation(
-            id,
-            driver.currentLat,
-            driver.currentLon,
-            60,
-          );
-        }
-      }
-    } catch (error) {
-      this.logger.error(`Failed to update driver status in Redis: ${id}`, error);
-      // Don't throw, as PostgreSQL is source of truth
-    }
-
-    // Then update PostgreSQL
-    const updatedDriver = await this.driverRepository.save(driver);
-    return updatedDriver;
-  }
-
-  async remove(id: string): Promise<void> {
-    // Remove from Redis first
-    try {
-      await this.redisService.markDriverOffline(id);
-    } catch (error) {
-      this.logger.error(`Failed to remove driver from Redis: ${id}`, error);
-    }
-
-    // Then remove from PostgreSQL
-    const result = await this.driverRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`Driver with ID ${id} not found`);
-    }
-  }
-
-  // Haversine distance calculation (km)
   calculateDistance(
     lat1: number,
     lon1: number,
     lat2: number,
     lon2: number,
   ): number {
-    const R = 6371; // Earth's radius in km
+    const R = 6371; // km
     const dLat = this.toRad(lat2 - lat1);
     const dLon = this.toRad(lon2 - lon1);
+
     const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.sin(dLat / 2) ** 2 +
       Math.cos(this.toRad(lat1)) *
         Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+        Math.sin(dLon / 2) ** 2;
+
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
   private toRad(value: number): number {
     return (value * Math.PI) / 180;
+  }
+  private readonly logger = new Logger(DriversService.name);
+
+  constructor(
+    @InjectRepository(Driver)
+    private readonly driverRepository: Repository<Driver>,
+    private readonly redisService: RedisService,
+  ) {}
+
+  /* ------------------------------------------------------------------ */
+  /* Admin operations                                                     */
+  /* ------------------------------------------------------------------ */
+
+  async create(dto: CreateDriverDto): Promise<Driver> {
+    const driver = this.driverRepository.create(dto);
+    return this.driverRepository.save(driver);
+  }
+
+  async findAll(): Promise<Driver[]> {
+    return this.driverRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async setActive(id: string, isActive: boolean): Promise<Driver> {
+    const driver = await this.findOne(id);
+
+    driver.isActive = isActive;
+    driver.lastActiveAt = new Date();
+
+    if (!isActive) {
+      try {
+        await this.redisService.markDriverOffline(id);
+      } catch (e) {
+        this.logger.error(`Redis offline failed for ${id}`, e);
+      }
+    }
+
+    return this.driverRepository.save(driver);
+  }
+
+  async remove(id: string): Promise<void> {
+    try {
+      await this.redisService.markDriverOffline(id);
+    } catch (e) {
+      this.logger.error(`Redis cleanup failed for ${id}`, e);
+    }
+
+    const res = await this.driverRepository.delete(id);
+    if (!res.affected) {
+      throw new NotFoundException(`Driver ${id} not found`);
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Read operations                                                      */
+  /* ------------------------------------------------------------------ */
+
+  async findOne(id: string): Promise<Driver> {
+    const driver = await this.driverRepository.findOne({ where: { id } });
+    if (!driver) throw new NotFoundException(`Driver ${id} not found`);
+    return driver;
+  }
+
+  async findById(id: string): Promise<Driver | null> {
+    return this.driverRepository.findOne({ where: { id } });
+  }
+
+  async findAvailable(
+    lat?: number,
+    lon?: number,
+    radiusKm?: number,
+  ): Promise<Driver[]> {
+    const limit = 50;
+
+    if (lat !== undefined && lon !== undefined) {
+      try {
+        const redisDrivers =
+          await this.redisService.findAvailableDrivers(
+            lat,
+            lon,
+            radiusKm || 5,
+            limit,
+          );
+
+        if (!redisDrivers.length) return [];
+
+        const ids = redisDrivers.map((d) => d.driverId);
+
+        const drivers = await this.driverRepository
+          .createQueryBuilder('driver')
+          .where('driver.id IN (:...ids)', { ids })
+          .andWhere('driver.isActive = true')
+          .andWhere('driver.status = :status', {
+            status: DriverStatus.AVAILABLE,
+          })
+          .getMany();
+
+        const map = new Map(drivers.map((d) => [d.id, d]));
+        return redisDrivers
+          .map(({ driverId }) => map.get(driverId))
+          .filter(Boolean) as Driver[];
+      } catch (e) {
+        this.logger.warn('Redis unavailable, fallback to DB', e);
+      }
+    }
+
+    return this.driverRepository.find({
+      where: {
+        isActive: true,
+        status: DriverStatus.AVAILABLE,
+      },
+      order: { lastActiveAt: 'DESC' },
+      take: limit,
+    });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Driver lifecycle                                                     */
+  /* ------------------------------------------------------------------ */
+
+  async updateLocation(
+    id: string,
+    lat: number,
+    lon: number,
+  ): Promise<Driver> {
+    const driver = await this.findOne(id);
+
+    driver.currentLat = lat;
+    driver.currentLon = lon;
+    driver.status = DriverStatus.AVAILABLE;
+    driver.lastActiveAt = new Date();
+
+    try {
+      await this.redisService.updateDriverLocation(id, lat, lon, 60);
+    } catch (e) {
+      this.logger.error(`Redis location update failed ${id}`, e);
+    }
+
+    return this.driverRepository.save(driver);
+  }
+
+  async updateStatus(
+    id: string,
+    status: DriverStatus,
+  ): Promise<Driver> {
+    const driver = await this.findOne(id);
+
+    driver.status = status;
+    driver.lastActiveAt = new Date();
+
+    try {
+      if (status === DriverStatus.BUSY) {
+        await this.redisService.markDriverBusy(id);
+      } else if (status === DriverStatus.OFFLINE) {
+        await this.redisService.markDriverOffline(id);
+      } else if (
+        status === DriverStatus.AVAILABLE &&
+        driver.currentLat &&
+        driver.currentLon
+      ) {
+        await this.redisService.updateDriverLocation(
+          id,
+          driver.currentLat,
+          driver.currentLon,
+          60,
+        );
+      }
+    } catch (e) {
+      this.logger.error(`Redis status update failed ${id}`, e);
+    }
+
+    return this.driverRepository.save(driver);
   }
 }

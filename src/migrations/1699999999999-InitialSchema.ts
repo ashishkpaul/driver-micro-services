@@ -16,6 +16,8 @@ export class InitialSchema1718078374611 implements MigrationInterface {
         status VARCHAR(20) DEFAULT 'AVAILABLE',
         vehicle_type VARCHAR(100),
         vehicle_number VARCHAR(100),
+        city_id VARCHAR NOT NULL,
+        zone_id VARCHAR,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_active_at TIMESTAMP
@@ -80,6 +82,8 @@ export class InitialSchema1718078374611 implements MigrationInterface {
       CREATE INDEX IF NOT EXISTS idx_delivery_events_seller_order ON delivery_events(seller_order_id);
       CREATE INDEX IF NOT EXISTS idx_assignments_seller_driver ON assignments(seller_order_id, driver_id);
       CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
+      CREATE INDEX IF NOT EXISTS idx_drivers_city_id ON drivers(city_id);
+      CREATE INDEX IF NOT EXISTS idx_drivers_zone_id ON drivers(zone_id);
     `);
   }
 

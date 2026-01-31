@@ -1,3 +1,4 @@
+// src/drivers/entities/driver.entity.ts
 import {
   Entity,
   Column,
@@ -5,7 +6,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
-} from "typeorm";
+} from 'typeorm';
 import {
   IsNotEmpty,
   IsPhoneNumber,
@@ -14,55 +15,103 @@ import {
   IsNumber,
   Min,
   Max,
-} from "class-validator";
+} from 'class-validator';
+import { DriverStatus } from '../enums/driver-status.enum';
 
-@Entity("drivers")
+@Entity('drivers')
 export class Driver {
-  @PrimaryGeneratedColumn("uuid")
+  @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  /* ------------------------------------------------------------------ */
+  /* Identity                                                            */
+  /* ------------------------------------------------------------------ */
 
   @Column()
   @IsNotEmpty()
   name!: string;
 
   @Column({ unique: true })
-  @IsPhoneNumber()
+  @IsPhoneNumber('IN')
   phone!: string;
 
-  @Column({ name: "is_active", default: true })
+  /* ------------------------------------------------------------------ */
+  /* Admin control flags                                                  */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * HARD enable / disable flag
+   * - false → cannot login
+   * - false → cannot receive assignments
+   * - controlled ONLY by admin APIs
+   */
+  @Index()
+  @Column({ name: 'is_active', default: true })
   @IsBoolean()
   isActive!: boolean;
 
-  @Column({ name: "current_lat", nullable: true, type: "numeric" })
+  /* ------------------------------------------------------------------ */
+  /* Driver lifecycle                                                     */
+  /* ------------------------------------------------------------------ */
+
+  @Index()
+  @Column({
+    type: 'enum',
+    enum: DriverStatus,
+    default: DriverStatus.AVAILABLE,
+  })
+  status!: DriverStatus;
+
+  /* ------------------------------------------------------------------ */
+  /* Geo / availability                                                   */
+  /* ------------------------------------------------------------------ */
+
+  @Column({ name: 'current_lat', type: 'numeric', nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(-90)
   @Max(90)
   currentLat?: number;
 
-  @Column({ name: "current_lon", nullable: true, type: "numeric" })
+  @Column({ name: 'current_lon', type: 'numeric', nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(-180)
   @Max(180)
   currentLon?: number;
 
-  @Index()
-  @Column({ default: "AVAILABLE" })
-  status!: "AVAILABLE" | "BUSY" | "OFFLINE";
+  /* ------------------------------------------------------------------ */
+  /* Multi-city / zone scoping                                            */
+  /* ------------------------------------------------------------------ */
 
-  @Column({ name: "vehicle_type", nullable: true })
+  @Index()
+  @Column({ name: 'city_id' })
+  cityId!: string;
+
+  @Index()
+  @Column({ name: 'zone_id', nullable: true })
+  zoneId?: string;
+
+  /* ------------------------------------------------------------------ */
+  /* Vehicle info                                                         */
+  /* ------------------------------------------------------------------ */
+
+  @Column({ name: 'vehicle_type', nullable: true })
   vehicleType?: string;
 
-  @Column({ name: "vehicle_number", nullable: true })
+  @Column({ name: 'vehicle_number', nullable: true })
   vehicleNumber?: string;
 
-  @CreateDateColumn({ name: "created_at" })
+  /* ------------------------------------------------------------------ */
+  /* Timestamps                                                          */
+  /* ------------------------------------------------------------------ */
+
+  @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: "updated_at" })
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 
-  @Column({ name: "last_active_at", nullable: true })
+  @Column({ name: 'last_active_at', nullable: true })
   lastActiveAt?: Date;
 }
