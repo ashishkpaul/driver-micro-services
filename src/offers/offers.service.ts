@@ -142,7 +142,7 @@ export class OffersService {
 
       // Create assignment
       const assignment = this.assignmentRepository.create({
-        sellerOrderId: offer.deliveryId,
+        sellerOrderId: offer.deliveryId, // Note: In V2, deliveryId maps to sellerOrderId
         driverId
       });
       const savedAssignment = await manager.save(assignment);
