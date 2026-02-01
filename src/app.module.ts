@@ -13,6 +13,7 @@ import { databaseConfig } from "./config/database.config";
 import { HealthModule } from "./health/health.module";
 import { WebSocketModule } from "./websocket/websocket.module";
 import { AuthModule } from "./auth/auth.module";
+import { AdminModule } from "./modules/admin.module";
 
 @Module({
   imports: [

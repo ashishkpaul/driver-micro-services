@@ -8,30 +8,43 @@ import {
 import { Role } from './roles.enum';
 
 interface AdminJwtPayload {
-  sub: string;
+  userId: string;
+  email: string;
   role: Role;
-  scope?: {
-    cities?: string[];
-    zones?: string[];
-  };
+  cityId?: string;
+  sub: string;
+  type: 'admin';
+}
+
+interface DriverJwtPayload {
+  driverId: string;
+  sub: string;
+  type: 'driver';
 }
 
 export class AdminScopeGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest();
-    const user = req.user as AdminJwtPayload | undefined;
+    const user = req.user as AdminJwtPayload | DriverJwtPayload | undefined;
 
     if (!user) {
       throw new UnauthorizedException('Missing authentication');
     }
 
+    // Check if user is admin (not driver)
+    if (user.type !== 'admin') {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const adminUser = user as AdminJwtPayload;
+
     // Role check
-    if (![Role.ADMIN, Role.SUPER_ADMIN].includes(user.role)) {
+    if (![Role.ADMIN, Role.SUPER_ADMIN].includes(adminUser.role)) {
       throw new ForbiddenException('Admin access required');
     }
 
     // SUPER_ADMIN bypasses all scope checks
-    if (user.role === Role.SUPER_ADMIN) {
+    if (adminUser.role === Role.SUPER_ADMIN) {
       return true;
     }
 
@@ -45,9 +58,10 @@ export class AdminScopeGuard implements CanActivate {
       throw new ForbiddenException('Missing city scope');
     }
 
-    if (!user.scope?.cities?.includes(cityId)) {
+    // Admin can only access their assigned city
+    if (adminUser.cityId !== cityId) {
       throw new ForbiddenException(
-        `You are not authorized for city ${cityId}`,
+        `You are not authorized for city ${cityId}. Your city: ${adminUser.cityId}`,
       );
     }
 

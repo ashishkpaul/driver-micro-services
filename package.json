@@ -21,6 +21,7 @@
     "migration:generate": "npm run typeorm -- migration:generate src/migrations/AutoMigration -d src/typeorm.config.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/typeorm.config.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/typeorm.config.ts",
+    "init:superadmin": "ts-node scripts/init-superadmin.ts",
     "docker:build": "docker build -t driver-micro-services .",
     "docker:run": "docker run -p 3001:3001 driver-micro-services"
   },
@@ -35,7 +36,10 @@
     "@nestjs/terminus": "^11.0.0",
     "@nestjs/typeorm": "^10.0.2",
     "@nestjs/websockets": "^10.3.0",
+    "@types/bcrypt": "^6.0.0",
+    "@types/geojson": "^7946.0.16",
     "axios": "^1.6.8",
+    "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "compression": "^1.7.4",
