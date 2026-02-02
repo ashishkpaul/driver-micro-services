@@ -1,9 +1,15 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { AdminLoginDto } from '../dto/admin.dto';
+import { AuditService } from '../services/audit.service';
+import { Request } from 'express';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly auditService: AuditService,
+  ) {}
 
   /**
    * POST /auth/login
@@ -17,5 +23,31 @@ export class AuthController {
   async login(@Body('driverId') driverId: string) {
     const driver = await this.authService.validateDriver(driverId);
     return this.authService.login(driver);
+  }
+
+  /**
+   * POST /auth/admin/login
+   *
+   * Admin login endpoint:
+   * {
+   *   "email": "admin@company.com",
+   *   "password": "password"
+   * }
+   */
+  @Post('admin/login')
+  async adminLogin(@Body() loginDto: AdminLoginDto, @Req() request: Request) {
+    const admin = await this.authService.validateAdmin(loginDto.email, loginDto.password);
+    const result = await this.authService.adminLogin(admin);
+
+    // Audit log
+    await this.auditService.logFromRequest(
+      request,
+      'ADMIN_LOGIN',
+      'ADMIN',
+      admin.id,
+      { email: admin.email },
+    );
+
+    return result;
   }
 }

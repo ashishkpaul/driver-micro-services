@@ -70,6 +70,7 @@ export class AuthService {
       role: admin.role,
       cityId: admin.cityId,
       sub: admin.id,
+      type: 'admin',
     };
 
     return {

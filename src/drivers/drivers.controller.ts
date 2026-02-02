@@ -18,6 +18,7 @@ import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverLocationDto } from './dto/update-driver-location.dto';
 import { UpdateDriverStatusDto } from './dto/update-driver-status.dto';
 import { AdminScopeGuard } from '../auth/admin-scope.guard';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('drivers')
 export class DriversController {
@@ -26,32 +27,32 @@ export class DriversController {
   /* -------------------- ADMIN -------------------- */
 
   @Post()
-  @UseGuards(AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
   create(@Body() dto: CreateDriverDto) {
     return this.driversService.create(dto);
   }
 
   @Get()
-  @UseGuards(AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
   findAll() {
     return this.driversService.findAll();
   }
 
   @Patch(':id/activate')
-  @UseGuards(AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
   activate(@Param('id') id: string) {
     return this.driversService.setActive(id, true);
   }
 
   @Patch(':id/deactivate')
-  @UseGuards(AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
   deactivate(@Param('id') id: string) {
     return this.driversService.setActive(id, false);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
   remove(@Param('id') id: string) {
     return this.driversService.remove(id);
   }
@@ -59,6 +60,7 @@ export class DriversController {
   /* -------------------- DRIVER / SYSTEM -------------------- */
 
   @Get('available')
+  @UseGuards(AuthGuard('jwt'))
   findAvailable(
     @Query('lat') lat?: string,
     @Query('lon') lon?: string,

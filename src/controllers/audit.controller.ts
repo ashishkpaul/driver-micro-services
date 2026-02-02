@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { AuditService } from '../services/audit.service';
 import { AdminScopeGuard } from '../auth/admin-scope.guard';
+import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
 // Define AuthPayload interface locally since it's not exported from auth.service
 interface AuthPayload {
@@ -23,7 +24,7 @@ interface AuthPayload {
 }
 
 @Controller('admin/audit-logs')
-@UseGuards(AdminScopeGuard)
+@UseGuards(AuthGuard('jwt'), AdminScopeGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 

@@ -9,10 +9,14 @@
  * Usage: npm run init:superadmin
  */
 
+import 'reflect-metadata';
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import { DataSource } from 'typeorm';
 import { AdminUser } from '../src/entities/admin-user.entity';
+import { City } from '../src/entities/city.entity';
+import { Zone } from '../src/entities/zone.entity';
+import { AuditLog } from '../src/entities/audit-log.entity';
 import { PasswordService } from '../src/services/password.service';
 
 async function initializeSuperAdmin() {
@@ -37,8 +41,8 @@ async function initializeSuperAdmin() {
     port: parseInt(process.env.DB_PORT || '5432'),
     username: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_NAME || 'driver_db',
-    entities: [AdminUser],
+    database: process.env.DB_NAME || 'driver_service',
+    entities: [AdminUser, City, Zone, AuditLog],
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   });
 

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { DriversService } from '../drivers/drivers.service';
 import { AdminScopeGuard } from '../auth/admin-scope.guard';
+import { AuthGuard } from '@nestjs/passport';
 import { AuditService } from '../services/audit.service';
 import { Request } from 'express';
 import { AdminUpdateDriverStatusDto, AdminBulkUpdateDriverStatusDto } from '../dto/admin-driver-status.dto';
@@ -26,7 +27,7 @@ interface AuthPayload {
 }
 
 @Controller('admin/drivers')
-@UseGuards(AdminScopeGuard)
+@UseGuards(AuthGuard('jwt'), AdminScopeGuard)
 export class DriverStatusController {
   constructor(
     private readonly driversService: DriversService,

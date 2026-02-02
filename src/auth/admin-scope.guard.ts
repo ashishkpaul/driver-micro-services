@@ -54,6 +54,7 @@ export class AdminScopeGuard implements CanActivate {
       req.body.cityId ??
       req.query.cityId;
 
+    // For non-superadmin users, cityId is required
     if (!cityId) {
       throw new ForbiddenException('Missing city scope');
     }

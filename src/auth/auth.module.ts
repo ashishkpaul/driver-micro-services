@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { DriversModule } from '../drivers/drivers.module';
+import { AdminModule } from '../modules/admin.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { DriversModule } from '../drivers/drivers.module';
       signOptions: { expiresIn: '24h' },
     }),
     DriversModule,
+    AdminModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

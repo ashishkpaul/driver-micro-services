@@ -36,6 +36,7 @@ import { AdminModule } from "./modules/admin.module";
         }) as TypeOrmModuleOptions,
     }),
     AuthModule,
+    AdminModule,
     WebSocketModule,
     HealthModule,
     DriversModule,

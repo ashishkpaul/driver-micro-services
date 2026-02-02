@@ -69,21 +69,29 @@ export class AdminService {
    * Validate admin credentials for login
    */
   async validateAdmin(email: string, password: string): Promise<AdminUser> {
+    console.log('🔍 Validating admin:', email);
+    
     const admin = await this.adminRepository.findOne({
-      where: { email },
-      relations: ['city']
+      where: { email }
     });
 
+    console.log('🔍 Admin found:', !!admin);
     if (!admin) {
+      console.log('❌ Admin not found');
       throw new NotFoundException('Invalid credentials');
     }
 
+    console.log('🔍 Admin active:', admin.isActive);
     if (!admin.isActive) {
+      console.log('❌ Admin disabled');
       throw new BadRequestException('Admin account is disabled');
     }
 
+    console.log('🔍 Comparing password...');
     const isPasswordValid = await this.passwordService.compare(password, admin.passwordHash);
+    console.log('🔍 Password valid:', isPasswordValid);
     if (!isPasswordValid) {
+      console.log('❌ Invalid password');
       throw new BadRequestException('Invalid credentials');
     }
 
@@ -91,6 +99,7 @@ export class AdminService {
     admin.lastLoginAt = new Date();
     await this.adminRepository.save(admin);
 
+    console.log('✅ Admin validation successful');
     return admin;
   }
 

@@ -18,9 +18,9 @@
     "test:cov": "jest --coverage",
     "test:e2e": "NODE_ENV=test jest --config ./test/jest-e2e.json",
     "typeorm": "typeorm-ts-node-commonjs",
-    "migration:generate": "npm run typeorm -- migration:generate src/migrations/AutoMigration -d src/typeorm.config.ts",
-    "migration:run": "npm run typeorm -- migration:run -d src/typeorm.config.ts",
-    "migration:revert": "npm run typeorm -- migration:revert -d src/typeorm.config.ts",
+    "migration:generate": "npm run typeorm -- migration:generate src/migrations/AutoMigration -d src/config/data-source.ts",
+    "migration:run": "npm run typeorm -- migration:run -d src/config/data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d src/config/data-source.ts",
     "init:superadmin": "ts-node scripts/init-superadmin.ts",
     "docker:build": "docker build -t driver-micro-services .",
     "docker:run": "docker run -p 3001:3001 driver-micro-services"

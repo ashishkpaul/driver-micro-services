@@ -14,42 +14,20 @@ import {
 } from '@nestjs/common';
 import { AdminService } from '../services/admin.service';
 import { PasswordService } from '../services/password.service';
-import { AuthService } from '../auth/auth.service';
 import { AdminScopeGuard } from '../auth/admin-scope.guard';
-import { CreateAdminDto, UpdateAdminDto, AdminLoginDto, AdminListQueryDto } from '../dto/admin.dto';
-import { AdminUser } from '../entities/admin-user.entity';
+import { AuthGuard } from '@nestjs/passport';
+import { CreateAdminDto, UpdateAdminDto, AdminListQueryDto } from '../dto/admin.dto';
 import { AuditService } from '../services/audit.service';
 import { Request } from 'express';
 
 @Controller('admin/users')
-@UseGuards(AdminScopeGuard)
+@UseGuards(AuthGuard('jwt'), AdminScopeGuard)
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly passwordService: PasswordService,
-    private readonly authService: AuthService,
     private readonly auditService: AuditService,
   ) {}
-
-  /**
-   * Admin login endpoint
-   */
-  @Post('login')
-  async login(@Body() loginDto: AdminLoginDto, @Req() request: Request) {
-    const admin = await this.authService.validateAdmin(loginDto.email, loginDto.password);
-    const result = await this.authService.adminLogin(admin);
-
-    // Audit log
-    await this.auditService.logFromRequest(
-      request,
-      'ADMIN_LOGIN',
-      'ADMIN',
-      admin.id,
-      { email: admin.email },
-    );
-
-    return result;
-  }
 
   /**
    * Create new admin user (SUPER_ADMIN only)
@@ -102,6 +80,19 @@ export class AdminController {
       skip,
       take,
     };
+  }
+
+  /**
+   * Get admin statistics (SUPER_ADMIN only)
+   */
+  @Get('stats')
+  async getStats(@Req() request: Request & { user: any }) {
+    // Only SUPER_ADMIN can access stats
+    if (request.user.role !== 'SUPER_ADMIN') {
+      throw new Error('Access denied: SUPER_ADMIN only');
+    }
+
+    return this.adminService.getStats();
   }
 
   /**
@@ -195,19 +186,6 @@ export class AdminController {
       message: 'Password reset successfully',
       newPassword: result.newPassword,
     };
-  }
-
-  /**
-   * Get admin statistics (SUPER_ADMIN only)
-   */
-  @Get('stats')
-  async getStats(@Req() request: Request & { user: any }) {
-    // Only SUPER_ADMIN can access stats
-    if (request.user.role !== 'SUPER_ADMIN') {
-      throw new Error('Access denied: SUPER_ADMIN only');
-    }
-
-    return this.adminService.getStats();
   }
 
   /**

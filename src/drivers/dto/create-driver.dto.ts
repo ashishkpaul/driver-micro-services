@@ -3,6 +3,7 @@ import {
   IsPhoneNumber,
   IsOptional,
   IsBoolean,
+  IsUUID,
 } from "class-validator";
 
 export class CreateDriverDto {
@@ -11,6 +12,9 @@ export class CreateDriverDto {
 
   @IsPhoneNumber("IN")
   phone!: string;
+
+  @IsUUID("all")
+  cityId!: string;
 
   @IsOptional()
   @IsBoolean()

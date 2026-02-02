@@ -13,10 +13,12 @@ import { AuditController } from '../controllers/audit.controller';
 import { DriverStatusController } from '../controllers/driver-status.controller';
 import { AuditLoggingInterceptor } from '../interceptors/audit-logging.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { DriversModule } from '../drivers/drivers.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([AdminUser, City, Zone, AuditLog]),
+    DriversModule,
   ],
   providers: [
     AdminService,

@@ -12,14 +12,11 @@ export class AdminUsersCitiesZones1700000000000 implements MigrationInterface {
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(20) NOT NULL DEFAULT 'ADMIN',
         is_active BOOLEAN DEFAULT true,
-        city_id UUID NULLABLE,
-        created_by_id UUID NULLABLE,
-        last_login_at TIMESTAMP NULLABLE,
+        city_id UUID NULL,
+        created_by_id UUID NULL,
+        last_login_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_email (email),
-        INDEX idx_role (role),
-        INDEX idx_city_id (city_id)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -29,10 +26,9 @@ export class AdminUsersCitiesZones1700000000000 implements MigrationInterface {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL,
         code VARCHAR(50) NOT NULL,
-        center POINT NULLABLE,
+        center POINT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_code (code)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -43,13 +39,19 @@ export class AdminUsersCitiesZones1700000000000 implements MigrationInterface {
         name VARCHAR(255) NOT NULL,
         code VARCHAR(50) NOT NULL,
         city_id UUID NOT NULL,
-        boundary POLYGON NULLABLE,
+        boundary POLYGON NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_city_id (city_id),
-        INDEX idx_code (code)
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Create indexes
+    await queryRunner.query(`CREATE INDEX idx_admin_users_email ON admin_users (email)`);
+    await queryRunner.query(`CREATE INDEX idx_admin_users_role ON admin_users (role)`);
+    await queryRunner.query(`CREATE INDEX idx_admin_users_city_id ON admin_users (city_id)`);
+    await queryRunner.query(`CREATE INDEX idx_cities_code ON cities (code)`);
+    await queryRunner.query(`CREATE INDEX idx_zones_city_id ON zones (city_id)`);
+    await queryRunner.query(`CREATE INDEX idx_zones_code ON zones (code)`);
 
     // Add foreign key constraints
     await queryRunner.query(`
