@@ -22,6 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           driverId: driver.id,
           sub: payload.sub,
           type: 'driver',
+          email: payload.email,
         };
       }
       

@@ -6,6 +6,7 @@ import { AdminService } from '../services/admin.service';
 import { AdminUser } from '../entities/admin-user.entity';
 import { AdminLoginDto } from '../dto/admin.dto';
 import { Role } from './roles.enum';
+import { GoogleAuthService } from './google-auth.service';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +14,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly driversService: DriversService,
     public readonly adminService: AdminService,
+    private readonly googleAuthService: GoogleAuthService,
   ) {}
 
   /**
@@ -126,5 +128,45 @@ export class AuthService {
    */
   canAccessCity(admin: AdminUser, cityId: string): boolean {
     return admin.canAccessCity(cityId);
+  }
+
+  /**
+   * Login driver with Google SSO
+   */
+  async loginWithGoogle(idToken: string) {
+    const googleUser = await this.googleAuthService.verifyIdToken(idToken);
+
+    let driver = await this.driversService.findByGoogleSub(googleUser.googleSub);
+
+    // If not found, create a pending driver (inactive by default - admin must activate)
+    if (!driver) {
+      driver = await this.driversService.createGooglePendingDriver({
+        name: googleUser.name ?? 'Driver',
+        email: googleUser.email,
+        googleSub: googleUser.googleSub,
+      });
+    }
+
+    if (!driver.isActive) {
+      return {
+        status: 'PENDING_APPROVAL',
+        driver: {
+          id: driver.id,
+          name: driver.name,
+          email: driver.email,
+        },
+      };
+    }
+
+    const payload = {
+      driverId: driver.id,
+      sub: driver.id,
+      type: 'driver',
+    };
+
+    return {
+      accessToken: this.jwtService.sign(payload),
+      driver,
+    };
   }
 }

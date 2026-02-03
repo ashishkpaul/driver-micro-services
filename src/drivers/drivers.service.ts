@@ -103,6 +103,26 @@ export class DriversService {
     return this.driverRepository.findOne({ where: { id } });
   }
 
+  async findByGoogleSub(googleSub: string): Promise<Driver | null> {
+    return this.driverRepository.findOne({ where: { googleSub } });
+  }
+
+  async createGooglePendingDriver(data: {
+    name: string;
+    email: string;
+    googleSub: string;
+  }): Promise<Driver> {
+    const driver = this.driverRepository.create({
+      name: data.name,
+      email: data.email,
+      googleSub: data.googleSub,
+      authProvider: 'google',
+      isActive: false,
+    });
+
+    return this.driverRepository.save(driver);
+  }
+
   async findAvailable(
     lat?: number,
     lon?: number,

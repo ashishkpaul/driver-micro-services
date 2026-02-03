@@ -114,4 +114,17 @@ export class Driver {
 
   @Column({ name: 'last_active_at', nullable: true })
   lastActiveAt?: Date;
+
+  /* ------------------------------------------------------------------ */
+  /* Google SSO Authentication                                            */
+  /* ------------------------------------------------------------------ */
+
+  @Column({ nullable: true })
+  email?: string;
+
+  @Column({ name: 'google_sub', nullable: true })
+  googleSub?: string;
+
+  @Column({ name: 'auth_provider', default: 'legacy' })
+  authProvider: 'legacy' | 'google' | 'email';
 }

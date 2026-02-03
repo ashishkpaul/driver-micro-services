@@ -50,4 +50,38 @@ export class AuthController {
 
     return result;
   }
+
+  /**
+   * POST /auth/google
+   *
+   * Google SSO login endpoint:
+   * {
+   *   "idToken": "GOOGLE_ID_TOKEN"
+   * }
+   */
+  @Post('google')
+  async googleLogin(@Body('idToken') idToken: string, @Req() request: Request) {
+    const result = await this.authService.loginWithGoogle(idToken);
+
+    // Audit log
+    if (result.status === 'PENDING_APPROVAL') {
+      await this.auditService.logFromRequest(
+        request,
+        'DRIVER_GOOGLE_LOGIN_PENDING',
+        'DRIVER',
+        result.driver.id,
+        { email: result.driver.email, status: 'PENDING_APPROVAL' },
+      );
+    } else {
+      await this.auditService.logFromRequest(
+        request,
+        'DRIVER_GOOGLE_LOGIN',
+        'DRIVER',
+        result.driver.id,
+        { email: result.driver.email, authProvider: 'google' },
+      );
+    }
+
+    return result;
+  }
 }

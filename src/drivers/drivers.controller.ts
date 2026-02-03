@@ -12,7 +12,9 @@ import {
   Query,
   BadRequestException,
   UseGuards,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { DriversService } from './drivers.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverLocationDto } from './dto/update-driver-location.dto';
@@ -80,6 +82,12 @@ export class DriversController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.driversService.findOne(id);
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard('jwt'))
+  getMe(@Req() req: Request & { user: any }) {
+    return this.driversService.findById(req.user.driverId);
   }
 
   @Patch(':id/location')
