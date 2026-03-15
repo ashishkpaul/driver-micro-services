@@ -16,7 +16,7 @@ export class WebhooksService {
 
   constructor(private configService: ConfigService) {
     this.vendureWebhookUrl = this.configService.get("VENDURE_WEBHOOK_URL");
-    this.webhookSecret = this.configService.get("WEBHOOK_SECRET");
+    this.webhookSecret = this.configService.get("DRIVER_TO_VENDURE_SECRET");
   }
 
   private async sendToVendure(

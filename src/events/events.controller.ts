@@ -54,7 +54,7 @@ export class EventsController {
     private assignmentService: AssignmentService,
     private configService: ConfigService,
   ) {
-    this.expectedSecret = this.configService.get("VENDURE_WEBHOOK_SECRET");
+    this.expectedSecret = this.configService.get("VENDURE_TO_DRIVER_SECRET");
   }
 
   @Post("seller-order-ready")

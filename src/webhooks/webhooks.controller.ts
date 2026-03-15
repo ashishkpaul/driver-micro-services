@@ -23,7 +23,7 @@ export class WebhooksController {
     @Body() event: unknown,
     @Headers("X-Webhook-Secret") secret: string,
   ) {
-    const expectedSecret = this.configService.get("DRIVER_WEBHOOK_SECRET");
+    const expectedSecret = this.configService.get("DRIVER_APP_SECRET");
 
     if (secret !== expectedSecret) {
       throw new BadRequestException("Invalid webhook secret");
