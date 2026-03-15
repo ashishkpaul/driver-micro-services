@@ -147,6 +147,13 @@ export class DeliveriesService {
         delivery.failureCode = updateDto.failureCode;
         delivery.failureReason = updateDto.failureReason;
         break;
+
+      case "CANCELLED":
+        delivery.status = "CANCELLED";
+        delivery.failedAt = new Date();
+        delivery.failureCode = updateDto.failureCode || "CANCELLED";
+        delivery.failureReason = updateDto.failureReason || "Cancelled";
+        break;
     }
 
     // 1️⃣ Persist delivery first (source of truth)
