@@ -89,4 +89,8 @@ export class DeliveryFailedDto {
     reason: string;
     occurredAt: string;
   };
+
+  @IsOptional()
+  @IsString()
+  cancelledAt?: string;
 }

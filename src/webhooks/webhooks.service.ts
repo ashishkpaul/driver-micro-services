@@ -22,10 +22,13 @@ export class WebhooksService {
     this.vendureWebhookUrl = this.configService.get("VENDURE_WEBHOOK_URL");
     this.webhookSecret = this.configService.get("DRIVER_TO_VENDURE_SECRET");
 
-    axiosRetry(this.axiosInstance || axios, {
+    axiosRetry(this.axiosInstance, {
       retries: 3,
       retryDelay: axiosRetry.exponentialDelay,
       retryCondition: axiosRetry.isNetworkOrIdempotentRequestError,
+      onRetry: (retry, error) => {
+        this.logger.warn(`Retry ${retry} reason: ${error.message}`);
+      },
     });
   }
 
@@ -35,7 +38,12 @@ export class WebhooksService {
       | DeliveryPickedUpDto
       | DeliveryDeliveredDto
       | DeliveryFailedDto
-      | { sellerOrderId: string; channelId: string; reason?: string }
+      | {
+          sellerOrderId: string;
+          channelId: string;
+          reason?: string;
+          cancelledAt?: string;
+        }
     ) & { eventId?: string },
     eventType: string,
   ): Promise<void> {
@@ -98,7 +106,11 @@ export class WebhooksService {
   }): Promise<void> {
     // v1 stub: mobile integration pending - driver app will call cancel endpoint
     await this.sendToVendure(
-      { ...data, eventId: crypto.randomUUID() },
+      {
+        eventId: crypto.randomUUID(),
+        cancelledAt: new Date().toISOString(),
+        ...data,
+      },
       DELIVERY_CANCELLED_V1,
     );
   }
