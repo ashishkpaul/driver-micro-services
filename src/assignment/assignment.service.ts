@@ -77,15 +77,6 @@ export class AssignmentService {
     // 5. Update driver status
     await this.driversService.updateStatus(driver.id, DriverStatus.BUSY);
 
-    // 6. Emit DELIVERY_ASSIGNED_V1 to Vendure (webhook)
-    await this.webhooksService.emitDeliveryAssigned({
-      sellerOrderId,
-      channelId,
-      driverId: driver.id,
-      assignmentId: assignment.id,
-      assignedAt: new Date().toISOString(),
-    });
-
     // 7. Emit DELIVERY_ASSIGNED_V1 to driver via WebSocket (✅ NEW)
     try {
       this.webSocketService.emitDeliveryAssigned(driver.id, {
