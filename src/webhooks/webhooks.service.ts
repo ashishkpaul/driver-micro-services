@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios from "axios";
+import axiosRetry from "axios-retry";
 import {
   DeliveryAssignedDto,
   DeliveryPickedUpDto,
@@ -13,10 +14,17 @@ export class WebhooksService {
   private readonly logger = new Logger(WebhooksService.name);
   private readonly vendureWebhookUrl: string | undefined;
   private readonly webhookSecret: string | undefined;
+  private readonly axiosInstance = axios.create();
 
   constructor(private configService: ConfigService) {
     this.vendureWebhookUrl = this.configService.get("VENDURE_WEBHOOK_URL");
     this.webhookSecret = this.configService.get("DRIVER_TO_VENDURE_SECRET");
+
+    axiosRetry(this.axiosInstance || axios, {
+      retries: 3,
+      retryDelay: axiosRetry.exponentialDelay,
+      retryCondition: axiosRetry.isNetworkOrIdempotentRequestError,
+    });
   }
 
   private async sendToVendure(
@@ -40,7 +48,7 @@ export class WebhooksService {
     };
 
     try {
-      await axios.post(this.vendureWebhookUrl, webhookPayload, {
+      await this.axiosInstance.post(this.vendureWebhookUrl, webhookPayload, {
         headers: {
           "Content-Type": "application/json",
           "X-Webhook-Secret": this.webhookSecret,
