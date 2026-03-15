@@ -4,13 +4,16 @@ import {
   IsOptional,
   IsObject,
   IsNumber,
+  IsNotEmpty,
 } from "class-validator";
 
 export class DeliveryAssignedDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   sellerOrderId!: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   channelId!: string;
 
   @IsUUID()
@@ -24,10 +27,12 @@ export class DeliveryAssignedDto {
 }
 
 export class DeliveryPickedUpDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   sellerOrderId!: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   channelId!: string;
 
   @IsString()
@@ -39,10 +44,12 @@ export class DeliveryPickedUpDto {
 }
 
 export class DeliveryDeliveredDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   sellerOrderId!: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   channelId!: string;
 
   @IsString()
@@ -62,10 +69,12 @@ export class DeliveryDeliveredDto {
 }
 
 export class DeliveryFailedDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   sellerOrderId!: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   channelId!: string;
 
   @IsObject()

@@ -8,7 +8,7 @@ import {
 } from "@nestjs/common";
 import { AssignmentService } from "../assignment/assignment.service";
 import { ConfigService } from "@nestjs/config";
-import { IsUUID, IsNumber, ValidateNested } from "class-validator";
+import { IsNumber, ValidateNested, IsString, IsNotEmpty } from "class-validator";
 import { Type } from "class-transformer";
 
 class PickupLocationDto {
@@ -28,10 +28,12 @@ class DropLocationDto {
 }
 
 class SellerOrderReadyPayloadDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   sellerOrderId!: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   channelId!: string;
 
   @ValidateNested()
