@@ -205,6 +205,25 @@ export class DeliveriesService {
     });
   }
 
+  async cancelDelivery(deliveryId: string, reason?: string): Promise<void> {
+    const delivery = await this.findOne(deliveryId);
+    if (delivery.status === "CANCELLED" || delivery.status === "DELIVERED") {
+      return;
+    }
+
+    await this.updateStatus(deliveryId, {
+      status: "CANCELLED",
+      failureCode: "CANCELLED",
+      failureReason: reason || "Cancelled by driver or system",
+    });
+
+    await this.webhooksService.emitDeliveryCancelled({
+      sellerOrderId: delivery.sellerOrderId,
+      channelId: delivery.channelId,
+      reason: reason || "Cancelled by driver or system",
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Vendure helpers
   // ---------------------------------------------------------------------------

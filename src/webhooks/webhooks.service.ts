@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 import axiosRetry from "axios-retry";
 import crypto from "node:crypto";
+import { DELIVERY_CANCELLED_V1 } from "../deliveries/constants";
 import {
   DeliveryAssignedDto,
   DeliveryPickedUpDto,
@@ -34,6 +35,7 @@ export class WebhooksService {
       | DeliveryPickedUpDto
       | DeliveryDeliveredDto
       | DeliveryFailedDto
+      | { sellerOrderId: string; channelId: string; reason?: string }
     ) & { eventId?: string },
     eventType: string,
   ): Promise<void> {
@@ -87,6 +89,17 @@ export class WebhooksService {
   async emitDeliveryFailed(data: DeliveryFailedDto): Promise<void> {
     const eventId = crypto.randomUUID();
     await this.sendToVendure({ eventId, ...data }, "DELIVERY_FAILED_V1");
+  }
+
+  async emitDeliveryCancelled(data: {
+    sellerOrderId: string;
+    channelId: string;
+    reason?: string;
+  }): Promise<void> {
+    await this.sendToVendure(
+      { ...data, eventId: crypto.randomUUID() },
+      DELIVERY_CANCELLED_V1,
+    );
   }
 
   // For receiving webhooks from driver mobile app
