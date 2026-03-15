@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 import axiosRetry from "axios-retry";
+import crypto from "node:crypto";
 import {
   DeliveryAssignedDto,
   DeliveryPickedUpDto,
@@ -28,11 +29,12 @@ export class WebhooksService {
   }
 
   private async sendToVendure(
-    payload:
+    payload: (
       | DeliveryAssignedDto
       | DeliveryPickedUpDto
       | DeliveryDeliveredDto
-      | DeliveryFailedDto,
+      | DeliveryFailedDto
+    ) & { eventId?: string },
     eventType: string,
   ): Promise<void> {
     if (!this.vendureWebhookUrl) {
@@ -68,19 +70,23 @@ export class WebhooksService {
   }
 
   async emitDeliveryAssigned(data: DeliveryAssignedDto): Promise<void> {
-    await this.sendToVendure(data, "DELIVERY_ASSIGNED_V1");
+    const eventId = crypto.randomUUID();
+    await this.sendToVendure({ eventId, ...data }, "DELIVERY_ASSIGNED_V1");
   }
 
   async emitDeliveryPickedUp(data: DeliveryPickedUpDto): Promise<void> {
-    await this.sendToVendure(data, "DELIVERY_PICKED_UP_V1");
+    const eventId = crypto.randomUUID();
+    await this.sendToVendure({ eventId, ...data }, "DELIVERY_PICKED_UP_V1");
   }
 
   async emitDeliveryDelivered(data: DeliveryDeliveredDto): Promise<void> {
-    await this.sendToVendure(data, "DELIVERY_DELIVERED_V1");
+    const eventId = crypto.randomUUID();
+    await this.sendToVendure({ eventId, ...data }, "DELIVERY_DELIVERED_V1");
   }
 
   async emitDeliveryFailed(data: DeliveryFailedDto): Promise<void> {
-    await this.sendToVendure(data, "DELIVERY_FAILED_V1");
+    const eventId = crypto.randomUUID();
+    await this.sendToVendure({ eventId, ...data }, "DELIVERY_FAILED_V1");
   }
 
   // For receiving webhooks from driver mobile app

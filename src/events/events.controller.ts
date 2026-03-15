@@ -10,6 +10,7 @@ import { AssignmentService } from "../assignment/assignment.service";
 import { ConfigService } from "@nestjs/config";
 import { IsNumber, ValidateNested, IsString, IsNotEmpty } from "class-validator";
 import { Type } from "class-transformer";
+import { RedisService } from "../redis/redis.service";
 
 class PickupLocationDto {
   @IsNumber()
@@ -28,6 +29,10 @@ class DropLocationDto {
 }
 
 class SellerOrderReadyPayloadDto {
+  @IsString()
+  @IsNotEmpty()
+  eventId!: string;
+
   @IsString()
   @IsNotEmpty()
   sellerOrderId!: string;
@@ -49,12 +54,18 @@ class SellerOrderReadyPayloadDto {
 export class EventsController {
   private readonly logger = new Logger(EventsController.name);
   private readonly expectedSecret: string | undefined;
+  private readonly eventIdTtlSeconds = 60 * 60 * 24;
 
   constructor(
     private assignmentService: AssignmentService,
     private configService: ConfigService,
+    private redisService: RedisService,
   ) {
     this.expectedSecret = this.configService.get("VENDURE_TO_DRIVER_SECRET");
+  }
+
+  private getEventIdKey(eventId: string): string {
+    return `idempotency:vendure-event:${eventId}`;
   }
 
   @Post("seller-order-ready")
@@ -66,6 +77,21 @@ export class EventsController {
     if (secret !== this.expectedSecret) {
       this.logger.warn(`Invalid webhook secret received: ${secret}`);
       throw new BadRequestException("Invalid webhook secret");
+    }
+
+    const eventIdKey = this.getEventIdKey(payload.eventId);
+    const alreadyProcessed = await this.redisService
+      .getClient()
+      .exists(eventIdKey);
+
+    if (alreadyProcessed === 1) {
+      this.logger.warn(
+        `Duplicate seller-order-ready event skipped: ${payload.eventId}`,
+      );
+      return {
+        status: "ignored",
+        message: "Duplicate event ignored",
+      };
     }
 
     this.logger.log(`Received seller order ready: ${payload.sellerOrderId}`);
@@ -80,6 +106,10 @@ export class EventsController {
         payload.drop.lat,
         payload.drop.lon,
       );
+
+      await this.redisService
+        .getClient()
+        .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
 
       this.logger.log(
         `Successfully processed seller order ${payload.sellerOrderId}, delivery ID: ${deliveryId}`,
