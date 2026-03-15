@@ -96,6 +96,7 @@ export class WebhooksService {
     channelId: string;
     reason?: string;
   }): Promise<void> {
+    // v1 stub: mobile integration pending - driver app will call cancel endpoint
     await this.sendToVendure(
       { ...data, eventId: crypto.randomUUID() },
       DELIVERY_CANCELLED_V1,
