@@ -22,7 +22,15 @@ export class UpdateDeliveryStatusDto {
   proofUrl?: string;
 
   @IsOptional()
-  @IsString()
+  @IsEnum([
+    "DRIVER_REJECTED",
+    "DRIVER_OFFLINE",
+    "PICKUP_FAILED",
+    "DELIVERY_FAILED",
+    "TIMEOUT",
+    "MANUAL_CANCEL",
+    "CANCELLED",
+  ])
   failureCode?: string;
 
   @IsOptional()
