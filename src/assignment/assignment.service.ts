@@ -6,7 +6,6 @@ import { DriversService } from "../drivers/drivers.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
 import { Assignment } from "./entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
-import { WebhooksService } from "../webhooks/webhooks.service";
 import { WebSocketService } from "../websocket/websocket.service"; // ✅ NEW
 import { DriverStatus } from '../drivers/enums/driver-status.enum';
 
@@ -19,7 +18,6 @@ export class AssignmentService {
     private readonly assignmentRepository: Repository<Assignment>,
     private readonly driversService: DriversService,
     private readonly deliveriesService: DeliveriesService,
-    private readonly webhooksService: WebhooksService,
     private readonly webSocketService: WebSocketService, // ✅ NEW
   ) {}
 
