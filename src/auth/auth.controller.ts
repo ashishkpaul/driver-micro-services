@@ -1,14 +1,16 @@
-import { Controller, Post, Body, Req } from '@nestjs/common';
+import { Controller, Post, Body, Req, ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AdminLoginDto } from '../dto/admin.dto';
 import { AuditService } from '../services/audit.service';
 import { Request } from 'express';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -20,9 +22,18 @@ export class AuthController {
    * }
    */
   @Post('login')
-  async login(@Body('driverId') driverId: string) {
-    const driver = await this.authService.validateDriver(driverId);
-    return this.authService.login(driver);
+  async login(@Body() body: { driverId: string; deviceId?: string }) {
+    const allowLegacyDriverIdLogin =
+      this.configService.get('ALLOW_LEGACY_DRIVER_ID_LOGIN') === 'true';
+
+    if (!allowLegacyDriverIdLogin) {
+      throw new ForbiddenException(
+        'Legacy driverId login is disabled. Use Google login or secure auth flow.',
+      );
+    }
+
+    const driver = await this.authService.validateDriver(body.driverId);
+    return this.authService.login(driver, body.deviceId);
   }
 
   /**

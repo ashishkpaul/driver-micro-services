@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '../redis/redis.module';
+import { DriversModule } from '../drivers/drivers.module';
 
 // Controllers
 import { OffersController } from './offers.controller';
@@ -23,7 +24,8 @@ import { Assignment } from '../assignment/entities/assignment.entity';
       Delivery,
       Assignment
     ]),
-    RedisModule
+    RedisModule,
+    DriversModule,
   ],
   controllers: [OffersController, V2OffersController],
   providers: [OffersService],

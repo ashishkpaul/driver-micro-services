@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Delivery } from "./entities/delivery.entity";
@@ -14,6 +14,16 @@ import {
   DeliveryDeliveredDto,
   DeliveryFailedDto,
 } from "../webhooks/dto/vendure-webhook.dto";
+
+const DELIVERY_STATE_TRANSITIONS: Record<string, string[]> = {
+  PENDING: ['ASSIGNED', 'CANCELLED'],
+  ASSIGNED: ['PICKED_UP', 'FAILED', 'CANCELLED'],
+  PICKED_UP: ['IN_TRANSIT', 'DELIVERED', 'FAILED'],
+  IN_TRANSIT: ['DELIVERED', 'FAILED'],
+  FAILED: ['ASSIGNED', 'CANCELLED'],
+  DELIVERED: [],
+  CANCELLED: [],
+};
 
 /**
  * Vendure only accepts this strict subset of states.
@@ -128,6 +138,8 @@ export class DeliveriesService {
     updateDto: UpdateDeliveryStatusDto,
   ): Promise<Delivery> {
     const delivery = await this.findOne(deliveryId);
+
+    this.validateStateTransition(delivery.status, updateDto.status);
 
     delivery.status = updateDto.status;
 
@@ -282,5 +294,21 @@ export class DeliveriesService {
   ): Promise<DeliveryEvent> {
     const event = this.deliveryEventRepository.create(eventData);
     return await this.deliveryEventRepository.save(event);
+  }
+
+  private validateStateTransition(
+    fromStatus: Delivery['status'],
+    toStatus: UpdateDeliveryStatusDto['status'],
+  ): void {
+    if (fromStatus === toStatus) {
+      return;
+    }
+
+    const allowedTransitions = DELIVERY_STATE_TRANSITIONS[fromStatus] || [];
+    if (!allowedTransitions.includes(toStatus)) {
+      throw new BadRequestException(
+        `Invalid delivery status transition: ${fromStatus} -> ${toStatus}`,
+      );
+    }
   }
 }

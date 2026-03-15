@@ -19,8 +19,9 @@ import { DriversService } from './drivers.service';
 import { CreateDriverDto } from './dto/create-driver.dto';
 import { UpdateDriverLocationDto } from './dto/update-driver-location.dto';
 import { UpdateDriverStatusDto } from './dto/update-driver-status.dto';
-import { AdminScopeGuard } from '../auth/admin-scope.guard';
 import { AuthGuard } from '@nestjs/passport';
+import { PolicyGuard, RequirePermissions } from '../auth/policy.guard';
+import { Permission } from '../auth/permissions';
 
 @Controller('drivers')
 export class DriversController {
@@ -29,32 +30,37 @@ export class DriversController {
   /* -------------------- ADMIN -------------------- */
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @RequirePermissions(Permission.ADMIN_CREATE_DRIVER)
   create(@Body() dto: CreateDriverDto) {
     return this.driversService.create(dto);
   }
 
   @Get()
-  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @RequirePermissions(Permission.ADMIN_READ_DRIVER_ANY)
   findAll() {
     return this.driversService.findAll();
   }
 
   @Patch(':id/activate')
-  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   activate(@Param('id') id: string) {
     return this.driversService.setActive(id, true);
   }
 
   @Patch(':id/deactivate')
-  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   deactivate(@Param('id') id: string) {
     return this.driversService.setActive(id, false);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(AuthGuard('jwt'), AdminScopeGuard)
+  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @RequirePermissions(Permission.ADMIN_DELETE_DRIVER)
   remove(@Param('id') id: string) {
     return this.driversService.remove(id);
   }
@@ -91,6 +97,8 @@ export class DriversController {
   }
 
   @Patch(':id/location')
+  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @RequirePermissions(Permission.DRIVER_UPDATE_OWN_LOCATION)
   updateLocation(
     @Param('id') id: string,
     @Body() dto: UpdateDriverLocationDto,
@@ -99,6 +107,8 @@ export class DriversController {
   }
 
   @Patch(':id/status')
+  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @RequirePermissions(Permission.DRIVER_UPDATE_DELIVERY_STATUS)
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateDriverStatusDto,

@@ -8,6 +8,7 @@ import { DeliveriesService } from "./deliveries.service";
 import { DeliveriesController } from "./deliveries.controller";
 import { WebhooksModule } from "../webhooks/webhooks.module";
 import { DeliveryEventsNotifier } from "./delivery-events.notifier";
+import { DeliveryAuthorizationService } from './delivery-authorization.service';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { DeliveryEventsNotifier } from "./delivery-events.notifier";
   providers: [
     DeliveriesService,
     DeliveryEventsNotifier,
+    DeliveryAuthorizationService,
   ],
-  exports: [DeliveriesService],
+  exports: [DeliveriesService, DeliveryAuthorizationService],
 })
 export class DeliveriesModule {}

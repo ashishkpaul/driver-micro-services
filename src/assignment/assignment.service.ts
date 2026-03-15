@@ -8,6 +8,9 @@ import { Assignment } from "./entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { WebSocketService } from "../websocket/websocket.service"; // ✅ NEW
 import { DriverStatus } from '../drivers/enums/driver-status.enum';
+import { AssignmentAuthorizationService } from './assignment.authorization.service';
+import { AuthorizationActor } from '../authorization/authorization.types';
+import { DriverCapabilityService } from '../drivers/driver-capability.service';
 
 @Injectable()
 export class AssignmentService {
@@ -17,8 +20,10 @@ export class AssignmentService {
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
     private readonly driversService: DriversService,
+    private readonly driverCapabilityService: DriverCapabilityService,
     private readonly deliveriesService: DeliveriesService,
     private readonly webSocketService: WebSocketService, // ✅ NEW
+    private readonly assignmentAuthorizationService: AssignmentAuthorizationService,
   ) {}
 
   async createAndAssignDelivery(
@@ -28,6 +33,11 @@ export class AssignmentService {
     pickupLon: number,
     dropLat: number,
     dropLon: number,
+    actor: AuthorizationActor = {
+      role: 'SYSTEM',
+      type: 'system',
+      permissions: [],
+    },
   ): Promise<string> {
     // 1. Create delivery record
     const delivery = await this.deliveriesService.create({
@@ -49,6 +59,21 @@ export class AssignmentService {
     if (!driver) {
       this.logger.warn(
         `No available drivers found for seller order ${sellerOrderId}`,
+      );
+      return delivery.id;
+    }
+
+    this.assignmentAuthorizationService.ensureCanAssign(actor, {
+      targetCityId: driver.cityId,
+    });
+
+    const capability = await this.driverCapabilityService.checkDeliveryAcceptanceCapability(
+      driver.id,
+    );
+
+    if (!capability.canAccept) {
+      this.logger.warn(
+        `Driver ${driver.id} is not eligible for assignment. reason=${capability.reason}`,
       );
       return delivery.id;
     }

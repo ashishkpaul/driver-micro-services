@@ -11,7 +11,6 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { DriversService } from '../drivers/drivers.service';
-import { AdminScopeGuard } from '../auth/admin-scope.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { AuditService } from '../services/audit.service';
 import { Request } from 'express';
@@ -20,6 +19,8 @@ import {
   AdminBulkUpdateDriverStatusDto,
   AdminDriverListQueryDto,
 } from '../dto/admin-driver-status.dto';
+import { RequirePermissions, PolicyGuard } from '../auth/policy.guard';
+import { Permission } from '../auth/permissions';
 
 // Define AuthPayload interface locally since it's not exported from auth.service
 interface AuthPayload {
@@ -33,7 +34,7 @@ interface AuthPayload {
 }
 
 @Controller('admin/drivers')
-@UseGuards(AuthGuard('jwt'), AdminScopeGuard)
+@UseGuards(AuthGuard('jwt'), PolicyGuard)
 export class DriverStatusController {
   constructor(
     private readonly driversService: DriversService,
@@ -44,6 +45,7 @@ export class DriverStatusController {
    * List drivers with filters (admin only)
    */
   @Get()
+  @RequirePermissions(Permission.ADMIN_READ_DRIVER_ANY)
   async listDrivers(
     @Req() request: Request & { user: AuthPayload },
     @Query() query: AdminDriverListQueryDto,
@@ -80,6 +82,7 @@ export class DriverStatusController {
    * Only ADMIN and SUPER_ADMIN can access this endpoint
    */
   @Patch(':id/status')
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async updateDriverStatus(
     @Param('id', ParseUUIDPipe) driverId: string,
     @Body() updateDriverStatusDto: AdminUpdateDriverStatusDto,
@@ -122,6 +125,7 @@ export class DriverStatusController {
    * Enable driver
    */
   @Patch(':id/enable')
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async enableDriver(
     @Param('id', ParseUUIDPipe) driverId: string,
     @Req() request: Request & { user: AuthPayload },
@@ -168,6 +172,7 @@ export class DriverStatusController {
    * Disable driver
    */
   @Patch(':id/disable')
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async disableDriver(
     @Param('id', ParseUUIDPipe) driverId: string,
     @Body() body: { reason?: string },
@@ -216,6 +221,7 @@ export class DriverStatusController {
    * Bulk update driver status
    */
   @Patch('bulk/status')
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async bulkUpdateDriverStatus(
     @Body() body: AdminBulkUpdateDriverStatusDto,
     @Req() request: Request & { user: AuthPayload },

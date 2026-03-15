@@ -7,6 +7,7 @@ import { AdminUser } from '../entities/admin-user.entity';
 import { AdminLoginDto } from '../dto/admin.dto';
 import { Role } from './roles.enum';
 import { GoogleAuthService } from './google-auth.service';
+import { RolePermissions } from './permissions';
 
 @Injectable()
 export class AuthService {
@@ -47,10 +48,19 @@ export class AuthService {
   /**
    * Issue JWT for driver (used by PWA and WebSocket auth)
    */
-  async login(driver: Driver) {
+  async login(driver: Driver, deviceId?: string) {
     const payload = {
       driverId: driver.id,
       sub: driver.id,
+      type: 'driver',
+      role: Role.DRIVER,
+      email: driver.email,
+      permissions: RolePermissions.DRIVER,
+      isActive: driver.isActive,
+      status: driver.status,
+      cityId: driver.cityId,
+      zoneId: driver.zoneId,
+      deviceId,
     };
 
     return {
@@ -66,6 +76,9 @@ export class AuthService {
    * Issue JWT for admin
    */
   async adminLogin(admin: AdminUser) {
+    const permissions =
+      RolePermissions[admin.role as keyof typeof RolePermissions] || [];
+
     const payload = {
       userId: admin.id,
       email: admin.email,
@@ -73,6 +86,8 @@ export class AuthService {
       cityId: admin.cityId,
       sub: admin.id,
       type: 'admin',
+      permissions,
+      isActive: admin.isActive,
     };
 
     return {
@@ -162,6 +177,13 @@ export class AuthService {
       driverId: driver.id,
       sub: driver.id,
       type: 'driver',
+      role: Role.DRIVER,
+      email: driver.email,
+      permissions: RolePermissions.DRIVER,
+      isActive: driver.isActive,
+      status: driver.status,
+      cityId: driver.cityId,
+      zoneId: driver.zoneId,
     };
 
     return {

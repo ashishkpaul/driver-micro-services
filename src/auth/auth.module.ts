@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
@@ -7,6 +7,10 @@ import { JwtStrategy } from './jwt.strategy';
 import { DriversModule } from '../drivers/drivers.module';
 import { AdminModule } from '../modules/admin.module';
 import { GoogleAuthService } from './google-auth.service';
+import { PolicyGuard, RequirePermissions } from './policy.guard';
+import { PermissionInjectionMiddleware } from './permission-injection.middleware';
+import { AuthorizationAuditService } from './authorization-audit.service';
+import { AuthorizationModule } from '../authorization/authorization.module';
 
 @Module({
   imports: [
@@ -17,9 +21,23 @@ import { GoogleAuthService } from './google-auth.service';
     }),
     DriversModule,
     AdminModule,
+    AuthorizationModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleAuthService],
-  exports: [AuthService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleAuthService,
+    PolicyGuard,
+    PermissionInjectionMiddleware,
+    AuthorizationAuditService,
+  ],
+  exports: [AuthService, PolicyGuard, RequirePermissions, PermissionInjectionMiddleware],
 })
-export class AuthModule {}
+export class AuthModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(PermissionInjectionMiddleware)
+      .forRoutes('*'); // Apply to all routes that use JWT authentication
+  }
+}

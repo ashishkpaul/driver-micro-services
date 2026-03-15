@@ -8,6 +8,7 @@ import { Driver } from '../drivers/entities/driver.entity';
 import { Delivery } from '../deliveries/entities/delivery.entity';
 import { Assignment } from '../assignment/entities/assignment.entity';
 import { DriverStatus } from '../drivers/enums/driver-status.enum';
+import { DriverCapabilityService } from '../drivers/driver-capability.service';
 
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { AcceptOfferDto } from './dto/accept-offer.dto';
@@ -25,7 +26,8 @@ export class OffersService {
     @InjectRepository(Assignment)
     private readonly assignmentRepository: Repository<Assignment>,
     private readonly redisService: RedisService,
-    private readonly dataSource: DataSource
+    private readonly dataSource: DataSource,
+    private readonly driverCapabilityService: DriverCapabilityService,
   ) {}
 
   async createOfferForDriver(
@@ -46,6 +48,15 @@ export class OffersService {
 
     if (driver.status !== 'AVAILABLE') {
       throw new ConflictException(`Driver ${driverId} is not available`);
+    }
+
+    const capability = await this.driverCapabilityService.checkDeliveryAcceptanceCapability(
+      driverId,
+    );
+    if (!capability.canAccept) {
+      throw new ConflictException(
+        `Driver ${driverId} cannot receive offer: ${capability.reason || 'CAPABILITY_REJECTED'}`,
+      );
     }
 
     // Validate delivery exists and is ready
@@ -129,6 +140,14 @@ export class OffersService {
 
       if (offer.expiresAt < new Date()) {
         throw new ConflictException('Offer has expired');
+      }
+
+      const capability =
+        await this.driverCapabilityService.checkDeliveryAcceptanceCapability(driverId);
+      if (!capability.canAccept) {
+        throw new ConflictException(
+          `Driver ${driverId} cannot accept offer: ${capability.reason || 'CAPABILITY_REJECTED'}`,
+        );
       }
 
       // Calculate response time

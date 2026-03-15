@@ -1,11 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { AuthService } from './auth.service';
+import { RolePermissions } from './permissions';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly authService: AuthService) {
+  constructor() {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -15,33 +15,53 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any) {
     try {
+      if (payload.role === 'SYSTEM' || payload.type === 'system') {
+        return {
+          role: 'SYSTEM',
+          type: 'system',
+          sub: payload.sub || 'system',
+          permissions: payload.permissions || RolePermissions.SYSTEM,
+        };
+      }
+
       // Check if it's a driver token
       if (payload.driverId) {
-        const driver = await this.authService.validateDriver(payload.driverId);
         return {
-          driverId: driver.id,
+          driverId: payload.driverId,
           sub: payload.sub,
           type: 'driver',
+          role: payload.role || 'DRIVER',
           email: payload.email,
+          permissions: payload.permissions || RolePermissions.DRIVER,
+          isActive: payload.isActive,
+          status: payload.status,
+          cityId: payload.cityId,
+          zoneId: payload.zoneId,
+          deviceId: payload.deviceId,
         };
       }
       
       // Check if it's an admin token
       if (payload.userId && payload.role) {
-        const admin = await this.authService.adminService.findById(payload.userId);
+        const permissions = RolePermissions[payload.role as keyof typeof RolePermissions] || [];
+        
         return {
-          userId: admin.id,
-          email: admin.email,
-          role: admin.role,
-          cityId: admin.cityId,
+          userId: payload.userId,
+          email: payload.email,
+          role: payload.role,
+          cityId: payload.cityId,
           sub: payload.sub,
           type: 'admin',
+          permissions: payload.permissions || permissions,
+          isActive: payload.isActive,
         };
       }
 
-      throw new Error('Invalid token payload');
+      throw new UnauthorizedException('Invalid token payload');
     } catch (error) {
-      throw new Error('Token validation failed: ' + error.message);
+      throw new UnauthorizedException(
+        'Token validation failed: ' + error.message,
+      );
     }
   }
 }

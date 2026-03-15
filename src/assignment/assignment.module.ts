@@ -4,6 +4,7 @@ import { Assignment } from "./entities/assignment.entity";
 import { AssignmentService } from "./assignment.service";
 import { DriversModule } from "../drivers/drivers.module";
 import { DeliveriesModule } from "../deliveries/deliveries.module";
+import { AssignmentAuthorizationService } from './assignment.authorization.service';
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { DeliveriesModule } from "../deliveries/deliveries.module";
     DriversModule,
     DeliveriesModule,
   ],
-  providers: [AssignmentService],
-  exports: [AssignmentService],
+  providers: [AssignmentService, AssignmentAuthorizationService],
+  exports: [AssignmentService, AssignmentAuthorizationService],
 })
 export class AssignmentModule {}
