@@ -3,7 +3,7 @@ import { loginDriver } from './helpers/auth';
 
 describe('WebSocket E2E', () => {
   it('authenticates driver and responds to PING_V1', async () => {
-    const driverId = '00000000-0000-0000-0000-000000000001';
+    const driverId = '46894ed3-4de6-4a4e-8c15-008698df5d1a';
     const token = await loginDriver(driverId);
 
     const socket = io('http://localhost:3002/driver', {

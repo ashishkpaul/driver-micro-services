@@ -59,6 +59,65 @@ export class DriversService {
     });
   }
 
+  async findAllWithFilters(options: {
+    cityId?: string;
+    zoneId?: string;
+    status?: DriverStatus;
+    isActive?: boolean;
+    authProvider?: string;
+    search?: string;
+    skip?: number;
+    take?: number;
+  }): Promise<{ drivers: Driver[]; total: number }> {
+    const {
+      cityId,
+      zoneId,
+      status,
+      isActive,
+      authProvider,
+      search,
+      skip = 0,
+      take = 50,
+    } = options;
+
+    const query = this.driverRepository
+      .createQueryBuilder('driver')
+      .skip(skip)
+      .take(take)
+      .orderBy('driver.createdAt', 'DESC');
+
+    if (cityId) {
+      query.andWhere('driver.cityId = :cityId', { cityId });
+    }
+
+    if (zoneId) {
+      query.andWhere('driver.zoneId = :zoneId', { zoneId });
+    }
+
+    if (status) {
+      query.andWhere('driver.status = :status', { status });
+    }
+
+    if (isActive !== undefined) {
+      query.andWhere('driver.isActive = :isActive', { isActive });
+    }
+
+    if (authProvider) {
+      query.andWhere('driver.authProvider = :authProvider', { authProvider });
+    }
+
+    if (search) {
+      query.andWhere(
+        '(LOWER(driver.name) LIKE :search OR LOWER(driver.phone) LIKE :search OR LOWER(driver.email) LIKE :search)',
+        { search: `%${search.toLowerCase()}%` },
+      );
+    }
+
+    const [drivers, total] = await query.getManyAndCount();
+
+    return { drivers, total };
+  }
+
   async setActive(id: string, isActive: boolean): Promise<Driver> {
     const driver = await this.findOne(id);
 

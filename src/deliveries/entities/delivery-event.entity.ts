@@ -1,5 +1,5 @@
 import {
-  Entity,
+Entity,
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
@@ -9,14 +9,14 @@ import {
 import { Delivery } from "./delivery.entity";
 import { IsEnum, IsUUID } from "class-validator";
 
-@Entity("delivery_events")
+@Entity({ name: "delivery_events", schema: "public" })
 @Index(["deliveryId", "eventType"])
 @Index(["sellerOrderId"])
 export class DeliveryEvent {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column()
+  @Column({ name: "delivery_id" })
   @IsUUID()
   deliveryId!: string;
 

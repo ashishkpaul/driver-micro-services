@@ -62,7 +62,25 @@ async function initializeSuperAdmin() {
       console.log('✅ Superadmin already exists');
       console.log(`📧 Email: ${existingSuperAdmin.email}`);
       console.log(`🆔 ID: ${existingSuperAdmin.id}`);
-      console.log('💡 Use existing credentials or delete the superadmin to create a new one');
+
+      if (password) {
+        const passwordValidation = passwordService.validatePassword(password);
+        if (!passwordValidation.isValid) {
+          console.log('❌ Password does not meet security requirements:');
+          passwordValidation.errors.forEach(error => console.log(`   - ${error}`));
+          process.exit(1);
+        }
+
+        const passwordHash = await passwordService.hash(password);
+        existingSuperAdmin.passwordHash = passwordHash;
+        existingSuperAdmin.updatedAt = new Date();
+        await adminRepository.save(existingSuperAdmin);
+
+        console.log('� Superadmin password updated from SUPERADMIN_PASSWORD');
+      } else {
+        console.log('�💡 Use existing credentials or delete the superadmin to create a new one');
+      }
+
       process.exit(0);
     }
 

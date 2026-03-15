@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { DriversModule } from '../drivers/drivers.module';
 import { AdminModule } from '../modules/admin.module';
+import { GoogleAuthService } from './google-auth.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { AdminModule } from '../modules/admin.module';
     AdminModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, GoogleAuthService],
   exports: [AuthService],
 })
 export class AuthModule {}

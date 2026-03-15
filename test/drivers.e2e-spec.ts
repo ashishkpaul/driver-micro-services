@@ -13,7 +13,7 @@ describe('Drivers E2E', () => {
   });
 
   it('GET /drivers/:id returns driver', async () => {
-    driverId = '00000000-0000-0000-0000-000000000001';
+    driverId = '46894ed3-4de6-4a4e-8c15-008698df5d1a';
 
     const res = await api.get(`/drivers/${driverId}`);
 

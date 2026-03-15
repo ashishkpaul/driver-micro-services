@@ -31,6 +31,7 @@ import { AdminModule } from "./modules/admin.module";
           username: config.get<string>("DB_USER"),
           password: config.get<string>("DB_PASSWORD"),
           database: config.get<string>("DB_NAME"),
+          schema: "public",
           synchronize: config.get("DB_SYNCHRONIZE") === "true",
           logging: config.get("DB_LOGGING") === "true",
         }) as TypeOrmModuleOptions,

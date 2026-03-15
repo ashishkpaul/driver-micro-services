@@ -4,6 +4,8 @@ import {
   Patch,
   Param,
   Body,
+  Get,
+  Query,
   UseGuards,
   Req,
   ParseUUIDPipe,
@@ -13,7 +15,11 @@ import { AdminScopeGuard } from '../auth/admin-scope.guard';
 import { AuthGuard } from '@nestjs/passport';
 import { AuditService } from '../services/audit.service';
 import { Request } from 'express';
-import { AdminUpdateDriverStatusDto, AdminBulkUpdateDriverStatusDto } from '../dto/admin-driver-status.dto';
+import {
+  AdminUpdateDriverStatusDto,
+  AdminBulkUpdateDriverStatusDto,
+  AdminDriverListQueryDto,
+} from '../dto/admin-driver-status.dto';
 
 // Define AuthPayload interface locally since it's not exported from auth.service
 interface AuthPayload {
@@ -33,6 +39,41 @@ export class DriverStatusController {
     private readonly driversService: DriversService,
     private readonly auditService: AuditService,
   ) {}
+
+  /**
+   * List drivers with filters (admin only)
+   */
+  @Get()
+  async listDrivers(
+    @Req() request: Request & { user: AuthPayload },
+    @Query() query: AdminDriverListQueryDto,
+  ) {
+    const { cityId, zoneId, status, isActive, authProvider, search, skip = 0, take = 50 } = query;
+
+    // Enforce city scope for ADMIN users (SUPER_ADMIN can query any city)
+    let scopedCityId = cityId;
+    if (request.user.role === 'ADMIN' && !scopedCityId) {
+      scopedCityId = request.user.cityId;
+    }
+
+    const result = await this.driversService.findAllWithFilters({
+      cityId: scopedCityId,
+      zoneId,
+      status,
+      isActive,
+      authProvider,
+      search,
+      skip,
+      take,
+    });
+
+    return {
+      drivers: result.drivers,
+      total: result.total,
+      skip,
+      take,
+    };
+  }
 
   /**
    * Toggle driver status (enable/disable)

@@ -1,5 +1,7 @@
 // src/dto/admin-driver-status.dto.ts
-import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { DriverStatus } from '../drivers/enums/driver-status.enum';
 
 export class AdminUpdateDriverStatusDto {
   @IsBoolean()
@@ -20,4 +22,43 @@ export class AdminBulkUpdateDriverStatusDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+export class AdminDriverListQueryDto {
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  zoneId?: string;
+
+  @IsOptional()
+  @IsEnum(DriverStatus)
+  status?: DriverStatus;
+
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === undefined) return value;
+    if (typeof value === 'boolean') return value;
+    return value === 'true';
+  })
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  authProvider?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? value : Number(value)))
+  skip?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? value : Number(value)))
+  take?: number;
 }
