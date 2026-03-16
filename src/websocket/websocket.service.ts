@@ -43,4 +43,12 @@ export class WebSocketService {
     this.server.to(this.room(driverId)).emit("ERROR_V1", { code, message });
     this.metrics.messageSent(driverId).catch(() => {});
   }
+
+  /**
+   * Check if driver is connected
+   */
+  isDriverConnected(driverId: string): boolean {
+    const sockets = this.server.sockets.adapter.rooms.get(this.room(driverId));
+    return !!sockets && sockets.size > 0;
+  }
 }

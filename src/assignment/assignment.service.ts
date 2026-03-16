@@ -11,6 +11,7 @@ import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { AssignmentAuthorizationService } from "./assignment.authorization.service";
 import { AuthorizationActor } from "../authorization/authorization.types";
 import { DriverCapabilityService } from "../drivers/driver-capability.service";
+import { PushNotificationService } from "../push/push.service"; // NEW
 
 @Injectable()
 export class AssignmentService {
@@ -24,6 +25,7 @@ export class AssignmentService {
     private readonly deliveriesService: DeliveriesService,
     private readonly webSocketService: WebSocketService, // ✅ NEW
     private readonly assignmentAuthorizationService: AssignmentAuthorizationService,
+    private readonly pushService: PushNotificationService, // NEW
   ) {}
 
   async createAndAssignDelivery(
@@ -103,6 +105,8 @@ export class AssignmentService {
     await this.driversService.updateStatus(driver.id, DriverStatus.BUSY);
 
     // 7. Emit DELIVERY_ASSIGNED_V1 to driver via WebSocket (✅ NEW)
+    const wsConnected = this.webSocketService.isDriverConnected(driver.id);
+
     try {
       this.webSocketService.emitDeliveryAssigned(driver.id, {
         deliveryId: delivery.id,
@@ -127,6 +131,21 @@ export class AssignmentService {
       this.logger.warn(
         `Driver ${driver.id} not connected via WebSocket, assignment not pushed`,
       );
+    }
+
+    // 8. Push notification fallback if not connected via WebSocket
+    if (!wsConnected) {
+      await this.pushService.sendToDriver(driver.id, {
+        title: "New delivery assigned",
+        body: `Pickup in ${Math.ceil(this.driversService.calculateDistance(driver.currentLat, driver.currentLon, pickupLat, pickupLon) / 0.5)}min`,
+        data: {
+          type: "DELIVERY_ASSIGNED",
+          deliveryId: delivery.id,
+          sellerOrderId,
+          deepLink: `/delivery/${delivery.id}`,
+        },
+        priority: "high",
+      });
     }
 
     this.logger.log(
