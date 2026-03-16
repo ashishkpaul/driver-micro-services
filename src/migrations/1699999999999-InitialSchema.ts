@@ -6,7 +6,7 @@ export class InitialSchema1718078374611 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create drivers table
     await queryRunner.query(`
-      CREATE TABLE drivers (
+      CREATE TABLE IF NOT EXISTS drivers (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(20) UNIQUE NOT NULL,
@@ -26,7 +26,7 @@ export class InitialSchema1718078374611 implements MigrationInterface {
 
     // Create deliveries table
     await queryRunner.query(`
-      CREATE TABLE deliveries (
+      CREATE TABLE IF NOT EXISTS deliveries (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         seller_order_id VARCHAR(255) NOT NULL,
         channel_id VARCHAR(255) NOT NULL,
@@ -51,7 +51,7 @@ export class InitialSchema1718078374611 implements MigrationInterface {
 
     // Create delivery_events table
     await queryRunner.query(`
-      CREATE TABLE delivery_events (
+      CREATE TABLE IF NOT EXISTS delivery_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         delivery_id UUID NOT NULL REFERENCES deliveries(id) ON DELETE CASCADE,
         seller_order_id VARCHAR(255) NOT NULL,
@@ -66,7 +66,7 @@ export class InitialSchema1718078374611 implements MigrationInterface {
 
     // Create assignments table
     await queryRunner.query(`
-      CREATE TABLE assignments (
+      CREATE TABLE IF NOT EXISTS assignments (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         seller_order_id VARCHAR(255) NOT NULL,
         driver_id UUID NOT NULL,

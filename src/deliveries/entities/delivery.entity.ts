@@ -110,7 +110,7 @@ export class Delivery {
   @Column({ name: "sla_breach_at", type: "timestamp", nullable: true })
   slaBreachAt?: Date | null;
 
-  @Column({ name: "delivery_otp", length: 6, nullable: true })
+  @Column({ name: "delivery_otp", type: "varchar", length: 6, nullable: true })
   deliveryOtp?: string | null;
 
   @Column({ name: "otp_attempts", type: "int", default: 0 })

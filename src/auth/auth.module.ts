@@ -7,7 +7,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { DriversModule } from '../drivers/drivers.module';
 import { AdminModule } from '../modules/admin.module';
 import { GoogleAuthService } from './google-auth.service';
-import { PolicyGuard, RequirePermissions } from './policy.guard';
+import { PolicyGuard } from './policy.guard';
 import { PermissionInjectionMiddleware } from './permission-injection.middleware';
 import { AuthorizationAuditService } from './authorization-audit.service';
 import { AuthorizationModule } from '../authorization/authorization.module';
@@ -32,7 +32,7 @@ import { AuthorizationModule } from '../authorization/authorization.module';
     PermissionInjectionMiddleware,
     AuthorizationAuditService,
   ],
-  exports: [AuthService, PolicyGuard, RequirePermissions, PermissionInjectionMiddleware],
+  exports: [AuthService, PolicyGuard, PermissionInjectionMiddleware],
 })
 export class AuthModule {
   configure(consumer: MiddlewareConsumer) {

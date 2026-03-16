@@ -5,8 +5,9 @@ import {
   Injectable,
   ForbiddenException,
   Logger,
+  Optional,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { ModuleRef, Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { PermissionType } from './permissions';
 import { SetMetadata } from '@nestjs/common';
@@ -35,9 +36,24 @@ export class PolicyGuard implements CanActivate {
 
   constructor(
     private readonly reflector: Reflector,
-    private readonly authorizationService: AuthorizationService,
-    private readonly authorizationAuditService: AuthorizationAuditService,
+    private readonly moduleRef: ModuleRef,
+    @Optional() private readonly authorizationService?: AuthorizationService,
+    @Optional() private readonly authorizationAuditService?: AuthorizationAuditService,
   ) {}
+
+  private getAuthorizationService(): AuthorizationService {
+    return (
+      this.authorizationService ||
+      this.moduleRef.get(AuthorizationService, { strict: false })
+    );
+  }
+
+  private getAuthorizationAuditService(): AuthorizationAuditService {
+    return (
+      this.authorizationAuditService ||
+      this.moduleRef.get(AuthorizationAuditService, { strict: false })
+    );
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermissions = this.reflector.getAllAndOverride<PermissionType[]>(
@@ -51,10 +67,12 @@ export class PolicyGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request>();
     const policyContext = this.buildPolicyContext(request);
+    const authorizationService = this.getAuthorizationService();
+    const authorizationAuditService = this.getAuthorizationAuditService();
 
     const decisions = await Promise.all(
       requiredPermissions.map(permission =>
-        this.authorizationService.authorize(
+        authorizationService.authorize(
           {
             userId: policyContext.userId,
             driverId: policyContext.driverId,
@@ -86,7 +104,7 @@ export class PolicyGuard implements CanActivate {
         `attempted ${request.method} ${request.path} without ${requiredPermissions.join(' or ')}`,
       );
 
-      await this.authorizationAuditService.logAuthorization(request, {
+      await authorizationAuditService.logAuthorization(request, {
         timestamp: new Date(),
         actorId: policyContext.userId || policyContext.driverId || 'unknown',
         actorRole: policyContext.role || 'unknown',
@@ -109,7 +127,7 @@ export class PolicyGuard implements CanActivate {
       throw new ForbiddenException('Insufficient permissions');
     }
 
-    await this.authorizationAuditService.logAuthorization(request, {
+    await authorizationAuditService.logAuthorization(request, {
       timestamp: new Date(),
       actorId: policyContext.userId || policyContext.driverId || 'unknown',
       actorRole: policyContext.role || 'unknown',
