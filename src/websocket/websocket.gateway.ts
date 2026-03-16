@@ -165,4 +165,24 @@ export class WebSocketGatewayHandler
       this.driversService,
     );
   }
+
+  @SubscribeMessage("SYNC_STATE_V1")
+  async handleSyncState(@ConnectedSocket() client: Socket) {
+    const driverId = client.data.driverId;
+    if (driverId) {
+      // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
+      this.metrics.messageReceived(driverId).catch(() => {});
+    }
+
+    // Get active delivery for driver
+    const delivery = await this.deliveriesService.findActiveForDriver(driverId);
+
+    // Get pending offers for driver (this would need to be implemented in OffersService)
+    const offers: any[] = []; // TODO: Implement pending offers query
+
+    return {
+      delivery,
+      offers,
+    };
+  }
 }

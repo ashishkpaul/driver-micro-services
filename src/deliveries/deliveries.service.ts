@@ -117,11 +117,6 @@ export class DeliveriesService {
     actor?: AuthorizationActor,
   ): Promise<Delivery> {
     const delivery = await this.findOne(deliveryId);
-    await this.deliveryStateMachine.assertTransitionAllowed(
-      delivery,
-      "ASSIGNED",
-      actor,
-    );
 
     delivery.driverId = driverId;
     delivery.status = "ASSIGNED";
@@ -259,12 +254,6 @@ export class DeliveriesService {
   ): Promise<Delivery> {
     const delivery = await this.findOne(deliveryId);
 
-    await this.deliveryStateMachine.assertTransitionAllowed(
-      delivery,
-      updateDto.status,
-      actor,
-    );
-
     if (
       updateDto.status === "DELIVERED" &&
       !skipOtpCheck &&
@@ -373,6 +362,17 @@ export class DeliveriesService {
       sellerOrderId: delivery.sellerOrderId,
       channelId: delivery.channelId,
       reason: reason || "Cancelled by driver or system",
+    });
+  }
+
+  async findActiveForDriver(driverId: string): Promise<Delivery | null> {
+    return await this.deliveryRepository.findOne({
+      where: {
+        driverId,
+        status: "ASSIGNED",
+      },
+      relations: ["events"],
+      order: { assignedAt: "DESC" },
     });
   }
 

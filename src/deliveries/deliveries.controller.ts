@@ -41,6 +41,11 @@ export class DeliveriesController {
     return this.deliveriesService.getDeliveryHistory(sellerOrderId);
   }
 
+  @Get("drivers/:driverId/active")
+  findActiveForDriver(@Param("driverId") driverId: string) {
+    return this.deliveriesService.findActiveForDriver(driverId);
+  }
+
   @Patch(":id/assign")
   assignDriver(
     @Param("id") id: string,
