@@ -1,4 +1,4 @@
-import { IsUUID, IsNumber } from "class-validator";
+import { IsUUID, IsNumber, IsOptional, IsDateString } from "class-validator";
 
 export class CreateDeliveryDto {
   @IsUUID()
@@ -18,4 +18,12 @@ export class CreateDeliveryDto {
 
   @IsNumber()
   dropLon!: number;
+
+  @IsOptional()
+  @IsDateString()
+  expectedPickupAt?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expectedDeliveryAt?: string;
 }

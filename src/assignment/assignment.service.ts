@@ -95,6 +95,7 @@ export class AssignmentService {
       delivery.id,
       driver.id,
       assignment.id,
+      actor,
     );
 
     // 5. Update driver status

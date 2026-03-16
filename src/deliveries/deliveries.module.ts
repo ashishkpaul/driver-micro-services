@@ -9,11 +9,15 @@ import { DeliveriesController } from "./deliveries.controller";
 import { WebhooksModule } from "../webhooks/webhooks.module";
 import { DeliveryEventsNotifier } from "./delivery-events.notifier";
 import { DeliveryAuthorizationService } from './delivery-authorization.service';
+import { DeliveryStateMachine } from "./delivery-state-machine.service";
+import { SlaMonitorService } from "./sla-monitor.service";
+import { RedisModule } from "../redis/redis.module";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Delivery, DeliveryEvent]),
     WebhooksModule,
+    RedisModule,
     // 🚫 DO NOT import WebSocketModule
   ],
   controllers: [DeliveriesController],
@@ -21,6 +25,8 @@ import { DeliveryAuthorizationService } from './delivery-authorization.service';
     DeliveriesService,
     DeliveryEventsNotifier,
     DeliveryAuthorizationService,
+    DeliveryStateMachine,
+    SlaMonitorService,
   ],
   exports: [DeliveriesService, DeliveryAuthorizationService],
 })

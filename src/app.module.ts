@@ -14,6 +14,7 @@ import { HealthModule } from "./health/health.module";
 import { WebSocketModule } from "./websocket/websocket.module";
 import { AuthModule } from "./auth/auth.module";
 import { AdminModule } from "./modules/admin.module";
+import { ScheduleModule } from "@nestjs/schedule";
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AdminModule } from "./modules/admin.module";
       isGlobal: true,
       envFilePath: [".env.local", ".env"],
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService): TypeOrmModuleOptions =>

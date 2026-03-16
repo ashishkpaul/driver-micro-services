@@ -20,6 +20,9 @@ import {
 @Index(["sellerOrderId"])
 @Index(["status"])
 @Index(["driverId"])
+@Index(["expectedPickupAt"])
+@Index(["expectedDeliveryAt"])
+@Index(["slaBreachAt"])
 export class Delivery {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
@@ -97,6 +100,24 @@ export class Delivery {
 
   @Column({ nullable: true })
   failedAt?: Date;
+
+  @Column({ name: "expected_pickup_at", type: "timestamp", nullable: true })
+  expectedPickupAt?: Date | null;
+
+  @Column({ name: "expected_delivery_at", type: "timestamp", nullable: true })
+  expectedDeliveryAt?: Date | null;
+
+  @Column({ name: "sla_breach_at", type: "timestamp", nullable: true })
+  slaBreachAt?: Date | null;
+
+  @Column({ name: "delivery_otp", length: 6, nullable: true })
+  deliveryOtp?: string | null;
+
+  @Column({ name: "otp_attempts", type: "int", default: 0 })
+  otpAttempts!: number;
+
+  @Column({ name: "otp_locked_until", type: "timestamp", nullable: true })
+  otpLockedUntil?: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;

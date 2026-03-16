@@ -1,7 +1,16 @@
-import { Controller, Get, Post, Body, Patch, Param } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  ParseUUIDPipe,
+} from "@nestjs/common";
 import { DeliveriesService } from "./deliveries.service";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
 import { UpdateDeliveryStatusDto } from "./dto/update-delivery-status.dto";
+import { VerifyDeliveryOtpDto } from "./dto/verify-delivery-otp.dto";
 
 @Controller("deliveries")
 export class DeliveriesController {
@@ -50,5 +59,22 @@ export class DeliveriesController {
     @Body() updateDeliveryStatusDto: UpdateDeliveryStatusDto,
   ) {
     return this.deliveriesService.updateStatus(id, updateDeliveryStatusDto);
+  }
+
+  @Post(":id/otp/regenerate")
+  regenerateOtp(@Param("id", ParseUUIDPipe) id: string) {
+    return this.deliveriesService.generateDeliveryOtp(id);
+  }
+
+  @Post(":id/otp/verify")
+  verifyOtp(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() verifyDeliveryOtpDto: VerifyDeliveryOtpDto,
+  ) {
+    return this.deliveriesService.verifyDeliveryOtp(
+      id,
+      verifyDeliveryOtpDto.otp,
+      verifyDeliveryOtpDto.proofUrl,
+    );
   }
 }
