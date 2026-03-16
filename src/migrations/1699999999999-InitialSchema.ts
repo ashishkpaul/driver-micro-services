@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from "typeorm";
 
 export class InitialSchema1718078374611 implements MigrationInterface {
-  name = 'InitialSchema1718078374611';
+  name = "InitialSchema1718078374611";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create drivers table
@@ -88,15 +88,19 @@ export class InitialSchema1718078374611 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query('DROP INDEX IF EXISTS idx_drivers_status');
-    await queryRunner.query('DROP INDEX IF EXISTS idx_assignments_seller_driver');
-    await queryRunner.query('DROP INDEX IF EXISTS idx_delivery_events_seller_order');
-    await queryRunner.query('DROP INDEX IF EXISTS idx_deliveries_driver');
-    await queryRunner.query('DROP INDEX IF EXISTS idx_deliveries_status');
-    await queryRunner.query('DROP INDEX IF EXISTS idx_deliveries_seller_order');
-    await queryRunner.query('DROP TABLE IF EXISTS assignments');
-    await queryRunner.query('DROP TABLE IF EXISTS delivery_events');
-    await queryRunner.query('DROP TABLE IF EXISTS deliveries');
-    await queryRunner.query('DROP TABLE IF EXISTS drivers');
+    await queryRunner.query("DROP INDEX IF EXISTS idx_drivers_status");
+    await queryRunner.query(
+      "DROP INDEX IF EXISTS idx_assignments_seller_driver",
+    );
+    await queryRunner.query(
+      "DROP INDEX IF EXISTS idx_delivery_events_seller_order",
+    );
+    await queryRunner.query("DROP INDEX IF EXISTS idx_deliveries_driver");
+    await queryRunner.query("DROP INDEX IF EXISTS idx_deliveries_status");
+    await queryRunner.query("DROP INDEX IF EXISTS idx_deliveries_seller_order");
+    await queryRunner.query("DROP TABLE IF EXISTS assignments");
+    await queryRunner.query("DROP TABLE IF EXISTS delivery_events");
+    await queryRunner.query("DROP TABLE IF EXISTS deliveries");
+    await queryRunner.query("DROP TABLE IF EXISTS drivers");
   }
 }

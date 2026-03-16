@@ -9,18 +9,18 @@ import {
   UseGuards,
   Req,
   ParseUUIDPipe,
-} from '@nestjs/common';
-import { DriversService } from '../drivers/drivers.service';
-import { AuthGuard } from '@nestjs/passport';
-import { AuditService } from '../services/audit.service';
-import { Request } from 'express';
+} from "@nestjs/common";
+import { DriversService } from "../drivers/drivers.service";
+import { AuthGuard } from "@nestjs/passport";
+import { AuditService } from "../services/audit.service";
+import { Request } from "express";
 import {
   AdminUpdateDriverStatusDto,
   AdminBulkUpdateDriverStatusDto,
   AdminDriverListQueryDto,
-} from '../dto/admin-driver-status.dto';
-import { RequirePermissions, PolicyGuard } from '../auth/policy.guard';
-import { Permission } from '../auth/permissions';
+} from "../dto/admin-driver-status.dto";
+import { RequirePermissions, PolicyGuard } from "../auth/policy.guard";
+import { Permission } from "../auth/permissions";
 
 // Define AuthPayload interface locally since it's not exported from auth.service
 interface AuthPayload {
@@ -33,8 +33,8 @@ interface AuthPayload {
   type?: string;
 }
 
-@Controller('admin/drivers')
-@UseGuards(AuthGuard('jwt'), PolicyGuard)
+@Controller("admin/drivers")
+@UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class DriverStatusController {
   constructor(
     private readonly driversService: DriversService,
@@ -50,11 +50,20 @@ export class DriverStatusController {
     @Req() request: Request & { user: AuthPayload },
     @Query() query: AdminDriverListQueryDto,
   ) {
-    const { cityId, zoneId, status, isActive, authProvider, search, skip = 0, take = 50 } = query;
+    const {
+      cityId,
+      zoneId,
+      status,
+      isActive,
+      authProvider,
+      search,
+      skip = 0,
+      take = 50,
+    } = query;
 
     // Enforce city scope for ADMIN users (SUPER_ADMIN can query any city)
     let scopedCityId = cityId;
-    if (request.user.role === 'ADMIN' && !scopedCityId) {
+    if (request.user.role === "ADMIN" && !scopedCityId) {
       scopedCityId = request.user.cityId;
     }
 
@@ -81,15 +90,15 @@ export class DriverStatusController {
    * Toggle driver status (enable/disable)
    * Only ADMIN and SUPER_ADMIN can access this endpoint
    */
-  @Patch(':id/status')
+  @Patch(":id/status")
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async updateDriverStatus(
-    @Param('id', ParseUUIDPipe) driverId: string,
+    @Param("id", ParseUUIDPipe) driverId: string,
     @Body() updateDriverStatusDto: AdminUpdateDriverStatusDto,
     @Req() request: Request & { user: AuthPayload },
   ) {
     const adminUser = request.user;
-    
+
     // Get current driver status for audit log
     const currentDriver = await this.driversService.findOne(driverId);
     const oldStatus = currentDriver.isActive;
@@ -104,8 +113,8 @@ export class DriverStatusController {
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'DRIVER_STATUS_CHANGED',
-      'DRIVER',
+      "DRIVER_STATUS_CHANGED",
+      "DRIVER",
       driverId,
       {
         oldStatus,
@@ -116,7 +125,7 @@ export class DriverStatusController {
     );
 
     return {
-      message: `Driver ${newStatus ? 'enabled' : 'disabled'} successfully`,
+      message: `Driver ${newStatus ? "enabled" : "disabled"} successfully`,
       driver: updatedDriver,
     };
   }
@@ -124,36 +133,33 @@ export class DriverStatusController {
   /**
    * Enable driver
    */
-  @Patch(':id/enable')
+  @Patch(":id/enable")
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async enableDriver(
-    @Param('id', ParseUUIDPipe) driverId: string,
+    @Param("id", ParseUUIDPipe) driverId: string,
     @Req() request: Request & { user: AuthPayload },
   ) {
     const adminUser = request.user;
-    
+
     // Get current driver status for audit log
     const currentDriver = await this.driversService.findOne(driverId);
     const oldStatus = currentDriver.isActive;
 
     if (oldStatus) {
       return {
-        message: 'Driver is already enabled',
+        message: "Driver is already enabled",
         driver: currentDriver,
       };
     }
 
     // Enable driver
-    const updatedDriver = await this.driversService.setActive(
-      driverId,
-      true,
-    );
+    const updatedDriver = await this.driversService.setActive(driverId, true);
 
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'DRIVER_ENABLED',
-      'DRIVER',
+      "DRIVER_ENABLED",
+      "DRIVER",
       driverId,
       {
         oldStatus,
@@ -163,7 +169,7 @@ export class DriverStatusController {
     );
 
     return {
-      message: 'Driver enabled successfully',
+      message: "Driver enabled successfully",
       driver: updatedDriver,
     };
   }
@@ -171,37 +177,34 @@ export class DriverStatusController {
   /**
    * Disable driver
    */
-  @Patch(':id/disable')
+  @Patch(":id/disable")
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async disableDriver(
-    @Param('id', ParseUUIDPipe) driverId: string,
+    @Param("id", ParseUUIDPipe) driverId: string,
     @Body() body: { reason?: string },
     @Req() request: Request & { user: AuthPayload },
   ) {
     const adminUser = request.user;
-    
+
     // Get current driver status for audit log
     const currentDriver = await this.driversService.findOne(driverId);
     const oldStatus = currentDriver.isActive;
 
     if (!oldStatus) {
       return {
-        message: 'Driver is already disabled',
+        message: "Driver is already disabled",
         driver: currentDriver,
       };
     }
 
     // Disable driver
-    const updatedDriver = await this.driversService.setActive(
-      driverId,
-      false,
-    );
+    const updatedDriver = await this.driversService.setActive(driverId, false);
 
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'DRIVER_DISABLED',
-      'DRIVER',
+      "DRIVER_DISABLED",
+      "DRIVER",
       driverId,
       {
         oldStatus,
@@ -212,7 +215,7 @@ export class DriverStatusController {
     );
 
     return {
-      message: 'Driver disabled successfully',
+      message: "Driver disabled successfully",
       driver: updatedDriver,
     };
   }
@@ -220,7 +223,7 @@ export class DriverStatusController {
   /**
    * Bulk update driver status
    */
-  @Patch('bulk/status')
+  @Patch("bulk/status")
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
   async bulkUpdateDriverStatus(
     @Body() body: AdminBulkUpdateDriverStatusDto,
@@ -241,8 +244,8 @@ export class DriverStatusController {
         if (oldStatus === isActive) {
           results.push({
             driverId,
-            status: 'skipped',
-            message: `Driver already ${isActive ? 'enabled' : 'disabled'}`,
+            status: "skipped",
+            message: `Driver already ${isActive ? "enabled" : "disabled"}`,
           });
           continue;
         }
@@ -256,8 +259,8 @@ export class DriverStatusController {
         // Audit log
         await this.auditService.logFromRequest(
           request,
-          isActive ? 'DRIVER_ENABLED' : 'DRIVER_DISABLED',
-          'DRIVER',
+          isActive ? "DRIVER_ENABLED" : "DRIVER_DISABLED",
+          "DRIVER",
           driverId,
           {
             oldStatus,
@@ -269,26 +272,26 @@ export class DriverStatusController {
 
         results.push({
           driverId,
-          status: 'success',
+          status: "success",
           driver: updatedDriver,
         });
       } catch (error) {
         errors.push({
           driverId,
-          status: 'error',
+          status: "error",
           message: error.message,
         });
       }
     }
 
     return {
-      message: `Bulk ${isActive ? 'enable' : 'disable'} completed`,
+      message: `Bulk ${isActive ? "enable" : "disable"} completed`,
       results,
       errors,
       summary: {
         total: driverIds.length,
-        success: results.filter(r => r.status === 'success').length,
-        skipped: results.filter(r => r.status === 'skipped').length,
+        success: results.filter((r) => r.status === "success").length,
+        skipped: results.filter((r) => r.status === "skipped").length,
         errors: errors.length,
       },
     };

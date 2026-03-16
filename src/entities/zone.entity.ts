@@ -8,14 +8,14 @@ import {
   Index,
   ManyToOne,
   JoinColumn,
-} from 'typeorm';
-import { IsString, IsNotEmpty } from 'class-validator';
-import { Polygon } from 'geojson';
-import { City } from './city.entity';
+} from "typeorm";
+import { IsString, IsNotEmpty } from "class-validator";
+import { Polygon } from "geojson";
+import { City } from "./city.entity";
 
-@Entity('zones')
+@Entity("zones")
 export class Zone {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   /* ------------------------------------------------------------------ */
@@ -36,15 +36,15 @@ export class Zone {
   /* Geographic Information                                              */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: 'city_id' })
+  @Column({ name: "city_id" })
   @IsNotEmpty()
   cityId!: string;
 
   @ManyToOne(() => City, { nullable: false })
-  @JoinColumn({ name: 'city_id' })
+  @JoinColumn({ name: "city_id" })
   city!: City;
 
-  @Column({ type: 'polygon', spatialFeatureType: 'Polygon', nullable: true })
+  @Column({ type: "polygon", spatialFeatureType: "Polygon", nullable: true })
   @IsNotEmpty()
   boundary?: Polygon; // Geographic boundary of the zone
 
@@ -52,10 +52,10 @@ export class Zone {
   /* Timestamps                                                         */
   /* ------------------------------------------------------------------ */
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date;
 
   /* ------------------------------------------------------------------ */

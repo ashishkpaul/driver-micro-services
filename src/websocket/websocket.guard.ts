@@ -3,10 +3,10 @@ import {
   ExecutionContext,
   Injectable,
   Logger,
-} from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { WsException } from '@nestjs/websockets';
-import { Socket } from 'socket.io';
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { WsException } from "@nestjs/websockets";
+import { Socket } from "socket.io";
 
 @Injectable()
 export class WebSocketJwtGuard implements CanActivate {
@@ -20,11 +20,11 @@ export class WebSocketJwtGuard implements CanActivate {
     try {
       const token = this.extractToken(client);
       if (!token) {
-        throw new WsException('Missing auth token');
+        throw new WsException("Missing auth token");
       }
 
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'driver-service-secret',
+        secret: process.env.JWT_SECRET || "driver-service-secret",
       });
 
       client.data.driverId = payload.driverId;
@@ -32,8 +32,8 @@ export class WebSocketJwtGuard implements CanActivate {
       this.logger.log(`WS authenticated driver ${payload.driverId}`);
       return true;
     } catch (err) {
-      this.logger.error('WS auth failed', err);
-      throw new WsException('Unauthorized');
+      this.logger.error("WS auth failed", err);
+      throw new WsException("Unauthorized");
     }
   }
 
@@ -44,7 +44,7 @@ export class WebSocketJwtGuard implements CanActivate {
     }
 
     // ✅ query string fallback
-    if (typeof client.handshake.query?.token === 'string') {
+    if (typeof client.handshake.query?.token === "string") {
       return client.handshake.query.token;
     }
 

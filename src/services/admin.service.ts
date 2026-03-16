@@ -1,12 +1,21 @@
 // src/services/admin.service.ts
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { PasswordService } from './password.service';
-import { AdminUser } from '../entities/admin-user.entity';
-import { CreateAdminDto, UpdateAdminDto, AdminLoginDto } from '../dto/admin.dto';
-import { Role } from '../auth/roles.enum';
-import { City } from '../entities/city.entity';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { PasswordService } from "./password.service";
+import { AdminUser } from "../entities/admin-user.entity";
+import {
+  CreateAdminDto,
+  UpdateAdminDto,
+  AdminLoginDto,
+} from "../dto/admin.dto";
+import { Role } from "../auth/roles.enum";
+import { City } from "../entities/city.entity";
 
 @Injectable()
 export class AdminService {
@@ -21,34 +30,43 @@ export class AdminService {
   /**
    * Create a new admin user
    */
-  async create(createAdminDto: CreateAdminDto, createdBy?: string): Promise<AdminUser> {
+  async create(
+    createAdminDto: CreateAdminDto,
+    createdBy?: string,
+  ): Promise<AdminUser> {
     // Check if email already exists
     const existingAdmin = await this.adminRepository.findOne({
-      where: { email: createAdminDto.email }
+      where: { email: createAdminDto.email },
     });
 
     if (existingAdmin) {
-      throw new ConflictException('Admin with this email already exists');
+      throw new ConflictException("Admin with this email already exists");
     }
 
     // Validate password strength
-    const passwordValidation = this.passwordService.validatePassword(createAdminDto.password);
+    const passwordValidation = this.passwordService.validatePassword(
+      createAdminDto.password,
+    );
     if (!passwordValidation.isValid) {
       throw new BadRequestException(passwordValidation.errors);
     }
 
     // Hash password
-    const passwordHash = await this.passwordService.hash(createAdminDto.password);
+    const passwordHash = await this.passwordService.hash(
+      createAdminDto.password,
+    );
 
     // Validate city exists if provided
     let city = null;
     if (createAdminDto.cityId) {
       city = await this.cityRepository.findOne({
-        where: { id: createAdminDto.cityId }
+        where: { id: createAdminDto.cityId },
       });
 
       if (!city) {
-        throw new NotFoundException(`City with ID ${createAdminDto.cityId} not found`);
+        throw new NotFoundException(
+          `City with ID ${createAdminDto.cityId} not found`,
+        );
       }
     }
 
@@ -69,37 +87,40 @@ export class AdminService {
    * Validate admin credentials for login
    */
   async validateAdmin(email: string, password: string): Promise<AdminUser> {
-    console.log('🔍 Validating admin:', email);
-    
+    console.log("🔍 Validating admin:", email);
+
     const admin = await this.adminRepository.findOne({
-      where: { email }
+      where: { email },
     });
 
-    console.log('🔍 Admin found:', !!admin);
+    console.log("🔍 Admin found:", !!admin);
     if (!admin) {
-      console.log('❌ Admin not found');
-      throw new NotFoundException('Invalid credentials');
+      console.log("❌ Admin not found");
+      throw new NotFoundException("Invalid credentials");
     }
 
-    console.log('🔍 Admin active:', admin.isActive);
+    console.log("🔍 Admin active:", admin.isActive);
     if (!admin.isActive) {
-      console.log('❌ Admin disabled');
-      throw new BadRequestException('Admin account is disabled');
+      console.log("❌ Admin disabled");
+      throw new BadRequestException("Admin account is disabled");
     }
 
-    console.log('🔍 Comparing password...');
-    const isPasswordValid = await this.passwordService.compare(password, admin.passwordHash);
-    console.log('🔍 Password valid:', isPasswordValid);
+    console.log("🔍 Comparing password...");
+    const isPasswordValid = await this.passwordService.compare(
+      password,
+      admin.passwordHash,
+    );
+    console.log("🔍 Password valid:", isPasswordValid);
     if (!isPasswordValid) {
-      console.log('❌ Invalid password');
-      throw new BadRequestException('Invalid credentials');
+      console.log("❌ Invalid password");
+      throw new BadRequestException("Invalid credentials");
     }
 
     // Update last login
     admin.lastLoginAt = new Date();
     await this.adminRepository.save(admin);
 
-    console.log('✅ Admin validation successful');
+    console.log("✅ Admin validation successful");
     return admin;
   }
 
@@ -109,7 +130,7 @@ export class AdminService {
   async findById(id: string): Promise<AdminUser> {
     const admin = await this.adminRepository.findOne({
       where: { id },
-      relations: ['city']
+      relations: ["city"],
     });
 
     if (!admin) {
@@ -125,7 +146,7 @@ export class AdminService {
   async findByEmail(email: string): Promise<AdminUser> {
     const admin = await this.adminRepository.findOne({
       where: { email },
-      relations: ['city']
+      relations: ["city"],
     });
 
     if (!admin) {
@@ -138,18 +159,24 @@ export class AdminService {
   /**
    * Find all admins with optional filtering
    */
-  async findAll(cityId?: string, role?: Role, skip = 0, take = 50): Promise<{ admins: AdminUser[]; total: number }> {
-    const query = this.adminRepository.createQueryBuilder('admin')
-      .leftJoinAndSelect('admin.city', 'city')
+  async findAll(
+    cityId?: string,
+    role?: Role,
+    skip = 0,
+    take = 50,
+  ): Promise<{ admins: AdminUser[]; total: number }> {
+    const query = this.adminRepository
+      .createQueryBuilder("admin")
+      .leftJoinAndSelect("admin.city", "city")
       .skip(skip)
       .take(take);
 
     if (cityId) {
-      query.andWhere('admin.cityId = :cityId', { cityId });
+      query.andWhere("admin.cityId = :cityId", { cityId });
     }
 
     if (role) {
-      query.andWhere('admin.role = :role', { role });
+      query.andWhere("admin.role = :role", { role });
     }
 
     const [admins, total] = await query.getManyAndCount();
@@ -160,33 +187,42 @@ export class AdminService {
   /**
    * Update admin user
    */
-  async update(id: string, updateAdminDto: UpdateAdminDto, updatedBy: AdminUser): Promise<AdminUser> {
+  async update(
+    id: string,
+    updateAdminDto: UpdateAdminDto,
+    updatedBy: AdminUser,
+  ): Promise<AdminUser> {
     const admin = await this.findById(id);
 
     // Superadmin can update any admin, regular admin can only update their own city
-    if (updatedBy.role !== Role.SUPER_ADMIN && admin.cityId !== updatedBy.cityId) {
-      throw new BadRequestException('You can only update admins in your city');
+    if (
+      updatedBy.role !== Role.SUPER_ADMIN &&
+      admin.cityId !== updatedBy.cityId
+    ) {
+      throw new BadRequestException("You can only update admins in your city");
     }
 
     // Check for email conflicts (excluding current admin)
     if (updateAdminDto.email && updateAdminDto.email !== admin.email) {
       const existingAdmin = await this.adminRepository.findOne({
-        where: { email: updateAdminDto.email }
+        where: { email: updateAdminDto.email },
       });
 
       if (existingAdmin) {
-        throw new ConflictException('Admin with this email already exists');
+        throw new ConflictException("Admin with this email already exists");
       }
     }
 
     // Validate city exists if provided
     if (updateAdminDto.cityId) {
       const city = await this.cityRepository.findOne({
-        where: { id: updateAdminDto.cityId }
+        where: { id: updateAdminDto.cityId },
       });
 
       if (!city) {
-        throw new NotFoundException(`City with ID ${updateAdminDto.cityId} not found`);
+        throw new NotFoundException(
+          `City with ID ${updateAdminDto.cityId} not found`,
+        );
       }
     }
 
@@ -205,12 +241,12 @@ export class AdminService {
 
     // Only superadmin can delete other admins
     if (deletedBy.role !== Role.SUPER_ADMIN) {
-      throw new BadRequestException('Only superadmin can delete admins');
+      throw new BadRequestException("Only superadmin can delete admins");
     }
 
     // Cannot delete superadmin
     if (admin.role === Role.SUPER_ADMIN) {
-      throw new BadRequestException('Cannot delete superadmin');
+      throw new BadRequestException("Cannot delete superadmin");
     }
 
     admin.isActive = false;
@@ -222,10 +258,14 @@ export class AdminService {
   /**
    * Reset admin password
    */
-  async resetPassword(id: string, newPassword?: string): Promise<{ newPassword: string }> {
+  async resetPassword(
+    id: string,
+    newPassword?: string,
+  ): Promise<{ newPassword: string }> {
     const admin = await this.findById(id);
 
-    const password = newPassword || this.passwordService.generateSecurePassword();
+    const password =
+      newPassword || this.passwordService.generateSecurePassword();
     const passwordHash = await this.passwordService.hash(password);
 
     admin.passwordHash = passwordHash;
@@ -253,30 +293,35 @@ export class AdminService {
     byCity: { cityId: string; count: number }[];
   }> {
     const total = await this.adminRepository.count();
-    const active = await this.adminRepository.count({ where: { isActive: true } });
+    const active = await this.adminRepository.count({
+      where: { isActive: true },
+    });
 
     // Count by role
     const byRole = await this.adminRepository
-      .createQueryBuilder('admin')
-      .select('admin.role', 'role')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('admin.role')
+      .createQueryBuilder("admin")
+      .select("admin.role", "role")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("admin.role")
       .getRawMany();
 
     // Count by city
     const byCity = await this.adminRepository
-      .createQueryBuilder('admin')
-      .select('admin.cityId', 'cityId')
-      .addSelect('COUNT(*)', 'count')
-      .where('admin.cityId IS NOT NULL')
-      .groupBy('admin.cityId')
+      .createQueryBuilder("admin")
+      .select("admin.cityId", "cityId")
+      .addSelect("COUNT(*)", "count")
+      .where("admin.cityId IS NOT NULL")
+      .groupBy("admin.cityId")
       .getRawMany();
 
     return {
       total,
       active,
-      byRole: byRole.map(r => ({ role: r.role, count: parseInt(r.count) })),
-      byCity: byCity.map(c => ({ cityId: c.cityId, count: parseInt(c.count) }))
+      byRole: byRole.map((r) => ({ role: r.role, count: parseInt(r.count) })),
+      byCity: byCity.map((c) => ({
+        cityId: c.cityId,
+        count: parseInt(c.count),
+      })),
     };
   }
 }

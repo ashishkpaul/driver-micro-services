@@ -4,7 +4,7 @@ import { Assignment } from "./entities/assignment.entity";
 import { AssignmentService } from "./assignment.service";
 import { DriversModule } from "../drivers/drivers.module";
 import { DeliveriesModule } from "../deliveries/deliveries.module";
-import { AssignmentAuthorizationService } from './assignment.authorization.service';
+import { AssignmentAuthorizationService } from "./assignment.authorization.service";
 
 @Module({
   imports: [

@@ -1,5 +1,5 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { OAuth2Client } from 'google-auth-library';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { OAuth2Client } from "google-auth-library";
 
 @Injectable()
 export class GoogleAuthService {
@@ -19,7 +19,7 @@ export class GoogleAuthService {
       const payload = ticket.getPayload();
 
       if (!payload?.sub || !payload?.email) {
-        throw new UnauthorizedException('Invalid Google token');
+        throw new UnauthorizedException("Invalid Google token");
       }
 
       return {
@@ -29,7 +29,7 @@ export class GoogleAuthService {
         picture: payload.picture,
       };
     } catch (err) {
-      throw new UnauthorizedException('Google authentication failed');
+      throw new UnauthorizedException("Google authentication failed");
     }
   }
 }

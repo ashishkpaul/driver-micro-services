@@ -6,7 +6,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
-} from 'typeorm';
+} from "typeorm";
 import {
   IsNotEmpty,
   IsPhoneNumber,
@@ -15,12 +15,12 @@ import {
   IsNumber,
   Min,
   Max,
-} from 'class-validator';
-import { DriverStatus } from '../enums/driver-status.enum';
+} from "class-validator";
+import { DriverStatus } from "../enums/driver-status.enum";
 
-@Entity('drivers')
+@Entity("drivers")
 export class Driver {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   /* ------------------------------------------------------------------ */
@@ -32,7 +32,7 @@ export class Driver {
   name!: string;
 
   @Column({ unique: true })
-  @IsPhoneNumber('IN')
+  @IsPhoneNumber("IN")
   phone!: string;
 
   /* ------------------------------------------------------------------ */
@@ -46,7 +46,7 @@ export class Driver {
    * - controlled ONLY by admin APIs
    */
   @Index()
-  @Column({ name: 'is_active', default: true })
+  @Column({ name: "is_active", default: true })
   @IsBoolean()
   isActive!: boolean;
 
@@ -56,7 +56,7 @@ export class Driver {
 
   @Index()
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: DriverStatus,
     default: DriverStatus.AVAILABLE,
   })
@@ -66,14 +66,14 @@ export class Driver {
   /* Geo / availability                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: 'current_lat', type: 'numeric', nullable: true })
+  @Column({ name: "current_lat", type: "numeric", nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(-90)
   @Max(90)
   currentLat?: number;
 
-  @Column({ name: 'current_lon', type: 'numeric', nullable: true })
+  @Column({ name: "current_lon", type: "numeric", nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(-180)
@@ -85,34 +85,34 @@ export class Driver {
   /* ------------------------------------------------------------------ */
 
   @Index()
-  @Column({ name: 'city_id' })
+  @Column({ name: "city_id" })
   cityId!: string;
 
   @Index()
-  @Column({ name: 'zone_id', nullable: true })
+  @Column({ name: "zone_id", nullable: true })
   zoneId?: string;
 
   /* ------------------------------------------------------------------ */
   /* Vehicle info                                                         */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: 'vehicle_type', nullable: true })
+  @Column({ name: "vehicle_type", nullable: true })
   vehicleType?: string;
 
-  @Column({ name: 'vehicle_number', nullable: true })
+  @Column({ name: "vehicle_number", nullable: true })
   vehicleNumber?: string;
 
   /* ------------------------------------------------------------------ */
   /* Timestamps                                                          */
   /* ------------------------------------------------------------------ */
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date;
 
-  @Column({ name: 'last_active_at', nullable: true })
+  @Column({ name: "last_active_at", nullable: true })
   lastActiveAt?: Date;
 
   /* ------------------------------------------------------------------ */
@@ -122,9 +122,9 @@ export class Driver {
   @Column({ nullable: true })
   email?: string;
 
-  @Column({ name: 'google_sub', nullable: true })
+  @Column({ name: "google_sub", nullable: true })
   googleSub?: string;
 
-  @Column({ name: 'auth_provider', default: 'legacy' })
-  authProvider: 'legacy' | 'google' | 'email';
+  @Column({ name: "auth_provider", default: "legacy" })
+  authProvider: "legacy" | "google" | "email";
 }

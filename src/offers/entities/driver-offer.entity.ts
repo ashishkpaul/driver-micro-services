@@ -1,26 +1,35 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, BeforeInsert, BeforeUpdate } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+  BeforeInsert,
+  BeforeUpdate,
+} from "typeorm";
 
-@Entity('driver_offers')
+@Entity("driver_offers")
 export class DriverOffer {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column('uuid')
-  @Index('idx_delivery_pending')
+  @Column("uuid")
+  @Index("idx_delivery_pending")
   deliveryId: string;
 
-  @Column('uuid')
-  @Index('idx_driver_pending')
+  @Column("uuid")
+  @Index("idx_driver_pending")
   driverId: string;
 
   @Column({
-    type: 'varchar',
+    type: "varchar",
     length: 20,
-    default: 'PENDING'
+    default: "PENDING",
   })
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED";
 
-  @Column('jsonb')
+  @Column("jsonb")
   offerPayload: {
     pickupLocation: { lat: number; lon: number };
     pickupStoreName: string;
@@ -33,31 +42,31 @@ export class DriverOffer {
   @CreateDateColumn()
   createdAt: Date;
 
-  @Column('timestamp')
-  @Index('idx_expires_at')
+  @Column("timestamp")
+  @Index("idx_expires_at")
   expiresAt: Date;
 
-  @Column('timestamp', { nullable: true })
+  @Column("timestamp", { nullable: true })
   acceptedAt: Date;
 
-  @Column('timestamp', { nullable: true })
+  @Column("timestamp", { nullable: true })
   rejectedAt: Date;
 
-  @Column('text', { nullable: true })
+  @Column("text", { nullable: true })
   rejectionReason: string;
 
-  @Column('timestamp', { nullable: true })
-  @Index('idx_created_at')
+  @Column("timestamp", { nullable: true })
+  @Index("idx_created_at")
   notificationSentAt: Date;
 
   @Column({
-    type: 'varchar',
+    type: "varchar",
     length: 20,
-    default: 'push'
+    default: "push",
   })
-  notificationMethod: 'push' | 'websocket' | 'both';
+  notificationMethod: "push" | "websocket" | "both";
 
-  @Column('integer', { nullable: true })
+  @Column("integer", { nullable: true })
   driverResponseTimeMs: number;
 
   @BeforeInsert()
@@ -69,9 +78,9 @@ export class DriverOffer {
 
   @BeforeUpdate()
   updateTimestamps() {
-    if (this.status === 'ACCEPTED' && !this.acceptedAt) {
+    if (this.status === "ACCEPTED" && !this.acceptedAt) {
       this.acceptedAt = new Date();
-    } else if (this.status === 'REJECTED' && !this.rejectedAt) {
+    } else if (this.status === "REJECTED" && !this.rejectedAt) {
       this.rejectedAt = new Date();
     }
   }

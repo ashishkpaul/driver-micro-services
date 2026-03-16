@@ -1,9 +1,9 @@
 // src/services/audit.service.ts
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { AuditLog } from '../entities/audit-log.entity';
-import { Request } from 'express';
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { AuditLog } from "../entities/audit-log.entity";
+import { Request } from "express";
 
 export interface CreateAuditLogDto {
   userId: string;
@@ -63,26 +63,33 @@ export class AuditService {
       endDate?: Date;
     },
   ): Promise<{ logs: AuditLog[]; total: number }> {
-    const query = this.auditRepository.createQueryBuilder('audit')
-      .where('audit.userId = :userId', { userId })
-      .orderBy('audit.createdAt', 'DESC')
+    const query = this.auditRepository
+      .createQueryBuilder("audit")
+      .where("audit.userId = :userId", { userId })
+      .orderBy("audit.createdAt", "DESC")
       .skip(skip)
       .take(take);
 
     if (filters?.action) {
-      query.andWhere('audit.action = :action', { action: filters.action });
+      query.andWhere("audit.action = :action", { action: filters.action });
     }
 
     if (filters?.resourceType) {
-      query.andWhere('audit.resourceType = :resourceType', { resourceType: filters.resourceType });
+      query.andWhere("audit.resourceType = :resourceType", {
+        resourceType: filters.resourceType,
+      });
     }
 
     if (filters?.startDate) {
-      query.andWhere('audit.createdAt >= :startDate', { startDate: filters.startDate });
+      query.andWhere("audit.createdAt >= :startDate", {
+        startDate: filters.startDate,
+      });
     }
 
     if (filters?.endDate) {
-      query.andWhere('audit.createdAt <= :endDate', { endDate: filters.endDate });
+      query.andWhere("audit.createdAt <= :endDate", {
+        endDate: filters.endDate,
+      });
     }
 
     const [logs, total] = await query.getManyAndCount();
@@ -99,10 +106,11 @@ export class AuditService {
     skip = 0,
     take = 50,
   ): Promise<{ logs: AuditLog[]; total: number }> {
-    const query = this.auditRepository.createQueryBuilder('audit')
-      .where('audit.resourceType = :resourceType', { resourceType })
-      .andWhere('audit.resourceId = :resourceId', { resourceId })
-      .orderBy('audit.createdAt', 'DESC')
+    const query = this.auditRepository
+      .createQueryBuilder("audit")
+      .where("audit.resourceType = :resourceType", { resourceType })
+      .andWhere("audit.resourceId = :resourceId", { resourceId })
+      .orderBy("audit.createdAt", "DESC")
       .skip(skip)
       .take(take);
 
@@ -124,22 +132,27 @@ export class AuditService {
       userId?: string;
     },
   ): Promise<{ logs: AuditLog[]; total: number }> {
-    const query = this.auditRepository.createQueryBuilder('audit')
-      .where('audit.action = :action', { action })
-      .orderBy('audit.createdAt', 'DESC')
+    const query = this.auditRepository
+      .createQueryBuilder("audit")
+      .where("audit.action = :action", { action })
+      .orderBy("audit.createdAt", "DESC")
       .skip(skip)
       .take(take);
 
     if (filters?.startDate) {
-      query.andWhere('audit.createdAt >= :startDate', { startDate: filters.startDate });
+      query.andWhere("audit.createdAt >= :startDate", {
+        startDate: filters.startDate,
+      });
     }
 
     if (filters?.endDate) {
-      query.andWhere('audit.createdAt <= :endDate', { endDate: filters.endDate });
+      query.andWhere("audit.createdAt <= :endDate", {
+        endDate: filters.endDate,
+      });
     }
 
     if (filters?.userId) {
-      query.andWhere('audit.userId = :userId', { userId: filters.userId });
+      query.andWhere("audit.userId = :userId", { userId: filters.userId });
     }
 
     const [logs, total] = await query.getManyAndCount();
@@ -161,23 +174,26 @@ export class AuditService {
       userId?: string;
     },
   ): Promise<{ logs: AuditLog[]; total: number }> {
-    const query = this.auditRepository.createQueryBuilder('audit')
-      .where('audit.createdAt >= :startDate', { startDate })
-      .andWhere('audit.createdAt <= :endDate', { endDate })
-      .orderBy('audit.createdAt', 'DESC')
+    const query = this.auditRepository
+      .createQueryBuilder("audit")
+      .where("audit.createdAt >= :startDate", { startDate })
+      .andWhere("audit.createdAt <= :endDate", { endDate })
+      .orderBy("audit.createdAt", "DESC")
       .skip(skip)
       .take(take);
 
     if (filters?.action) {
-      query.andWhere('audit.action = :action', { action: filters.action });
+      query.andWhere("audit.action = :action", { action: filters.action });
     }
 
     if (filters?.resourceType) {
-      query.andWhere('audit.resourceType = :resourceType', { resourceType: filters.resourceType });
+      query.andWhere("audit.resourceType = :resourceType", {
+        resourceType: filters.resourceType,
+      });
     }
 
     if (filters?.userId) {
-      query.andWhere('audit.userId = :userId', { userId: filters.userId });
+      query.andWhere("audit.userId = :userId", { userId: filters.userId });
     }
 
     const [logs, total] = await query.getManyAndCount();
@@ -199,44 +215,53 @@ export class AuditService {
 
     // Count by action
     const byAction = await this.auditRepository
-      .createQueryBuilder('audit')
-      .select('audit.action', 'action')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('audit.action')
-      .orderBy('count', 'DESC')
+      .createQueryBuilder("audit")
+      .select("audit.action", "action")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("audit.action")
+      .orderBy("count", "DESC")
       .getRawMany();
 
     // Count by resource type
     const byResourceType = await this.auditRepository
-      .createQueryBuilder('audit')
-      .select('audit.resourceType', 'resourceType')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('audit.resourceType')
-      .orderBy('count', 'DESC')
+      .createQueryBuilder("audit")
+      .select("audit.resourceType", "resourceType")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("audit.resourceType")
+      .orderBy("count", "DESC")
       .getRawMany();
 
     // Count by user
     const byUser = await this.auditRepository
-      .createQueryBuilder('audit')
-      .select('audit.userId', 'userId')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('audit.userId')
-      .orderBy('count', 'DESC')
+      .createQueryBuilder("audit")
+      .select("audit.userId", "userId")
+      .addSelect("COUNT(*)", "count")
+      .groupBy("audit.userId")
+      .orderBy("count", "DESC")
       .limit(10)
       .getRawMany();
 
     // Recent activity
     const recentActivity = await this.auditRepository
-      .createQueryBuilder('audit')
-      .orderBy('audit.createdAt', 'DESC')
+      .createQueryBuilder("audit")
+      .orderBy("audit.createdAt", "DESC")
       .limit(20)
       .getMany();
 
     return {
       total,
-      byAction: byAction.map(a => ({ action: a.action, count: parseInt(a.count) })),
-      byResourceType: byResourceType.map(r => ({ resourceType: r.resourceType, count: parseInt(r.count) })),
-      byUser: byUser.map(u => ({ userId: u.userId, count: parseInt(u.count) })),
+      byAction: byAction.map((a) => ({
+        action: a.action,
+        count: parseInt(a.count),
+      })),
+      byResourceType: byResourceType.map((r) => ({
+        resourceType: r.resourceType,
+        count: parseInt(r.count),
+      })),
+      byUser: byUser.map((u) => ({
+        userId: u.userId,
+        count: parseInt(u.count),
+      })),
       recentActivity,
     };
   }
@@ -252,7 +277,7 @@ export class AuditService {
       .createQueryBuilder()
       .delete()
       .from(AuditLog)
-      .where('createdAt < :cutoffDate', { cutoffDate })
+      .where("createdAt < :cutoffDate", { cutoffDate })
       .execute();
 
     return result.affected || 0;
@@ -271,7 +296,7 @@ export class AuditService {
     try {
       const user = (request as any).user;
       const auditData: CreateAuditLogDto = {
-        userId: user?.userId || user?.driverId || 'anonymous',
+        userId: user?.userId || user?.driverId || "anonymous",
         userEmail: user?.email,
         userRole: user?.role,
         action,
@@ -279,14 +304,14 @@ export class AuditService {
         resourceId,
         changes,
         ipAddress: this.getClientIp(request),
-        userAgent: request.headers['user-agent'],
-        requestId: request.headers['x-request-id'] as string,
+        userAgent: request.headers["user-agent"],
+        requestId: request.headers["x-request-id"] as string,
       };
 
       await this.log(auditData);
     } catch (error) {
       // Don't throw errors for audit logging failures
-      console.error('Failed to create audit log:', error);
+      console.error("Failed to create audit log:", error);
     }
   }
 
@@ -295,8 +320,8 @@ export class AuditService {
    */
   private getClientIp(request: Request): string | undefined {
     return (
-      request.headers['x-forwarded-for'] as string ||
-      request.headers['x-real-ip'] as string ||
+      (request.headers["x-forwarded-for"] as string) ||
+      (request.headers["x-real-ip"] as string) ||
       request.connection.remoteAddress ||
       request.ip
     );

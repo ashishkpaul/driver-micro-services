@@ -36,33 +36,28 @@ describe("handleDriverHeartbeat", () => {
     mockDriversService = createMockDriversService();
   });
 
-  it("should reject heartbeat with mismatched driver ID", async () => {
-    mockSocket.data.driverId = "wrong-driver";
+  it("should return error when no driverId", async () => {
+    mockSocket.data.driverId = undefined;
 
-    await handleDriverHeartbeat(
+    const result = await handleDriverHeartbeat(
       mockSocket,
       {
-        driverId: "test-driver-123",
         status: "AVAILABLE",
-        timestamp: new Date().toISOString(),
+        clientTime: Date.now(),
       },
       mockRedisService,
       mockDriversService,
     );
 
-    expect(mockSocket.emit).toHaveBeenCalledWith("ERROR_V1", {
-      code: "HEARTBEAT_MISMATCH",
-      message: "Driver ID mismatch",
-    });
+    expect(result).toEqual({ ok: false });
   });
 
   it("should mark driver offline when status is OFFLINE", async () => {
-    await handleDriverHeartbeat(
+    const result = await handleDriverHeartbeat(
       mockSocket,
       {
-        driverId: "test-driver-123",
         status: "OFFLINE",
-        timestamp: new Date().toISOString(),
+        clientTime: Date.now(),
       },
       mockRedisService,
       mockDriversService,
@@ -71,82 +66,98 @@ describe("handleDriverHeartbeat", () => {
     expect(mockRedisService.markDriverOffline).toHaveBeenCalledWith(
       "test-driver-123",
     );
-    expect(mockSocket.emit).toHaveBeenCalledWith(
-      "HEARTBEAT_ACK_V1",
-      expect.objectContaining({
-        receivedAt: expect.any(String),
-        serverTime: expect.any(Number),
-        ttlSeconds: 45,
-      }),
+    expect(mockDriversService.updateStatus).toHaveBeenCalledWith(
+      "test-driver-123",
+      DriverStatus.OFFLINE,
     );
+    expect(result).toEqual({
+      ok: true,
+      serverTime: expect.any(Number),
+      nextHeartbeatMs: 20000,
+    });
   });
 
-  it("should update driver location and status when coordinates provided", async () => {
+  it("should update driver location when coordinates provided", async () => {
     mockDriversService.findById.mockResolvedValue({
       id: "test-driver-123",
-      status: DriverStatus.BUSY,
+      status: DriverStatus.AVAILABLE,
     });
 
-    await handleDriverHeartbeat(
+    const result = await handleDriverHeartbeat(
       mockSocket,
       {
-        driverId: "test-driver-123",
         status: "AVAILABLE",
         lat: 12.9716,
         lon: 77.5946,
-        timestamp: new Date().toISOString(),
+        clientTime: Date.now(),
       },
       mockRedisService,
       mockDriversService,
     );
 
-    expect(mockRedisService.updateDriverPresence).toHaveBeenCalledWith(
+    expect(mockRedisService.updateDriverLocation).toHaveBeenCalledWith(
       "test-driver-123",
       12.9716,
       77.5946,
-      "AVAILABLE",
       45,
     );
     expect(mockDriversService.updateStatus).toHaveBeenCalledWith(
       "test-driver-123",
       DriverStatus.AVAILABLE,
     );
+    expect(result).toEqual({
+      ok: true,
+      serverTime: expect.any(Number),
+      nextHeartbeatMs: 20000,
+    });
   });
 
-  it("should handle driver not found gracefully", async () => {
-    mockDriversService.findById.mockResolvedValue(null);
+  it("should not update status when driver is BUSY", async () => {
+    mockDriversService.findById.mockResolvedValue({
+      id: "test-driver-123",
+      status: DriverStatus.BUSY,
+    });
 
-    await handleDriverHeartbeat(
+    const result = await handleDriverHeartbeat(
       mockSocket,
       {
-        driverId: "test-driver-123",
         status: "AVAILABLE",
         lat: 12.9716,
         lon: 77.5946,
-        timestamp: new Date().toISOString(),
+        clientTime: Date.now(),
       },
       mockRedisService,
       mockDriversService,
     );
 
     expect(mockDriversService.updateStatus).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: true,
+      serverTime: expect.any(Number),
+      nextHeartbeatMs: 20000,
+    });
   });
 
-  it("should handle client_unload reason", async () => {
-    await handleDriverHeartbeat(
+  it("should handle driver not found gracefully", async () => {
+    mockDriversService.findById.mockResolvedValue(null);
+
+    const result = await handleDriverHeartbeat(
       mockSocket,
       {
-        driverId: "test-driver-123",
         status: "AVAILABLE",
-        reason: "client_unload",
-        timestamp: new Date().toISOString(),
+        lat: 12.9716,
+        lon: 77.5946,
+        clientTime: Date.now(),
       },
       mockRedisService,
       mockDriversService,
     );
 
-    expect(mockRedisService.markDriverOffline).toHaveBeenCalledWith(
-      "test-driver-123",
-    );
+    expect(mockDriversService.updateStatus).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: true,
+      serverTime: expect.any(Number),
+      nextHeartbeatMs: 20000,
+    });
   });
 });

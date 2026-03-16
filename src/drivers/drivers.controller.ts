@@ -13,69 +13,69 @@ import {
   BadRequestException,
   UseGuards,
   Req,
-} from '@nestjs/common';
-import { Request } from 'express';
-import { DriversService } from './drivers.service';
-import { CreateDriverDto } from './dto/create-driver.dto';
-import { UpdateDriverLocationDto } from './dto/update-driver-location.dto';
-import { UpdateDriverStatusDto } from './dto/update-driver-status.dto';
-import { AuthGuard } from '@nestjs/passport';
-import { PolicyGuard, RequirePermissions } from '../auth/policy.guard';
-import { Permission } from '../auth/permissions';
+} from "@nestjs/common";
+import { Request } from "express";
+import { DriversService } from "./drivers.service";
+import { CreateDriverDto } from "./dto/create-driver.dto";
+import { UpdateDriverLocationDto } from "./dto/update-driver-location.dto";
+import { UpdateDriverStatusDto } from "./dto/update-driver-status.dto";
+import { AuthGuard } from "@nestjs/passport";
+import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
+import { Permission } from "../auth/permissions";
 
-@Controller('drivers')
+@Controller("drivers")
 export class DriversController {
   constructor(private readonly driversService: DriversService) {}
 
   /* -------------------- ADMIN -------------------- */
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_CREATE_DRIVER)
   create(@Body() dto: CreateDriverDto) {
     return this.driversService.create(dto);
   }
 
   @Get()
-  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_READ_DRIVER_ANY)
   findAll() {
     return this.driversService.findAll();
   }
 
-  @Patch(':id/activate')
-  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @Patch(":id/activate")
+  @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
-  activate(@Param('id') id: string) {
+  activate(@Param("id") id: string) {
     return this.driversService.setActive(id, true);
   }
 
-  @Patch(':id/deactivate')
-  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @Patch(":id/deactivate")
+  @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
-  deactivate(@Param('id') id: string) {
+  deactivate(@Param("id") id: string) {
     return this.driversService.setActive(id, false);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_DELETE_DRIVER)
-  remove(@Param('id') id: string) {
+  remove(@Param("id") id: string) {
     return this.driversService.remove(id);
   }
 
   /* -------------------- DRIVER / SYSTEM -------------------- */
 
-  @Get('available')
-  @UseGuards(AuthGuard('jwt'))
+  @Get("available")
+  @UseGuards(AuthGuard("jwt"))
   findAvailable(
-    @Query('lat') lat?: string,
-    @Query('lon') lon?: string,
-    @Query('radiusKm') radiusKm?: string,
+    @Query("lat") lat?: string,
+    @Query("lon") lon?: string,
+    @Query("radiusKm") radiusKm?: string,
   ) {
     if ((lat && !lon) || (!lat && lon)) {
-      throw new BadRequestException('lat and lon must be provided together');
+      throw new BadRequestException("lat and lon must be provided together");
     }
 
     return this.driversService.findAvailable(
@@ -85,34 +85,31 @@ export class DriversController {
     );
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
+  @Get(":id")
+  findOne(@Param("id") id: string) {
     return this.driversService.findOne(id);
   }
 
-  @Get('me')
-  @UseGuards(AuthGuard('jwt'))
+  @Get("me")
+  @UseGuards(AuthGuard("jwt"))
   getMe(@Req() req: Request & { user: any }) {
     return this.driversService.findById(req.user.driverId);
   }
 
-  @Patch(':id/location')
-  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @Patch(":id/location")
+  @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.DRIVER_UPDATE_OWN_LOCATION)
   updateLocation(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() dto: UpdateDriverLocationDto,
   ) {
     return this.driversService.updateLocation(id, dto.lat, dto.lon);
   }
 
-  @Patch(':id/status')
-  @UseGuards(AuthGuard('jwt'), PolicyGuard)
+  @Patch(":id/status")
+  @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.DRIVER_UPDATE_DELIVERY_STATUS)
-  updateStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateDriverStatusDto,
-  ) {
+  updateStatus(@Param("id") id: string, @Body() dto: UpdateDriverStatusDto) {
     return this.driversService.updateStatus(id, dto.status);
   }
 }

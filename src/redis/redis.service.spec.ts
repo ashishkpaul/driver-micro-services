@@ -93,9 +93,9 @@ describe("RedisService – GEO availability invariants", () => {
         exists: jest.fn().mockReturnThis(),
         exec: jest.fn().mockResolvedValue([
           [null, "AVAILABLE"], // hget for driver1
-          [null, 1],           // exists for driver1
+          [null, 1], // exists for driver1
           [null, "AVAILABLE"], // hget for driver2
-          [null, 0],           // exists for driver2 (offline)
+          [null, 0], // exists for driver2 (offline)
         ]),
       };
       redisMock.pipeline.mockReturnValue(mockPipeline);
@@ -125,9 +125,7 @@ describe("RedisService – GEO availability invariants", () => {
       expect(mockPipeline.exists).toHaveBeenCalledTimes(2);
 
       // Only driver1 should be available (online=1)
-      expect(result).toEqual([
-        { driverId: "driver1", distanceKm: 1.5 },
-      ]);
+      expect(result).toEqual([{ driverId: "driver1", distanceKm: 1.5 }]);
     });
 
     it("should return empty array when no drivers found", async () => {

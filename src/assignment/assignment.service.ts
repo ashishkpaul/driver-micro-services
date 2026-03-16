@@ -7,10 +7,10 @@ import { DeliveriesService } from "../deliveries/deliveries.service";
 import { Assignment } from "./entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { WebSocketService } from "../websocket/websocket.service"; // ✅ NEW
-import { DriverStatus } from '../drivers/enums/driver-status.enum';
-import { AssignmentAuthorizationService } from './assignment.authorization.service';
-import { AuthorizationActor } from '../authorization/authorization.types';
-import { DriverCapabilityService } from '../drivers/driver-capability.service';
+import { DriverStatus } from "../drivers/enums/driver-status.enum";
+import { AssignmentAuthorizationService } from "./assignment.authorization.service";
+import { AuthorizationActor } from "../authorization/authorization.types";
+import { DriverCapabilityService } from "../drivers/driver-capability.service";
 
 @Injectable()
 export class AssignmentService {
@@ -34,8 +34,8 @@ export class AssignmentService {
     dropLat: number,
     dropLon: number,
     actor: AuthorizationActor = {
-      role: 'SYSTEM',
-      type: 'system',
+      role: "SYSTEM",
+      type: "system",
       permissions: [],
     },
   ): Promise<string> {
@@ -67,9 +67,10 @@ export class AssignmentService {
       targetCityId: driver.cityId,
     });
 
-    const capability = await this.driverCapabilityService.checkDeliveryAcceptanceCapability(
-      driver.id,
-    );
+    const capability =
+      await this.driverCapabilityService.checkDeliveryAcceptanceCapability(
+        driver.id,
+      );
 
     if (!capability.canAccept) {
       this.logger.warn(
@@ -139,8 +140,11 @@ export class AssignmentService {
     pickupLat: number,
     pickupLon: number,
   ): Promise<(Driver & { currentLat: number; currentLon: number }) | null> {
-    const availableDrivers =
-      await this.driversService.findAvailable(pickupLat, pickupLon, 5);
+    const availableDrivers = await this.driversService.findAvailable(
+      pickupLat,
+      pickupLon,
+      5,
+    );
 
     if (availableDrivers.length === 0) {
       return null;
@@ -172,9 +176,7 @@ export class AssignmentService {
     return driversWithDistance[0].driver;
   }
 
-  async getAssignmentHistory(
-    sellerOrderId: string,
-  ): Promise<Assignment[]> {
+  async getAssignmentHistory(sellerOrderId: string): Promise<Assignment[]> {
     return await this.assignmentRepository.find({
       where: { sellerOrderId },
       order: { createdAt: "DESC" },

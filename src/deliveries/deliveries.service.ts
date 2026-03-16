@@ -26,11 +26,7 @@ import {
  * Vendure only accepts this strict subset of states.
  * Internal delivery states MAY be broader.
  */
-type VendureStatus =
-  | "ASSIGNED"
-  | "PICKED_UP"
-  | "DELIVERED"
-  | "FAILED";
+type VendureStatus = "ASSIGNED" | "PICKED_UP" | "DELIVERED" | "FAILED";
 
 @Injectable()
 export class DeliveriesService {
@@ -176,7 +172,9 @@ export class DeliveriesService {
     const delivery = await this.findOne(deliveryId);
 
     if (!delivery.driverId) {
-      throw new BadRequestException("Cannot generate OTP for unassigned delivery");
+      throw new BadRequestException(
+        "Cannot generate OTP for unassigned delivery",
+      );
     }
 
     if (delivery.status === "DELIVERED" || delivery.status === "CANCELLED") {
@@ -352,9 +350,7 @@ export class DeliveriesService {
   // History
   // ---------------------------------------------------------------------------
 
-  async getDeliveryHistory(
-    sellerOrderId: string,
-  ): Promise<DeliveryEvent[]> {
+  async getDeliveryHistory(sellerOrderId: string): Promise<DeliveryEvent[]> {
     return await this.deliveryEventRepository.find({
       where: { sellerOrderId },
       order: { createdAt: "ASC" },
@@ -384,9 +380,7 @@ export class DeliveriesService {
   // Vendure helpers
   // ---------------------------------------------------------------------------
 
-  private isVendureStatus(
-    status: string,
-  ): status is VendureStatus {
+  private isVendureStatus(status: string): status is VendureStatus {
     return (
       status === "ASSIGNED" ||
       status === "PICKED_UP" ||

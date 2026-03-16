@@ -5,44 +5,44 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   Index,
-} from 'typeorm';
+} from "typeorm";
 
-@Entity('audit_logs')
+@Entity("audit_logs")
 export class AuditLog {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   /* ------------------------------------------------------------------ */
   /* User Information                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: 'user_id' })
+  @Column({ name: "user_id" })
   userId!: string;
 
-  @Column({ name: 'user_email', nullable: true })
+  @Column({ name: "user_email", nullable: true })
   userEmail?: string;
 
-  @Column({ name: 'user_role', nullable: true })
+  @Column({ name: "user_role", nullable: true })
   userRole?: string;
 
   /* ------------------------------------------------------------------ */
   /* Action Information                                                 */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: 'action' })
+  @Column({ name: "action" })
   action!: string; // e.g., "DRIVER_DISABLED", "ADMIN_CREATED", "DELIVERY_REASSIGNED"
 
-  @Column({ name: 'resource_type' })
+  @Column({ name: "resource_type" })
   resourceType!: string; // e.g., "DRIVER", "ADMIN", "DELIVERY"
 
-  @Column({ name: 'resource_id' })
+  @Column({ name: "resource_id" })
   resourceId!: string; // ID of the resource being acted upon
 
   /* ------------------------------------------------------------------ */
   /* Change Information                                                 */
   /* ------------------------------------------------------------------ */
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: "jsonb", nullable: true })
   changes?: {
     before?: any;
     after?: any;
@@ -53,20 +53,20 @@ export class AuditLog {
   /* Request Information                                                */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: 'ip_address', nullable: true })
+  @Column({ name: "ip_address", nullable: true })
   ipAddress?: string;
 
-  @Column({ name: 'user_agent', nullable: true })
+  @Column({ name: "user_agent", nullable: true })
   userAgent?: string;
 
-  @Column({ name: 'request_id', nullable: true })
+  @Column({ name: "request_id", nullable: true })
   requestId?: string;
 
   /* ------------------------------------------------------------------ */
   /* Metadata                                                           */
   /* ------------------------------------------------------------------ */
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
   /* ------------------------------------------------------------------ */

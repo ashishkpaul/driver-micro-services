@@ -8,29 +8,31 @@ import {
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
-} from '@nestjs/websockets';
-import { UseGuards, Logger } from '@nestjs/common';
-import { Server, Socket } from 'socket.io';
+} from "@nestjs/websockets";
+import { UseGuards, Logger } from "@nestjs/common";
+import { Server, Socket } from "socket.io";
 
-import { WebSocketJwtGuard } from './websocket.guard';
-import { WebSocketService } from './websocket.service';
-import { DriversService } from '../drivers/drivers.service';
-import { DeliveriesService } from '../deliveries/deliveries.service';
+import { WebSocketJwtGuard } from "./websocket.guard";
+import { WebSocketService } from "./websocket.service";
+import { DriversService } from "../drivers/drivers.service";
+import { DeliveriesService } from "../deliveries/deliveries.service";
 
 import {
   LocationUpdateEvent,
   ProofUploadedEvent,
   DriverStatusEvent,
-} from './interfaces/websocket.interface';
+} from "./interfaces/websocket.interface";
 
-import { handleLocationUpdate } from './events/location.handler';
-import { handleProofUploaded } from './events/proof.handler';
-import { handleDriverStatus } from './events/delivery.handler';
-import { WebSocketMetricsService } from './websocket-metrics.service';
-import { DriverStatus } from '../drivers/enums/driver-status.enum';
+import { handleLocationUpdate } from "./events/location.handler";
+import { handleProofUploaded } from "./events/proof.handler";
+import { handleDriverStatus } from "./events/delivery.handler";
+import { handleDriverHeartbeat } from "./events/presence.handler";
+import { WebSocketMetricsService } from "./websocket-metrics.service";
+import { DriverStatus } from "../drivers/enums/driver-status.enum";
+import { RedisService } from "../redis/redis.service";
 
 @WebSocketGateway({
-  namespace: '/driver',
+  namespace: "/driver",
   cors: { origin: true, credentials: true },
 })
 @UseGuards(WebSocketJwtGuard)
@@ -47,6 +49,7 @@ export class WebSocketGatewayHandler
     private readonly driversService: DriversService,
     private readonly deliveriesService: DeliveriesService,
     private readonly metrics: WebSocketMetricsService,
+    private readonly redisService: RedisService,
   ) {}
 
   afterInit(server: Server) {
@@ -57,7 +60,7 @@ export class WebSocketGatewayHandler
     const driverId = client.data.driverId;
 
     if (!driverId) {
-      this.logger.warn('WS connection without driverId — disconnecting');
+      this.logger.warn("WS connection without driverId — disconnecting");
       client.disconnect();
       return;
     }
@@ -79,8 +82,9 @@ export class WebSocketGatewayHandler
 
     // Delay OFFLINE status update to handle reconnection scenarios
     setTimeout(async () => {
-      const stillConnected = Array.from(this.server.sockets.sockets.values())
-        .some(s => s.data?.driverId === driverId);
+      const stillConnected = Array.from(
+        this.server.sockets.sockets.values(),
+      ).some((s) => s.data?.driverId === driverId);
 
       if (!stillConnected) {
         await this.driversService.updateStatus(driverId, DriverStatus.OFFLINE);
@@ -89,7 +93,7 @@ export class WebSocketGatewayHandler
     }, 30_000);
   }
 
-  @SubscribeMessage('LOCATION_UPDATE_V1')
+  @SubscribeMessage("LOCATION_UPDATE_V1")
   async handleLocation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: LocationUpdateEvent,
@@ -102,7 +106,7 @@ export class WebSocketGatewayHandler
     return handleLocationUpdate(client, data, this.driversService);
   }
 
-  @SubscribeMessage('PROOF_UPLOADED_V1')
+  @SubscribeMessage("PROOF_UPLOADED_V1")
   async handleProof(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: ProofUploadedEvent,
@@ -115,7 +119,7 @@ export class WebSocketGatewayHandler
     return handleProofUploaded(client, data, this.deliveriesService);
   }
 
-  @SubscribeMessage('DRIVER_STATUS_V1')
+  @SubscribeMessage("DRIVER_STATUS_V1")
   async handleStatus(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: DriverStatusEvent,
@@ -128,17 +132,37 @@ export class WebSocketGatewayHandler
     return handleDriverStatus(client, data, this.driversService);
   }
 
-  @SubscribeMessage('PING_V1')
+  @SubscribeMessage("PING_V1")
   async handlePing(@ConnectedSocket() client: Socket) {
     const driverId = client.data.driverId;
     if (driverId) {
       // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
       this.metrics.messageReceived(driverId).catch(() => {});
     }
-    
+
     return {
       timestamp: Date.now(),
-      status: 'ok',
+      status: "ok",
     };
+  }
+
+  @SubscribeMessage("DRIVER_HEARTBEAT_V1")
+  async handleHeartbeat(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: any,
+  ) {
+    const driverId = client.data.driverId;
+    if (driverId) {
+      // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
+      this.metrics.messageReceived(driverId).catch(() => {});
+    }
+
+    // Process heartbeat and return ACK
+    return handleDriverHeartbeat(
+      client,
+      data,
+      this.redisService,
+      this.driversService,
+    );
   }
 }

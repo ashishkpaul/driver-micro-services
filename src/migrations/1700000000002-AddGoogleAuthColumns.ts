@@ -1,38 +1,38 @@
-import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
+import { MigrationInterface, QueryRunner, TableColumn } from "typeorm";
 
 export class AddGoogleAuthColumns1700000000002 implements MigrationInterface {
-  name = 'AddGoogleAuthColumns1700000000002';
+  name = "AddGoogleAuthColumns1700000000002";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add Google auth columns to drivers table (idempotent)
-    if (!(await queryRunner.hasColumn('drivers', 'email'))) {
+    if (!(await queryRunner.hasColumn("drivers", "email"))) {
       await queryRunner.addColumn(
-        'drivers',
+        "drivers",
         new TableColumn({
-          name: 'email',
-          type: 'varchar',
+          name: "email",
+          type: "varchar",
           isNullable: true,
         }),
       );
     }
 
-    if (!(await queryRunner.hasColumn('drivers', 'google_sub'))) {
+    if (!(await queryRunner.hasColumn("drivers", "google_sub"))) {
       await queryRunner.addColumn(
-        'drivers',
+        "drivers",
         new TableColumn({
-          name: 'google_sub',
-          type: 'varchar',
+          name: "google_sub",
+          type: "varchar",
           isNullable: true,
         }),
       );
     }
 
-    if (!(await queryRunner.hasColumn('drivers', 'auth_provider'))) {
+    if (!(await queryRunner.hasColumn("drivers", "auth_provider"))) {
       await queryRunner.addColumn(
-        'drivers',
+        "drivers",
         new TableColumn({
-          name: 'auth_provider',
-          type: 'varchar',
+          name: "auth_provider",
+          type: "varchar",
           default: "'legacy'",
         }),
       );
@@ -55,18 +55,18 @@ export class AddGoogleAuthColumns1700000000002 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop indexes
-    await queryRunner.query('DROP INDEX IF EXISTS idx_drivers_google_sub');
-    await queryRunner.query('DROP INDEX IF EXISTS idx_drivers_email_unique');
+    await queryRunner.query("DROP INDEX IF EXISTS idx_drivers_google_sub");
+    await queryRunner.query("DROP INDEX IF EXISTS idx_drivers_email_unique");
 
     // Drop columns
-    if (await queryRunner.hasColumn('drivers', 'email')) {
-      await queryRunner.dropColumn('drivers', 'email');
+    if (await queryRunner.hasColumn("drivers", "email")) {
+      await queryRunner.dropColumn("drivers", "email");
     }
-    if (await queryRunner.hasColumn('drivers', 'google_sub')) {
-      await queryRunner.dropColumn('drivers', 'google_sub');
+    if (await queryRunner.hasColumn("drivers", "google_sub")) {
+      await queryRunner.dropColumn("drivers", "google_sub");
     }
-    if (await queryRunner.hasColumn('drivers', 'auth_provider')) {
-      await queryRunner.dropColumn('drivers', 'auth_provider');
+    if (await queryRunner.hasColumn("drivers", "auth_provider")) {
+      await queryRunner.dropColumn("drivers", "auth_provider");
     }
   }
 }

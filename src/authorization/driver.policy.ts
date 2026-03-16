@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { PermissionType } from '../auth/permissions';
+import { Injectable } from "@nestjs/common";
+import { PermissionType } from "../auth/permissions";
 import {
   AuthorizationActor,
   AuthorizationDecision,
   AuthorizationResourceContext,
-} from './authorization.types';
+} from "./authorization.types";
 
 @Injectable()
 export class DriverPolicy {
@@ -13,7 +13,7 @@ export class DriverPolicy {
     permission: PermissionType,
     resource: AuthorizationResourceContext,
   ): AuthorizationDecision {
-    if (!permission.startsWith('driver:')) {
+    if (!permission.startsWith("driver:")) {
       return { allowed: true };
     }
 
@@ -21,11 +21,11 @@ export class DriverPolicy {
     const targetDriverId = resource.driverId;
 
     if (targetDriverId && actorDriverId && targetDriverId !== actorDriverId) {
-      return { allowed: false, reason: 'DRIVER_OWNERSHIP_VIOLATION' };
+      return { allowed: false, reason: "DRIVER_OWNERSHIP_VIOLATION" };
     }
 
-    if (actor.isActive === false && permission !== 'driver:read:own_profile') {
-      return { allowed: false, reason: 'DRIVER_INACTIVE' };
+    if (actor.isActive === false && permission !== "driver:read:own_profile") {
+      return { allowed: false, reason: "DRIVER_INACTIVE" };
     }
 
     return { allowed: true };

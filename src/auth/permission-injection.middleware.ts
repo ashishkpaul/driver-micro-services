@@ -1,6 +1,6 @@
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
-import { RolePermissions } from './permissions';
+import { Injectable, NestMiddleware } from "@nestjs/common";
+import { Request, Response, NextFunction } from "express";
+import { RolePermissions } from "./permissions";
 
 interface AuthenticatedRequest extends Request {
   user: {
@@ -30,10 +30,10 @@ export class PermissionInjectionMiddleware implements NestMiddleware {
       } catch (error) {
         // If permission enhancement fails, continue with basic user info
         // This ensures the request doesn't fail due to permission issues
-        console.warn('Permission injection failed:', error.message);
+        console.warn("Permission injection failed:", error.message);
       }
     }
-    
+
     next();
   }
 
@@ -52,7 +52,7 @@ export class PermissionInjectionMiddleware implements NestMiddleware {
       // Admin token already carries city/active/role claims
       enhancedUser.permissions =
         RolePermissions[user.role as keyof typeof RolePermissions] || [];
-    } else if (user.role === 'SYSTEM' || user.type === 'system') {
+    } else if (user.role === "SYSTEM" || user.type === "system") {
       enhancedUser.permissions = RolePermissions.SYSTEM;
     } else {
       enhancedUser.permissions = [];
@@ -74,14 +74,15 @@ export class PermissionInjectionMiddleware implements NestMiddleware {
     user.resourceCityId = params.cityId || body.cityId || query.cityId;
     user.resourceZoneId = params.zoneId || body.zoneId || query.zoneId;
     user.resourceDriverId = params.driverId || body.driverId || query.driverId;
-    user.resourceDeliveryId = params.deliveryId || body.deliveryId || query.deliveryId;
-    
+    user.resourceDeliveryId =
+      params.deliveryId || body.deliveryId || query.deliveryId;
+
     // Add requested action for context-aware permissions
     user.requestedAction = req.method;
     user.requestedPath = req.path;
-    
+
     // Add request metadata
     user.requestIp = req.ip || req.connection?.remoteAddress;
-    user.userAgent = req.get('User-Agent');
+    user.userAgent = req.get("User-Agent");
   }
 }

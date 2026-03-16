@@ -1,4 +1,4 @@
-import { PermissionType } from '../auth/permissions';
+import { PermissionType } from "../auth/permissions";
 
 export interface AuthorizationActor {
   userId?: string;

@@ -1,4 +1,4 @@
-import { IsUUID, IsOptional, IsString, IsIn } from 'class-validator';
+import { IsUUID, IsOptional, IsString, IsIn } from "class-validator";
 
 export class RejectOfferDto {
   @IsUUID()
@@ -9,6 +9,6 @@ export class RejectOfferDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['too_far', 'no_time', 'bad_area', 'other'])
+  @IsIn(["too_far", "no_time", "bad_area", "other"])
   reason?: string;
 }

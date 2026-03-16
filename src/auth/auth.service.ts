@@ -1,13 +1,18 @@
-import { Injectable, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { DriversService } from '../drivers/drivers.service';
-import { Driver } from '../drivers/entities/driver.entity';
-import { AdminService } from '../services/admin.service';
-import { AdminUser } from '../entities/admin-user.entity';
-import { AdminLoginDto } from '../dto/admin.dto';
-import { Role } from './roles.enum';
-import { GoogleAuthService } from './google-auth.service';
-import { RolePermissions } from './permissions';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { DriversService } from "../drivers/drivers.service";
+import { Driver } from "../drivers/entities/driver.entity";
+import { AdminService } from "../services/admin.service";
+import { AdminUser } from "../entities/admin-user.entity";
+import { AdminLoginDto } from "../dto/admin.dto";
+import { Role } from "./roles.enum";
+import { GoogleAuthService } from "./google-auth.service";
+import { RolePermissions } from "./permissions";
 
 @Injectable()
 export class AuthService {
@@ -27,12 +32,12 @@ export class AuthService {
     const driver = await this.driversService.findById(driverId);
 
     if (!driver) {
-      throw new UnauthorizedException('Invalid driver');
+      throw new UnauthorizedException("Invalid driver");
     }
 
     // isActive = admin disable flag ONLY
     if (driver.isActive === false) {
-      throw new UnauthorizedException('Driver disabled');
+      throw new UnauthorizedException("Driver disabled");
     }
 
     return driver;
@@ -52,7 +57,7 @@ export class AuthService {
     const payload = {
       driverId: driver.id,
       sub: driver.id,
-      type: 'driver',
+      type: "driver",
       role: Role.DRIVER,
       email: driver.email,
       permissions: RolePermissions.DRIVER,
@@ -85,7 +90,7 @@ export class AuthService {
       role: admin.role,
       cityId: admin.cityId,
       sub: admin.id,
-      type: 'admin',
+      type: "admin",
       permissions,
       isActive: admin.isActive,
     };
@@ -121,14 +126,16 @@ export class AuthService {
       return this.adminService.findById(payload.userId);
     }
 
-    throw new UnauthorizedException('Invalid token');
+    throw new UnauthorizedException("Invalid token");
   }
 
   /**
    * Check if user is admin
    */
   isAdmin(user: any): boolean {
-    return user && user.role && [Role.ADMIN, Role.SUPER_ADMIN].includes(user.role);
+    return (
+      user && user.role && [Role.ADMIN, Role.SUPER_ADMIN].includes(user.role)
+    );
   }
 
   /**
@@ -151,12 +158,14 @@ export class AuthService {
   async loginWithGoogle(idToken: string) {
     const googleUser = await this.googleAuthService.verifyIdToken(idToken);
 
-    let driver = await this.driversService.findByGoogleSub(googleUser.googleSub);
+    let driver = await this.driversService.findByGoogleSub(
+      googleUser.googleSub,
+    );
 
     // If not found, create a pending driver (inactive by default - admin must activate)
     if (!driver) {
       driver = await this.driversService.createGooglePendingDriver({
-        name: googleUser.name ?? 'Driver',
+        name: googleUser.name ?? "Driver",
         email: googleUser.email,
         googleSub: googleUser.googleSub,
       });
@@ -164,7 +173,7 @@ export class AuthService {
 
     if (!driver.isActive) {
       return {
-        status: 'PENDING_APPROVAL',
+        status: "PENDING_APPROVAL",
         driver: {
           id: driver.id,
           name: driver.name,
@@ -176,7 +185,7 @@ export class AuthService {
     const payload = {
       driverId: driver.id,
       sub: driver.id,
-      type: 'driver',
+      type: "driver",
       role: Role.DRIVER,
       email: driver.email,
       permissions: RolePermissions.DRIVER,

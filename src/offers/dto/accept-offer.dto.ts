@@ -1,4 +1,4 @@
-import { IsUUID, IsISO8601 } from 'class-validator';
+import { IsUUID, IsISO8601 } from "class-validator";
 
 export class AcceptOfferDto {
   @IsUUID()

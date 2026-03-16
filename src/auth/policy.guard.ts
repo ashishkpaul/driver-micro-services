@@ -6,13 +6,13 @@ import {
   ForbiddenException,
   Logger,
   Optional,
-} from '@nestjs/common';
-import { ModuleRef, Reflector } from '@nestjs/core';
-import { Request } from 'express';
-import { PermissionType } from './permissions';
-import { SetMetadata } from '@nestjs/common';
-import { AuthorizationService } from '../authorization/authorization.service';
-import { AuthorizationAuditService } from './authorization-audit.service';
+} from "@nestjs/common";
+import { ModuleRef, Reflector } from "@nestjs/core";
+import { Request } from "express";
+import { PermissionType } from "./permissions";
+import { SetMetadata } from "@nestjs/common";
+import { AuthorizationService } from "../authorization/authorization.service";
+import { AuthorizationAuditService } from "./authorization-audit.service";
 
 interface PolicyContext {
   userId?: string;
@@ -38,7 +38,8 @@ export class PolicyGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly moduleRef: ModuleRef,
     @Optional() private readonly authorizationService?: AuthorizationService,
-    @Optional() private readonly authorizationAuditService?: AuthorizationAuditService,
+    @Optional()
+    private readonly authorizationAuditService?: AuthorizationAuditService,
   ) {}
 
   private getAuthorizationService(): AuthorizationService {
@@ -56,10 +57,9 @@ export class PolicyGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermissions = this.reflector.getAllAndOverride<PermissionType[]>(
-      'permissions',
-      [context.getHandler(), context.getClass()],
-    );
+    const requiredPermissions = this.reflector.getAllAndOverride<
+      PermissionType[]
+    >("permissions", [context.getHandler(), context.getClass()]);
 
     if (!requiredPermissions || requiredPermissions.length === 0) {
       return true; // No permissions required
@@ -71,7 +71,7 @@ export class PolicyGuard implements CanActivate {
     const authorizationAuditService = this.getAuthorizationAuditService();
 
     const decisions = await Promise.all(
-      requiredPermissions.map(permission =>
+      requiredPermissions.map((permission) =>
         authorizationService.authorize(
           {
             userId: policyContext.userId,
@@ -96,27 +96,29 @@ export class PolicyGuard implements CanActivate {
       ),
     );
 
-    const hasPermission = decisions.some(decision => decision.allowed);
+    const hasPermission = decisions.some((decision) => decision.allowed);
 
     if (!hasPermission) {
       this.logger.warn(
         `Access denied: ${policyContext.role} (${policyContext.userId || policyContext.driverId}) ` +
-        `attempted ${request.method} ${request.path} without ${requiredPermissions.join(' or ')}`,
+          `attempted ${request.method} ${request.path} without ${requiredPermissions.join(" or ")}`,
       );
 
       await authorizationAuditService.logAuthorization(request, {
         timestamp: new Date(),
-        actorId: policyContext.userId || policyContext.driverId || 'unknown',
-        actorRole: policyContext.role || 'unknown',
+        actorId: policyContext.userId || policyContext.driverId || "unknown",
+        actorRole: policyContext.role || "unknown",
         action: request.method,
         resource: request.path,
         resourceId:
           policyContext.resourceDeliveryId ||
           policyContext.resourceDriverId ||
           policyContext.resourceCityId ||
-          'unknown',
-        decision: 'DENY',
-        reason: decisions.find(d => !d.allowed)?.reason || 'INSUFFICIENT_PERMISSIONS',
+          "unknown",
+        decision: "DENY",
+        reason:
+          decisions.find((d) => !d.allowed)?.reason ||
+          "INSUFFICIENT_PERMISSIONS",
         context: {
           requiredPermissions,
           cityId: policyContext.cityId,
@@ -124,21 +126,21 @@ export class PolicyGuard implements CanActivate {
         },
       });
 
-      throw new ForbiddenException('Insufficient permissions');
+      throw new ForbiddenException("Insufficient permissions");
     }
 
     await authorizationAuditService.logAuthorization(request, {
       timestamp: new Date(),
-      actorId: policyContext.userId || policyContext.driverId || 'unknown',
-      actorRole: policyContext.role || 'unknown',
+      actorId: policyContext.userId || policyContext.driverId || "unknown",
+      actorRole: policyContext.role || "unknown",
       action: request.method,
       resource: request.path,
       resourceId:
         policyContext.resourceDeliveryId ||
         policyContext.resourceDriverId ||
         policyContext.resourceCityId ||
-        'unknown',
-      decision: 'ALLOW',
+        "unknown",
+      decision: "ALLOW",
       context: {
         requiredPermissions,
         cityId: policyContext.cityId,
@@ -151,7 +153,7 @@ export class PolicyGuard implements CanActivate {
 
   private buildPolicyContext(request: Request): PolicyContext {
     const user = (request as any).user;
-    
+
     return {
       userId: user?.userId,
       driverId: user?.driverId,
@@ -187,5 +189,5 @@ export class PolicyGuard implements CanActivate {
 }
 
 // Decorator for applying permissions
-export const RequirePermissions = (...permissions: PermissionType[]) => 
-  SetMetadata('permissions', permissions);
+export const RequirePermissions = (...permissions: PermissionType[]) =>
+  SetMetadata("permissions", permissions);

@@ -7,15 +7,15 @@ import {
   UpdateDateColumn,
   Index,
   OneToMany,
-} from 'typeorm';
-import { IsString, IsNotEmpty } from 'class-validator';
-import { Point } from 'geojson';
-import { Zone } from './zone.entity';
-import { AdminUser } from './admin-user.entity';
+} from "typeorm";
+import { IsString, IsNotEmpty } from "class-validator";
+import { Point } from "geojson";
+import { Zone } from "./zone.entity";
+import { AdminUser } from "./admin-user.entity";
 
-@Entity('cities')
+@Entity("cities")
 export class City {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   /* ------------------------------------------------------------------ */
@@ -36,7 +36,7 @@ export class City {
   /* Geographic Information                                              */
   /* ------------------------------------------------------------------ */
 
-  @Column({ type: 'point', spatialFeatureType: 'Point', nullable: true })
+  @Column({ type: "point", spatialFeatureType: "Point", nullable: true })
   @IsNotEmpty()
   center?: Point; // Geographic center of the city
 
@@ -44,20 +44,20 @@ export class City {
   /* Timestamps                                                         */
   /* ------------------------------------------------------------------ */
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date;
 
   /* ------------------------------------------------------------------ */
   /* Relationships                                                      */
   /* ------------------------------------------------------------------ */
 
-  @OneToMany(() => Zone, zone => zone.city)
+  @OneToMany(() => Zone, (zone) => zone.city)
   zones?: Zone[];
 
-  @OneToMany(() => AdminUser, admin => admin.city)
+  @OneToMany(() => AdminUser, (admin) => admin.city)
   admins?: AdminUser[];
 
   /* ------------------------------------------------------------------ */

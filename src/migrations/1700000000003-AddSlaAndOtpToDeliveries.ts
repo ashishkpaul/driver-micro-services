@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddSlaAndOtpToDeliveries1700000000003
-  implements MigrationInterface
-{
+export class AddSlaAndOtpToDeliveries1700000000003 implements MigrationInterface {
   name = "AddSlaAndOtpToDeliveries1700000000003";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -37,9 +35,15 @@ export class AddSlaAndOtpToDeliveries1700000000003
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_deliveries_sla_breach_at"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_deliveries_expected_delivery_at"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_deliveries_expected_pickup_at"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_deliveries_sla_breach_at"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_deliveries_expected_delivery_at"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_deliveries_expected_pickup_at"`,
+    );
 
     await queryRunner.query(`
       ALTER TABLE "deliveries"

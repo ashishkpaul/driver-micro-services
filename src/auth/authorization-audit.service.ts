@@ -1,7 +1,7 @@
 // src/auth/authorization-audit.service.ts
-import { Injectable } from '@nestjs/common';
-import { AuditService } from '../services/audit.service';
-import { Request } from 'express';
+import { Injectable } from "@nestjs/common";
+import { AuditService } from "../services/audit.service";
+import { Request } from "express";
 
 interface AuthorizationDecision {
   timestamp: Date;
@@ -10,7 +10,7 @@ interface AuthorizationDecision {
   action: string;
   resource: string;
   resourceId: string;
-  decision: 'ALLOW' | 'DENY';
+  decision: "ALLOW" | "DENY";
   reason?: string;
   context: Record<string, any>;
 }
@@ -24,12 +24,15 @@ export class AuthorizationAuditService {
     decision: AuthorizationDecision,
   ): Promise<void> {
     // Log successful authorizations at debug level, failures at warn
-    const action = decision.decision === 'ALLOW' ? 'AUTHORIZATION_ALLOWED' : 'AUTHORIZATION_DENIED';
-    
+    const action =
+      decision.decision === "ALLOW"
+        ? "AUTHORIZATION_ALLOWED"
+        : "AUTHORIZATION_DENIED";
+
     await this.auditService.logFromRequest(
       request,
       action,
-      'AUTHORIZATION',
+      "AUTHORIZATION",
       decision.resourceId,
       {
         actorId: decision.actorId,
@@ -44,7 +47,7 @@ export class AuthorizationAuditService {
     );
 
     // Real-time alert on suspicious patterns (e.g., 5+ denials in 1 minute)
-    if (decision.decision === 'DENY') {
+    if (decision.decision === "DENY") {
       await this.checkSuspiciousPattern(decision.actorId);
     }
   }

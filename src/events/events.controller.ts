@@ -8,10 +8,15 @@ import {
 } from "@nestjs/common";
 import { AssignmentService } from "../assignment/assignment.service";
 import { ConfigService } from "@nestjs/config";
-import { IsNumber, ValidateNested, IsString, IsNotEmpty } from "class-validator";
+import {
+  IsNumber,
+  ValidateNested,
+  IsString,
+  IsNotEmpty,
+} from "class-validator";
 import { Type } from "class-transformer";
 import { RedisService } from "../redis/redis.service";
-import * as crypto from 'crypto';
+import * as crypto from "crypto";
 
 class PickupLocationDto {
   @IsNumber()
@@ -67,10 +72,10 @@ export class EventsController {
   ) {
     this.expectedSecret = this.configService.get("VENDURE_TO_DRIVER_SECRET");
     this.webhookSignatureSecret =
-      this.configService.get('VENDURE_WEBHOOK_SIGNATURE_SECRET') ||
+      this.configService.get("VENDURE_WEBHOOK_SIGNATURE_SECRET") ||
       this.expectedSecret;
     this.enforceWebhookSignature =
-      this.configService.get('ENFORCE_WEBHOOK_SIGNATURE') === 'true';
+      this.configService.get("ENFORCE_WEBHOOK_SIGNATURE") === "true";
   }
 
   private getEventIdKey(eventId: string): string {
@@ -81,8 +86,8 @@ export class EventsController {
   async onSellerOrderReady(
     @Body() payload: SellerOrderReadyPayloadDto,
     @Headers("X-Webhook-Secret") secret: string,
-    @Headers('X-Webhook-Timestamp') timestampHeader?: string,
-    @Headers('X-Webhook-Signature') signatureHeader?: string,
+    @Headers("X-Webhook-Timestamp") timestampHeader?: string,
+    @Headers("X-Webhook-Signature") signatureHeader?: string,
   ) {
     // Validate webhook secret
     if (secret !== this.expectedSecret) {
@@ -152,19 +157,19 @@ export class EventsController {
   ): void {
     if (!timestampHeader || !signatureHeader || !this.webhookSignatureSecret) {
       if (this.enforceWebhookSignature) {
-        throw new BadRequestException('Missing webhook signature headers');
+        throw new BadRequestException("Missing webhook signature headers");
       }
       return;
     }
 
     const requestTimestamp = Number(timestampHeader);
     if (!Number.isFinite(requestTimestamp)) {
-      throw new BadRequestException('Invalid webhook timestamp');
+      throw new BadRequestException("Invalid webhook timestamp");
     }
 
     const skew = Math.abs(Date.now() - requestTimestamp);
     if (skew > this.webhookMaxClockSkewMs) {
-      throw new BadRequestException('Webhook timestamp outside accepted skew');
+      throw new BadRequestException("Webhook timestamp outside accepted skew");
     }
 
     const signingPayload = [
@@ -172,15 +177,15 @@ export class EventsController {
       payload.sellerOrderId,
       payload.channelId,
       timestampHeader,
-    ].join(':');
+    ].join(":");
 
     const expectedSignature = crypto
-      .createHmac('sha256', this.webhookSignatureSecret)
+      .createHmac("sha256", this.webhookSignatureSecret)
       .update(signingPayload)
-      .digest('hex');
+      .digest("hex");
 
     if (expectedSignature !== signatureHeader) {
-      throw new BadRequestException('Invalid webhook signature');
+      throw new BadRequestException("Invalid webhook signature");
     }
   }
 

@@ -1,13 +1,13 @@
-import { Injectable } from '@nestjs/common';
-import { PermissionType } from '../auth/permissions';
+import { Injectable } from "@nestjs/common";
+import { PermissionType } from "../auth/permissions";
 import {
   AuthorizationActor,
   AuthorizationDecision,
   AuthorizationResourceContext,
-} from './authorization.types';
-import { DriverPolicy } from './driver.policy';
-import { DeliveryPolicy } from './delivery.policy';
-import { AssignmentPolicy } from './assignment.policy';
+} from "./authorization.types";
+import { DriverPolicy } from "./driver.policy";
+import { DeliveryPolicy } from "./delivery.policy";
+import { AssignmentPolicy } from "./assignment.policy";
 
 @Injectable()
 export class AuthorizationService {
@@ -22,24 +22,31 @@ export class AuthorizationService {
     permission: PermissionType,
     resource: AuthorizationResourceContext,
   ): Promise<AuthorizationDecision> {
-    if (actor.role === 'SYSTEM' || actor.type === 'system') {
+    if (actor.role === "SYSTEM" || actor.type === "system") {
       return { allowed: true };
     }
 
-    if (actor.role === 'SUPER_ADMIN') {
+    if (actor.role === "SUPER_ADMIN") {
       return { allowed: true };
     }
 
     if (!actor.permissions?.includes(permission)) {
-      return { allowed: false, reason: 'MISSING_PERMISSION' };
+      return { allowed: false, reason: "MISSING_PERMISSION" };
     }
 
-    const assignmentDecision = this.assignmentPolicy.evaluate(actor, permission);
+    const assignmentDecision = this.assignmentPolicy.evaluate(
+      actor,
+      permission,
+    );
     if (!assignmentDecision.allowed) {
       return assignmentDecision;
     }
 
-    const driverDecision = this.driverPolicy.evaluate(actor, permission, resource);
+    const driverDecision = this.driverPolicy.evaluate(
+      actor,
+      permission,
+      resource,
+    );
     if (!driverDecision.allowed) {
       return driverDecision;
     }
@@ -66,22 +73,28 @@ export class AuthorizationService {
     permission: PermissionType,
     resource: AuthorizationResourceContext,
   ): AuthorizationDecision {
-    const isAdminPermission = permission.startsWith('admin:') || permission.startsWith('assignment:');
+    const isAdminPermission =
+      permission.startsWith("admin:") || permission.startsWith("assignment:");
     if (!isAdminPermission) {
       return { allowed: true };
     }
 
     if (!actor.role) {
-      return { allowed: false, reason: 'MISSING_ROLE' };
+      return { allowed: false, reason: "MISSING_ROLE" };
     }
 
-    if (actor.role === 'ADMIN' || actor.role === 'CITY_ADMIN' || actor.role === 'DISPATCHER' || actor.role === 'OPS_ADMIN') {
+    if (
+      actor.role === "ADMIN" ||
+      actor.role === "CITY_ADMIN" ||
+      actor.role === "DISPATCHER" ||
+      actor.role === "OPS_ADMIN"
+    ) {
       if (!actor.cityId) {
-        return { allowed: false, reason: 'MISSING_ADMIN_CITY_SCOPE' };
+        return { allowed: false, reason: "MISSING_ADMIN_CITY_SCOPE" };
       }
 
       if (resource.cityId && resource.cityId !== actor.cityId) {
-        return { allowed: false, reason: 'CITY_SCOPE_VIOLATION' };
+        return { allowed: false, reason: "CITY_SCOPE_VIOLATION" };
       }
     }
 

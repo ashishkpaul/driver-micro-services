@@ -11,7 +11,16 @@ import { SnakeNamingStrategy } from "./snake-naming.strategy";
 
 export const databaseConfig: TypeOrmModuleOptions = {
   type: "postgres",
-  entities: [Driver, Delivery, DeliveryEvent, Assignment, AdminUser, City, Zone, AuditLog],
+  entities: [
+    Driver,
+    Delivery,
+    DeliveryEvent,
+    Assignment,
+    AdminUser,
+    City,
+    Zone,
+    AuditLog,
+  ],
   migrations: ["dist/migrations/*.js"],
   migrationsRun: false,
   namingStrategy: new SnakeNamingStrategy(),

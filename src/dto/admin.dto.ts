@@ -1,6 +1,13 @@
 // src/dto/admin.dto.ts
-import { IsEmail, IsEnum, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
-import { Role } from '../auth/roles.enum';
+import {
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from "class-validator";
+import { Role } from "../auth/roles.enum";
 
 export class CreateAdminDto {
   @IsEmail()

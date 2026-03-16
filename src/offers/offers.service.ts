@@ -1,18 +1,23 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, LessThan, DataSource } from 'typeorm';
-import { RedisService } from '../redis/redis.service';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, In, LessThan, DataSource } from "typeorm";
+import { RedisService } from "../redis/redis.service";
 
-import { DriverOffer } from './entities/driver-offer.entity';
-import { Driver } from '../drivers/entities/driver.entity';
-import { Delivery } from '../deliveries/entities/delivery.entity';
-import { Assignment } from '../assignment/entities/assignment.entity';
-import { DriverStatus } from '../drivers/enums/driver-status.enum';
-import { DriverCapabilityService } from '../drivers/driver-capability.service';
+import { DriverOffer } from "./entities/driver-offer.entity";
+import { Driver } from "../drivers/entities/driver.entity";
+import { Delivery } from "../deliveries/entities/delivery.entity";
+import { Assignment } from "../assignment/entities/assignment.entity";
+import { DriverStatus } from "../drivers/enums/driver-status.enum";
+import { DriverCapabilityService } from "../drivers/driver-capability.service";
 
-import { CreateOfferDto } from './dto/create-offer.dto';
-import { AcceptOfferDto } from './dto/accept-offer.dto';
-import { RejectOfferDto } from './dto/reject-offer.dto';
+import { CreateOfferDto } from "./dto/create-offer.dto";
+import { AcceptOfferDto } from "./dto/accept-offer.dto";
+import { RejectOfferDto } from "./dto/reject-offer.dto";
 
 @Injectable()
 export class OffersService {
@@ -30,9 +35,7 @@ export class OffersService {
     private readonly driverCapabilityService: DriverCapabilityService,
   ) {}
 
-  async createOfferForDriver(
-    createOfferDto: CreateOfferDto
-  ): Promise<{
+  async createOfferForDriver(createOfferDto: CreateOfferDto): Promise<{
     success: boolean;
     offerId: string;
     expiresAt: string;
@@ -41,32 +44,39 @@ export class OffersService {
     const { driverId, deliveryId, expiresInSeconds = 30 } = createOfferDto;
 
     // Validate driver exists and is available
-    const driver = await this.driverRepository.findOne({ where: { id: driverId } });
+    const driver = await this.driverRepository.findOne({
+      where: { id: driverId },
+    });
     if (!driver) {
       throw new NotFoundException(`Driver ${driverId} not found`);
     }
 
-    if (driver.status !== 'AVAILABLE') {
+    if (driver.status !== "AVAILABLE") {
       throw new ConflictException(`Driver ${driverId} is not available`);
     }
 
-    const capability = await this.driverCapabilityService.checkDeliveryAcceptanceCapability(
-      driverId,
-    );
+    const capability =
+      await this.driverCapabilityService.checkDeliveryAcceptanceCapability(
+        driverId,
+      );
     if (!capability.canAccept) {
       throw new ConflictException(
-        `Driver ${driverId} cannot receive offer: ${capability.reason || 'CAPABILITY_REJECTED'}`,
+        `Driver ${driverId} cannot receive offer: ${capability.reason || "CAPABILITY_REJECTED"}`,
       );
     }
 
     // Validate delivery exists and is ready
-    const delivery = await this.deliveryRepository.findOne({ where: { id: deliveryId } });
+    const delivery = await this.deliveryRepository.findOne({
+      where: { id: deliveryId },
+    });
     if (!delivery) {
       throw new NotFoundException(`Delivery ${deliveryId} not found`);
     }
 
-    if (delivery.status !== 'PENDING') {
-      throw new ConflictException(`Delivery ${deliveryId} is not ready for assignment`);
+    if (delivery.status !== "PENDING") {
+      throw new ConflictException(
+        `Delivery ${deliveryId} is not ready for assignment`,
+      );
     }
 
     // Calculate offer payload
@@ -76,9 +86,9 @@ export class OffersService {
     const offer = this.driverOfferRepository.create({
       deliveryId,
       driverId,
-      status: 'PENDING',
+      status: "PENDING",
       offerPayload,
-      expiresAt: new Date(Date.now() + expiresInSeconds * 1000)
+      expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
     });
 
     const savedOffer = await this.driverOfferRepository.save(offer);
@@ -86,30 +96,36 @@ export class OffersService {
     // Set Redis keys for V2 intent - fast lookup and invalidation
     const redisClient = this.redisService.getClient();
     const pipeline = redisClient.pipeline();
-    
+
     // Individual offer lookup
-    pipeline.setex(`offer:${savedOffer.id}`, expiresInSeconds, JSON.stringify({ driverId, deliveryId }));
-    
+    pipeline.setex(
+      `offer:${savedOffer.id}`,
+      expiresInSeconds,
+      JSON.stringify({ driverId, deliveryId }),
+    );
+
     // Delivery-to-offers mapping
-    pipeline.zadd(`delivery:${deliveryId}:offers`, Date.now() + expiresInSeconds * 1000, savedOffer.id);
-    
+    pipeline.zadd(
+      `delivery:${deliveryId}:offers`,
+      Date.now() + expiresInSeconds * 1000,
+      savedOffer.id,
+    );
+
     // Driver-to-offers mapping
     pipeline.sadd(`driver:${driverId}:offers`, savedOffer.id);
     pipeline.expire(`driver:${driverId}:offers`, expiresInSeconds);
-    
+
     await pipeline.exec();
 
     return {
       success: true,
       offerId: savedOffer.id,
-      expiresAt: savedOffer.expiresAt ? savedOffer.expiresAt.toISOString() : '',
-      payload: offerPayload
+      expiresAt: savedOffer.expiresAt ? savedOffer.expiresAt.toISOString() : "",
+      payload: offerPayload,
     };
   }
 
-  async acceptOffer(
-    acceptOfferDto: AcceptOfferDto
-  ): Promise<{
+  async acceptOffer(acceptOfferDto: AcceptOfferDto): Promise<{
     success: boolean;
     assignmentId: string;
     deliveryId: string;
@@ -119,34 +135,36 @@ export class OffersService {
     const { offerId, driverId, acceptedAt: acceptedAtStr } = acceptOfferDto;
     const acceptedAt = new Date(acceptedAtStr);
 
-    return this.dataSource.transaction(async manager => {
+    return this.dataSource.transaction(async (manager) => {
       // Lock offer row for update to prevent race conditions
-      const offer = await manager.findOne(DriverOffer, { 
+      const offer = await manager.findOne(DriverOffer, {
         where: { id: offerId },
-        lock: { mode: 'pessimistic_write' }
+        lock: { mode: "pessimistic_write" },
       });
-      
+
       if (!offer) {
-        throw new NotFoundException('Offer not found');
+        throw new NotFoundException("Offer not found");
       }
 
       if (offer.driverId !== driverId) {
-        throw new BadRequestException('Invalid driver for this offer');
+        throw new BadRequestException("Invalid driver for this offer");
       }
 
-      if (offer.status !== 'PENDING') {
-        throw new ConflictException('Offer already processed');
+      if (offer.status !== "PENDING") {
+        throw new ConflictException("Offer already processed");
       }
 
       if (offer.expiresAt < new Date()) {
-        throw new ConflictException('Offer has expired');
+        throw new ConflictException("Offer has expired");
       }
 
       const capability =
-        await this.driverCapabilityService.checkDeliveryAcceptanceCapability(driverId);
+        await this.driverCapabilityService.checkDeliveryAcceptanceCapability(
+          driverId,
+        );
       if (!capability.canAccept) {
         throw new ConflictException(
-          `Driver ${driverId} cannot accept offer: ${capability.reason || 'CAPABILITY_REJECTED'}`,
+          `Driver ${driverId} cannot accept offer: ${capability.reason || "CAPABILITY_REJECTED"}`,
         );
       }
 
@@ -154,7 +172,7 @@ export class OffersService {
       const responseTimeMs = acceptedAt.getTime() - offer.createdAt.getTime();
 
       // Update offer status
-      offer.status = 'ACCEPTED';
+      offer.status = "ACCEPTED";
       offer.acceptedAt = acceptedAt;
       offer.driverResponseTimeMs = responseTimeMs;
       await manager.save(offer);
@@ -162,7 +180,7 @@ export class OffersService {
       // Create assignment
       const assignment = this.assignmentRepository.create({
         sellerOrderId: offer.deliveryId, // Note: In V2, deliveryId maps to sellerOrderId
-        driverId
+        driverId,
       });
       const savedAssignment = await manager.save(assignment);
 
@@ -174,14 +192,12 @@ export class OffersService {
         assignmentId: savedAssignment.id,
         deliveryId: offer.deliveryId,
         driverId,
-        responseTimeMs
+        responseTimeMs,
       };
     });
   }
 
-  async rejectOffer(
-    rejectOfferDto: RejectOfferDto
-  ): Promise<{
+  async rejectOffer(rejectOfferDto: RejectOfferDto): Promise<{
     success: boolean;
     nextOfferId?: string;
     reason: string;
@@ -189,21 +205,23 @@ export class OffersService {
     const { offerId, driverId, reason } = rejectOfferDto;
 
     // Find and validate offer
-    const offer = await this.driverOfferRepository.findOne({ where: { id: offerId } });
+    const offer = await this.driverOfferRepository.findOne({
+      where: { id: offerId },
+    });
     if (!offer) {
-      throw new NotFoundException('Offer not found');
+      throw new NotFoundException("Offer not found");
     }
 
     if (offer.driverId !== driverId) {
-      throw new BadRequestException('Invalid driver for this offer');
+      throw new BadRequestException("Invalid driver for this offer");
     }
 
-    if (offer.status !== 'PENDING') {
-      throw new ConflictException('Offer already processed');
+    if (offer.status !== "PENDING") {
+      throw new ConflictException("Offer already processed");
     }
 
     // Update offer status
-    offer.status = 'REJECTED';
+    offer.status = "REJECTED";
     offer.rejectedAt = new Date();
     if (reason) {
       offer.rejectionReason = reason;
@@ -212,41 +230,41 @@ export class OffersService {
 
     return {
       success: true,
-      reason: reason || 'other'
+      reason: reason || "other",
     };
   }
 
   async getDriverOffers(driverId: string): Promise<DriverOffer[]> {
     return this.driverOfferRepository.find({
       where: { driverId },
-      order: { createdAt: 'DESC' }
+      order: { createdAt: "DESC" },
     });
   }
 
   async getDeliveryOffers(deliveryId: string): Promise<DriverOffer[]> {
     return this.driverOfferRepository.find({
       where: { deliveryId },
-      order: { createdAt: 'DESC' }
+      order: { createdAt: "DESC" },
     });
   }
 
   async expireOffers(): Promise<void> {
     const expiredOffers = await this.driverOfferRepository.find({
       where: {
-        status: 'PENDING',
-        expiresAt: LessThan(new Date())
-      }
+        status: "PENDING",
+        expiresAt: LessThan(new Date()),
+      },
     });
 
     for (const offer of expiredOffers) {
-      offer.status = 'EXPIRED';
+      offer.status = "EXPIRED";
       await this.driverOfferRepository.save(offer);
     }
   }
 
   private async calculateOfferPayload(
     delivery: Delivery,
-    driver: Driver
+    driver: Driver,
   ): Promise<any> {
     // Simplified offer payload calculation
     const estimatedPickupTimeMin = 10; // Simplified
@@ -255,17 +273,21 @@ export class OffersService {
     return {
       pickupLocation: {
         lat: delivery.pickupLat,
-        lon: delivery.pickupLon
+        lon: delivery.pickupLon,
       },
-      pickupStoreName: 'Store Name', // Simplified
+      pickupStoreName: "Store Name", // Simplified
       estimatedPickupTimeMin,
-      estimatedDeliveryTime: new Date(Date.now() + (estimatedPickupTimeMin + 10) * 60000).toISOString(),
+      estimatedDeliveryTime: new Date(
+        Date.now() + (estimatedPickupTimeMin + 10) * 60000,
+      ).toISOString(),
       estimatedDistanceKm: 5, // Simplified
-      estimatedEarning
+      estimatedEarning,
     };
   }
 
-  private async triggerNextCandidate(deliveryId: string): Promise<string | undefined> {
+  private async triggerNextCandidate(
+    deliveryId: string,
+  ): Promise<string | undefined> {
     // Simplified - in real implementation, this would find the next available driver
     // and create a new offer
     return undefined;

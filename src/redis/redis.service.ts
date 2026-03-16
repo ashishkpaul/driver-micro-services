@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from "@nestjs/common";
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from "@nestjs/common";
 import Redis from "ioredis";
 
 @Injectable()
@@ -33,7 +38,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.redis.connect();
     } catch (err) {
-      this.logger.error("Redis unavailable at startup, continuing in degraded mode", err);
+      this.logger.error(
+        "Redis unavailable at startup, continuing in degraded mode",
+        err,
+      );
     }
   }
 
@@ -61,12 +69,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const pipeline = this.redis.pipeline();
     pipeline.geoadd(this.GEO_KEY, lon, lat, member);
     pipeline.hset(this.STATUS_KEY, driverId, "AVAILABLE");
-    pipeline.set(
-      `${this.ONLINE_KEY_PREFIX}${driverId}`,
-      "1",
-      "EX",
-      ttlSeconds,
-    );
+    pipeline.set(`${this.ONLINE_KEY_PREFIX}${driverId}`, "1", "EX", ttlSeconds);
 
     await pipeline.exec();
   }
@@ -100,6 +103,39 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Update driver presence with specific status
+   */
+  async updateDriverPresence(
+    driverId: string,
+    lat: number,
+    lon: number,
+    status: string,
+    ttlSeconds = 45,
+  ): Promise<void> {
+    const member = `driver:${driverId}`;
+
+    const pipeline = this.redis.pipeline();
+
+    if (status === "AVAILABLE" || status === "BUSY") {
+      pipeline.geoadd(this.GEO_KEY, lon, lat, member);
+      pipeline.hset(this.STATUS_KEY, driverId, status);
+      pipeline.set(
+        `${this.ONLINE_KEY_PREFIX}${driverId}`,
+        "1",
+        "EX",
+        ttlSeconds,
+      );
+    } else {
+      // OFFLINE status
+      pipeline.zrem(this.GEO_KEY, member);
+      pipeline.hset(this.STATUS_KEY, driverId, "OFFLINE");
+      pipeline.del(`${this.ONLINE_KEY_PREFIX}${driverId}`);
+    }
+
+    await pipeline.exec();
+  }
+
+  /**
    * Find available drivers near a location
    */
   async findAvailableDrivers(
@@ -115,7 +151,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   > {
     // Cap radius for safety
     const safeRadiusKm = Math.min(radiusKm, 100);
-    
+
     // GEOSEARCH returns: [member, distance]
     const results = (await this.redis.call(
       "GEOSEARCH",
@@ -137,7 +173,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     // Use pipeline for batch operations
     const pipeline = this.redis.pipeline();
-    
+
     for (const [member] of results) {
       const driverId = member.replace("driver:", "");
       pipeline.hget(this.STATUS_KEY, driverId);
@@ -154,20 +190,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     for (let i = 0; i < results.length; i++) {
       const [member, distance] = results[i];
       const driverId = member.replace("driver:", "");
-      
+
       // Each driver has 2 operations in pipeline: hget (index 2*i) and exists (index 2*i+1)
       const statusResponse = responses![2 * i];
       const onlineResponse = responses![2 * i + 1];
-      
+
       // Check if pipeline commands succeeded
       if (statusResponse[0] || onlineResponse[0]) {
         // Pipeline error - skip this driver
         continue;
       }
-      
+
       const status = statusResponse[1];
       const online = onlineResponse[1];
-      
+
       if (status === "AVAILABLE" && online === 1) {
         output.push({
           driverId,

@@ -1,10 +1,10 @@
-import { api } from './helpers/api';
+import { api } from "./helpers/api";
 
-describe('Drivers E2E', () => {
+describe("Drivers E2E", () => {
   let driverId: string;
 
-  it('GET /drivers/available returns array', async () => {
-    const res = await api.get('/drivers/available', {
+  it("GET /drivers/available returns array", async () => {
+    const res = await api.get("/drivers/available", {
       params: { lat: 12.9, lon: 77.6 },
     });
 
@@ -12,8 +12,8 @@ describe('Drivers E2E', () => {
     expect(Array.isArray(res.data)).toBe(true);
   });
 
-  it('GET /drivers/:id returns driver', async () => {
-    driverId = '46894ed3-4de6-4a4e-8c15-008698df5d1a';
+  it("GET /drivers/:id returns driver", async () => {
+    driverId = "46894ed3-4de6-4a4e-8c15-008698df5d1a";
 
     const res = await api.get(`/drivers/${driverId}`);
 

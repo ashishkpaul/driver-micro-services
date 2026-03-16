@@ -1,5 +1,5 @@
-import { socketService } from './WebSocketService';
-import { TokenManager } from '../auth/TokenManager';
+import { socketService } from "./WebSocketService";
+import { TokenManager } from "../auth/TokenManager";
 
 class ConnectionManager {
   start() {

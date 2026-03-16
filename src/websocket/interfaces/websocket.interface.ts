@@ -17,7 +17,7 @@ export interface LocationUpdateEvent {
 
 export interface ProofUploadedEvent {
   deliveryId: string;
-  proofType: 'PICKUP' | 'DROPOFF';
+  proofType: "PICKUP" | "DROPOFF";
   imageUrl: string;
   lat: number;
   lon: number;
@@ -25,7 +25,7 @@ export interface ProofUploadedEvent {
 }
 
 export interface DriverStatusEvent {
-  status: 'AVAILABLE' | 'BUSY' | 'OFFLINE';
+  status: "AVAILABLE" | "BUSY" | "OFFLINE";
   timestamp: string;
 }
 
@@ -55,6 +55,6 @@ export interface LocationAckEvent {
 export interface ProofAcceptedEvent {
   deliveryId: string;
   proofId: string;
-  proofType: 'PICKUP' | 'DROPOFF';
+  proofType: "PICKUP" | "DROPOFF";
   acceptedAt: string;
 }

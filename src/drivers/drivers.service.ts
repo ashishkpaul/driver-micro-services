@@ -1,15 +1,14 @@
 // src/drivers/drivers.service.ts
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Driver } from './entities/driver.entity';
-import { CreateDriverDto } from './dto/create-driver.dto';
-import { RedisService } from '../redis/redis.service';
-import { DriverStatus } from './enums/driver-status.enum';
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Driver } from "./entities/driver.entity";
+import { CreateDriverDto } from "./dto/create-driver.dto";
+import { RedisService } from "../redis/redis.service";
+import { DriverStatus } from "./enums/driver-status.enum";
 
 @Injectable()
 export class DriversService {
-
   /* ------------------------------------------------------------------ */
   /* Utilities                                                           */
   /* ------------------------------------------------------------------ */
@@ -55,7 +54,7 @@ export class DriversService {
 
   async findAll(): Promise<Driver[]> {
     return this.driverRepository.find({
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
     });
   }
 
@@ -81,34 +80,34 @@ export class DriversService {
     } = options;
 
     const query = this.driverRepository
-      .createQueryBuilder('driver')
+      .createQueryBuilder("driver")
       .skip(skip)
       .take(take)
-      .orderBy('driver.createdAt', 'DESC');
+      .orderBy("driver.createdAt", "DESC");
 
     if (cityId) {
-      query.andWhere('driver.cityId = :cityId', { cityId });
+      query.andWhere("driver.cityId = :cityId", { cityId });
     }
 
     if (zoneId) {
-      query.andWhere('driver.zoneId = :zoneId', { zoneId });
+      query.andWhere("driver.zoneId = :zoneId", { zoneId });
     }
 
     if (status) {
-      query.andWhere('driver.status = :status', { status });
+      query.andWhere("driver.status = :status", { status });
     }
 
     if (isActive !== undefined) {
-      query.andWhere('driver.isActive = :isActive', { isActive });
+      query.andWhere("driver.isActive = :isActive", { isActive });
     }
 
     if (authProvider) {
-      query.andWhere('driver.authProvider = :authProvider', { authProvider });
+      query.andWhere("driver.authProvider = :authProvider", { authProvider });
     }
 
     if (search) {
       query.andWhere(
-        '(LOWER(driver.name) LIKE :search OR LOWER(driver.phone) LIKE :search OR LOWER(driver.email) LIKE :search)',
+        "(LOWER(driver.name) LIKE :search OR LOWER(driver.phone) LIKE :search OR LOWER(driver.email) LIKE :search)",
         { search: `%${search.toLowerCase()}%` },
       );
     }
@@ -175,7 +174,7 @@ export class DriversService {
       name: data.name,
       email: data.email,
       googleSub: data.googleSub,
-      authProvider: 'google',
+      authProvider: "google",
       isActive: false,
     });
 
@@ -191,23 +190,22 @@ export class DriversService {
 
     if (lat !== undefined && lon !== undefined) {
       try {
-        const redisDrivers =
-          await this.redisService.findAvailableDrivers(
-            lat,
-            lon,
-            radiusKm || 5,
-            limit,
-          );
+        const redisDrivers = await this.redisService.findAvailableDrivers(
+          lat,
+          lon,
+          radiusKm || 5,
+          limit,
+        );
 
         if (!redisDrivers.length) return [];
 
         const ids = redisDrivers.map((d) => d.driverId);
 
         const drivers = await this.driverRepository
-          .createQueryBuilder('driver')
-          .where('driver.id IN (:...ids)', { ids })
-          .andWhere('driver.isActive = true')
-          .andWhere('driver.status = :status', {
+          .createQueryBuilder("driver")
+          .where("driver.id IN (:...ids)", { ids })
+          .andWhere("driver.isActive = true")
+          .andWhere("driver.status = :status", {
             status: DriverStatus.AVAILABLE,
           })
           .getMany();
@@ -217,7 +215,7 @@ export class DriversService {
           .map(({ driverId }) => map.get(driverId))
           .filter(Boolean) as Driver[];
       } catch (e) {
-        this.logger.warn('Redis unavailable, fallback to DB', e);
+        this.logger.warn("Redis unavailable, fallback to DB", e);
       }
     }
 
@@ -226,7 +224,7 @@ export class DriversService {
         isActive: true,
         status: DriverStatus.AVAILABLE,
       },
-      order: { lastActiveAt: 'DESC' },
+      order: { lastActiveAt: "DESC" },
       take: limit,
     });
   }
@@ -235,11 +233,7 @@ export class DriversService {
   /* Driver lifecycle                                                     */
   /* ------------------------------------------------------------------ */
 
-  async updateLocation(
-    id: string,
-    lat: number,
-    lon: number,
-  ): Promise<Driver> {
+  async updateLocation(id: string, lat: number, lon: number): Promise<Driver> {
     const driver = await this.findOne(id);
 
     driver.currentLat = lat;
@@ -256,10 +250,7 @@ export class DriversService {
     return this.driverRepository.save(driver);
   }
 
-  async updateStatus(
-    id: string,
-    status: DriverStatus,
-  ): Promise<Driver> {
+  async updateStatus(id: string, status: DriverStatus): Promise<Driver> {
     const driver = await this.findOne(id);
 
     driver.status = status;

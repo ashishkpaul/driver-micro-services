@@ -12,18 +12,22 @@ import {
   Req,
   ParseUUIDPipe,
   BadRequestException,
-} from '@nestjs/common';
-import { AdminService } from '../services/admin.service';
-import { PasswordService } from '../services/password.service';
-import { AuthGuard } from '@nestjs/passport';
-import { CreateAdminDto, UpdateAdminDto, AdminListQueryDto } from '../dto/admin.dto';
-import { AuditService } from '../services/audit.service';
-import { Request } from 'express';
-import { PolicyGuard, RequirePermissions } from '../auth/policy.guard';
-import { Permission } from '../auth/permissions';
+} from "@nestjs/common";
+import { AdminService } from "../services/admin.service";
+import { PasswordService } from "../services/password.service";
+import { AuthGuard } from "@nestjs/passport";
+import {
+  CreateAdminDto,
+  UpdateAdminDto,
+  AdminListQueryDto,
+} from "../dto/admin.dto";
+import { AuditService } from "../services/audit.service";
+import { Request } from "express";
+import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
+import { Permission } from "../auth/permissions";
 
-@Controller('admin/users')
-@UseGuards(AuthGuard('jwt'), PolicyGuard)
+@Controller("admin/users")
+@UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
@@ -40,15 +44,24 @@ export class AdminController {
     @Body() createAdminDto: CreateAdminDto,
     @Req() request: Request & { user: any },
   ) {
-    const admin = await this.adminService.create(createAdminDto, request.user.userId);
-    
+    const admin = await this.adminService.create(
+      createAdminDto,
+      request.user.userId,
+    );
+
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'ADMIN_CREATED',
-      'ADMIN',
+      "ADMIN_CREATED",
+      "ADMIN",
       admin.id,
-      { adminData: { email: admin.email, role: admin.role, cityId: admin.cityId } },
+      {
+        adminData: {
+          email: admin.email,
+          role: admin.role,
+          cityId: admin.cityId,
+        },
+      },
     );
 
     return admin.toResponseDto();
@@ -67,14 +80,19 @@ export class AdminController {
 
     // SUPER_ADMIN can see all, ADMIN can only see their city
     let filterCityId = cityId;
-    if (request.user.role === 'ADMIN' && !filterCityId) {
+    if (request.user.role === "ADMIN" && !filterCityId) {
       filterCityId = request.user.cityId;
     }
 
-    const result = await this.adminService.findAll(filterCityId, role, skip, take);
-    
+    const result = await this.adminService.findAll(
+      filterCityId,
+      role,
+      skip,
+      take,
+    );
+
     return {
-      admins: result.admins.map(admin => admin.toResponseDto()),
+      admins: result.admins.map((admin) => admin.toResponseDto()),
       total: result.total,
       skip,
       take,
@@ -84,7 +102,7 @@ export class AdminController {
   /**
    * Get admin statistics (SUPER_ADMIN only)
    */
-  @Get('stats')
+  @Get("stats")
   @RequirePermissions(Permission.SUPER_ADMIN_READ_SYSTEM_STATS)
   async getStats(@Req() request: Request & { user: any }) {
     return this.adminService.getStats();
@@ -93,10 +111,10 @@ export class AdminController {
   /**
    * Get admin by ID
    */
-  @Get(':id')
+  @Get(":id")
   @RequirePermissions(Permission.ADMIN_READ_ADMIN_ANY)
   async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: Request & { user: any },
   ) {
     const admin = await this.adminService.findById(id);
@@ -107,20 +125,24 @@ export class AdminController {
   /**
    * Update admin user
    */
-  @Patch(':id')
+  @Patch(":id")
   @RequirePermissions(Permission.ADMIN_UPDATE_ADMIN)
   async update(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() updateAdminDto: UpdateAdminDto,
     @Req() request: Request & { user: any },
   ) {
-    const updatedAdmin = await this.adminService.update(id, updateAdminDto, request.user);
+    const updatedAdmin = await this.adminService.update(
+      id,
+      updateAdminDto,
+      request.user,
+    );
 
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'ADMIN_UPDATED',
-      'ADMIN',
+      "ADMIN_UPDATED",
+      "ADMIN",
       id,
       { changes: updateAdminDto },
     );
@@ -131,10 +153,10 @@ export class AdminController {
   /**
    * Delete admin user (SUPER_ADMIN only, soft delete)
    */
-  @Delete(':id')
+  @Delete(":id")
   @RequirePermissions(Permission.SUPER_ADMIN_DELETE_ADMIN)
   async remove(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: Request & { user: any },
   ) {
     await this.adminService.remove(id, request.user);
@@ -142,22 +164,22 @@ export class AdminController {
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'ADMIN_DELETED',
-      'ADMIN',
+      "ADMIN_DELETED",
+      "ADMIN",
       id,
       { deletedBy: request.user.userId },
     );
 
-    return { message: 'Admin disabled successfully' };
+    return { message: "Admin disabled successfully" };
   }
 
   /**
    * Reset admin password (SUPER_ADMIN only)
    */
-  @Post(':id/reset-password')
+  @Post(":id/reset-password")
   @RequirePermissions(Permission.SUPER_ADMIN_RESET_ADMIN_PASSWORD)
   async resetPassword(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Req() request: Request & { user: any },
   ) {
     const result = await this.adminService.resetPassword(id);
@@ -165,14 +187,14 @@ export class AdminController {
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'ADMIN_PASSWORD_RESET',
-      'ADMIN',
+      "ADMIN_PASSWORD_RESET",
+      "ADMIN",
       id,
       { newPassword: result.newPassword },
     );
 
     return {
-      message: 'Password reset successfully',
+      message: "Password reset successfully",
       newPassword: result.newPassword,
     };
   }
@@ -180,14 +202,14 @@ export class AdminController {
   /**
    * Change own password
    */
-  @Patch('me/change-password')
+  @Patch("me/change-password")
   @RequirePermissions(Permission.ADMIN_UPDATE_ADMIN)
   async changeOwnPassword(
     @Req() request: Request & { user: any },
     @Body() body: { currentPassword: string; newPassword: string },
   ) {
     const admin = await this.adminService.findByEmail(request.user.email);
-    
+
     // Verify current password
     const isCurrentPasswordValid = await this.passwordService.compare(
       body.currentPassword,
@@ -195,31 +217,33 @@ export class AdminController {
     );
 
     if (!isCurrentPasswordValid) {
-      throw new BadRequestException('Current password is incorrect');
+      throw new BadRequestException("Current password is incorrect");
     }
 
     // Validate new password
-    const passwordValidation = this.passwordService.validatePassword(body.newPassword);
+    const passwordValidation = this.passwordService.validatePassword(
+      body.newPassword,
+    );
     if (!passwordValidation.isValid) {
-      throw new BadRequestException(passwordValidation.errors.join(', '));
+      throw new BadRequestException(passwordValidation.errors.join(", "));
     }
 
     // Update password
     const newPasswordHash = await this.passwordService.hash(body.newPassword);
     admin.passwordHash = newPasswordHash;
     admin.updatedAt = new Date();
-    
-    await this.adminService['adminRepository'].save(admin);
+
+    await this.adminService["adminRepository"].save(admin);
 
     // Audit log
     await this.auditService.logFromRequest(
       request,
-      'ADMIN_PASSWORD_CHANGED',
-      'ADMIN',
+      "ADMIN_PASSWORD_CHANGED",
+      "ADMIN",
       admin.id,
       { email: admin.email },
     );
 
-    return { message: 'Password changed successfully' };
+    return { message: "Password changed successfully" };
   }
 }

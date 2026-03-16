@@ -1,8 +1,8 @@
 // websocket/events/location.handler.ts
 
-import { DriversService } from '../../drivers/drivers.service';
-import { Socket } from 'socket.io';
-import { LocationUpdateEvent } from '../interfaces/websocket.interface';
+import { DriversService } from "../../drivers/drivers.service";
+import { Socket } from "socket.io";
+import { LocationUpdateEvent } from "../interfaces/websocket.interface";
 
 export async function handleLocationUpdate(
   client: Socket,
@@ -13,7 +13,7 @@ export async function handleLocationUpdate(
 
   await driversService.updateLocation(driverId, data.lat, data.lon);
 
-  client.emit('LOCATION_ACK_V1', {
+  client.emit("LOCATION_ACK_V1", {
     driverId,
     deliveryId: data.deliveryId,
     ackAt: new Date().toISOString(),

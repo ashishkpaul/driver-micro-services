@@ -7,7 +7,7 @@ import * as compression from "compression";
 import { Logger } from "winston";
 import { WinstonModule } from "nest-winston";
 import * as winston from "winston";
-import { IoAdapter } from '@nestjs/platform-socket.io'; // Add this
+import { IoAdapter } from "@nestjs/platform-socket.io"; // Add this
 
 async function bootstrap() {
   // Logger setup
@@ -43,7 +43,7 @@ async function bootstrap() {
   // Security & middleware
   app.use(helmet());
   app.use(compression());
-  
+
   const origins = configService
     .get<string>("CORS_ORIGINS", "")
     .split(",")
@@ -69,13 +69,15 @@ async function bootstrap() {
   const port = configService.get("PORT", 3001);
   await app.listen(port);
   logger.info(`Driver Service running on port ${port}`);
-  logger.info(`WebSocket server running on port ${configService.get("WEBSOCKET_PORT", 3002)}`);
+  logger.info(
+    `WebSocket server running on port ${configService.get("WEBSOCKET_PORT", 3002)}`,
+  );
 
   // Handle SIGTERM for graceful shutdown
-  process.on('SIGTERM', async () => {
-    logger.info('SIGTERM received, starting graceful shutdown');
+  process.on("SIGTERM", async () => {
+    logger.info("SIGTERM received, starting graceful shutdown");
     await app.close();
-    logger.info('Graceful shutdown completed');
+    logger.info("Graceful shutdown completed");
     process.exit(0);
   });
 }

@@ -4,11 +4,11 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
-} from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { AuditService } from '../services/audit.service';
-import { Request } from 'express';
+} from "@nestjs/common";
+import { Observable } from "rxjs";
+import { tap } from "rxjs/operators";
+import { AuditService } from "../services/audit.service";
+import { Request } from "express";
 
 export interface AuditMetadata {
   action: string;
@@ -26,7 +26,7 @@ export class AuditLoggingInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse();
 
     // Skip logging for GET requests (read-only operations)
-    if (request.method === 'GET') {
+    if (request.method === "GET") {
       return next.handle();
     }
 
@@ -54,13 +54,13 @@ export class AuditLoggingInterceptor implements NestInterceptor {
               request,
               action,
               resourceType,
-              resourceId || 'unknown',
+              resourceId || "unknown",
               changes,
             );
           }
         } catch (error) {
           // Don't throw errors for audit logging failures
-          console.error('Audit logging failed:', error);
+          console.error("Audit logging failed:", error);
         }
       }),
     );
@@ -68,61 +68,64 @@ export class AuditLoggingInterceptor implements NestInterceptor {
 
   private getActionName(method: string, url: string): string {
     switch (method) {
-      case 'POST':
-        return 'CREATE';
-      case 'PUT':
-      case 'PATCH':
-        return 'UPDATE';
-      case 'DELETE':
-        return 'DELETE';
+      case "POST":
+        return "CREATE";
+      case "PUT":
+      case "PATCH":
+        return "UPDATE";
+      case "DELETE":
+        return "DELETE";
       default:
         return method;
     }
   }
 
-  private getResourceInfo(request: Request): { resourceType: string; resourceId?: string } {
+  private getResourceInfo(request: Request): {
+    resourceType: string;
+    resourceId?: string;
+  } {
     const url = request.url;
-    
+
     // Extract resource type and ID from URL
     // Examples:
     // /drivers/123 -> resourceType: 'DRIVER', resourceId: '123'
     // /admin/users/456 -> resourceType: 'ADMIN', resourceId: '456'
     // /deliveries/789/status -> resourceType: 'DELIVERY', resourceId: '789'
 
-    const segments = url.split('/').filter(Boolean);
-    
+    const segments = url.split("/").filter(Boolean);
+
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
-      
+
       // Check for known resource patterns
-      if (segment === 'drivers') {
+      if (segment === "drivers") {
         return {
-          resourceType: 'DRIVER',
+          resourceType: "DRIVER",
           resourceId: segments[i + 1] || undefined,
         };
-      } else if (segment === 'admin' && segments[i + 1] === 'users') {
+      } else if (segment === "admin" && segments[i + 1] === "users") {
         return {
-          resourceType: 'ADMIN',
+          resourceType: "ADMIN",
           resourceId: segments[i + 2] || undefined,
         };
-      } else if (segment === 'deliveries') {
+      } else if (segment === "deliveries") {
         return {
-          resourceType: 'DELIVERY',
+          resourceType: "DELIVERY",
           resourceId: segments[i + 1] || undefined,
         };
-      } else if (segment === 'proofs') {
+      } else if (segment === "proofs") {
         return {
-          resourceType: 'PROOF',
+          resourceType: "PROOF",
           resourceId: segments[i + 1] || undefined,
         };
-      } else if (segment === 'cities') {
+      } else if (segment === "cities") {
         return {
-          resourceType: 'CITY',
+          resourceType: "CITY",
           resourceId: segments[i + 1] || undefined,
         };
-      } else if (segment === 'zones') {
+      } else if (segment === "zones") {
         return {
-          resourceType: 'ZONE',
+          resourceType: "ZONE",
           resourceId: segments[i + 1] || undefined,
         };
       }
@@ -130,7 +133,7 @@ export class AuditLoggingInterceptor implements NestInterceptor {
 
     // Default fallback
     return {
-      resourceType: 'UNKNOWN',
+      resourceType: "UNKNOWN",
       resourceId: undefined,
     };
   }
@@ -143,20 +146,20 @@ export class AuditLoggingInterceptor implements NestInterceptor {
     let changes: any = {};
 
     switch (method) {
-      case 'POST':
+      case "POST":
         // For create operations, log the created data
         changes.after = body;
         break;
 
-      case 'PUT':
-      case 'PATCH':
+      case "PUT":
+      case "PATCH":
         // For update operations, log both before and after
         changes.after = body;
         // Note: We don't have access to the "before" state here
         // This would require additional logic in the service layer
         break;
 
-      case 'DELETE':
+      case "DELETE":
         // For delete operations, log the deleted resource ID
         changes.before = { id: params.id || params.userId || params.driverId };
         break;
@@ -166,7 +169,7 @@ export class AuditLoggingInterceptor implements NestInterceptor {
     changes.request = {
       method: request.method,
       url: request.url,
-      userAgent: request.headers['user-agent'],
+      userAgent: request.headers["user-agent"],
       ip: this.getClientIp(request),
     };
 
@@ -175,8 +178,8 @@ export class AuditLoggingInterceptor implements NestInterceptor {
 
   private getClientIp(request: Request): string | undefined {
     return (
-      request.headers['x-forwarded-for'] as string ||
-      request.headers['x-real-ip'] as string ||
+      (request.headers["x-forwarded-for"] as string) ||
+      (request.headers["x-real-ip"] as string) ||
       request.connection.remoteAddress ||
       request.ip
     );
@@ -187,7 +190,11 @@ export class AuditLoggingInterceptor implements NestInterceptor {
  * Decorator to set audit metadata on a request
  */
 export function SetAuditMetadata(metadata: AuditMetadata) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor,
+  ) {
     const originalMethod = descriptor.value;
 
     descriptor.value = function (...args: any[]) {

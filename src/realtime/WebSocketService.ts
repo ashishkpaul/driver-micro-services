@@ -1,10 +1,10 @@
-import { io, Socket } from 'socket.io-client';
-import { TokenManager } from '../auth/TokenManager';
+import { io, Socket } from "socket.io-client";
+import { TokenManager } from "../auth/TokenManager";
 
 // WebSocket configuration - adjust based on environment
 // For development: http://localhost:3002/driver
 // For production: your-production-url/driver
-const WS_BASE_URL = 'http://localhost:3002';
+const WS_BASE_URL = "http://localhost:3002";
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -19,7 +19,7 @@ class WebSocketService {
     this.connecting = true;
 
     this.socket = io(`${WS_BASE_URL}/driver`, {
-      transports: ['websocket'],
+      transports: ["websocket"],
       auth: { token },
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -28,17 +28,17 @@ class WebSocketService {
       timeout: 20000,
     });
 
-    this.socket.on('connect', () => {
-      console.info('✅ WS connected', this.socket?.id);
+    this.socket.on("connect", () => {
+      console.info("✅ WS connected", this.socket?.id);
       this.connecting = false;
     });
 
-    this.socket.on('disconnect', (reason) => {
-      console.warn('⚠️ WS disconnected:', reason);
+    this.socket.on("disconnect", (reason) => {
+      console.warn("⚠️ WS disconnected:", reason);
     });
 
-    this.socket.on('connect_error', (err) => {
-      console.error('❌ WS error:', err.message);
+    this.socket.on("connect_error", (err) => {
+      console.error("❌ WS error:", err.message);
       this.connecting = false;
     });
   }

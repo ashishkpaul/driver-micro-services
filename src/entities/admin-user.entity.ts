@@ -9,14 +9,20 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
-} from 'typeorm';
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
-import { Role } from '../auth/roles.enum';
-import { City } from './city.entity';
+} from "typeorm";
+import {
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MinLength,
+} from "class-validator";
+import { Role } from "../auth/roles.enum";
+import { City } from "./city.entity";
 
-@Entity('admin_users')
+@Entity("admin_users")
 export class AdminUser {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id!: string;
 
   /* ------------------------------------------------------------------ */
@@ -27,13 +33,13 @@ export class AdminUser {
   @IsEmail()
   email!: string;
 
-  @Column({ name: 'password_hash' })
+  @Column({ name: "password_hash" })
   @IsString()
   @MinLength(8)
   passwordHash!: string;
 
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: Role,
     default: Role.ADMIN,
   })
@@ -45,7 +51,7 @@ export class AdminUser {
   /* ------------------------------------------------------------------ */
 
   @Index()
-  @Column({ name: 'is_active', default: true })
+  @Column({ name: "is_active", default: true })
   isActive!: boolean;
 
   /* ------------------------------------------------------------------ */
@@ -53,27 +59,27 @@ export class AdminUser {
   /* ------------------------------------------------------------------ */
 
   @Index()
-  @Column({ name: 'city_id', nullable: true })
+  @Column({ name: "city_id", nullable: true })
   cityId?: string;
 
   @ManyToOne(() => City, { nullable: true })
-  @JoinColumn({ name: 'city_id' })
+  @JoinColumn({ name: "city_id" })
   city?: City;
 
   /* ------------------------------------------------------------------ */
   /* Audit & Tracking                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: 'created_by_id', nullable: true })
+  @Column({ name: "created_by_id", nullable: true })
   createdById?: string;
 
-  @Column({ name: 'last_login_at', nullable: true })
+  @Column({ name: "last_login_at", nullable: true })
   lastLoginAt?: Date;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date;
 
   /* ------------------------------------------------------------------ */
@@ -102,7 +108,7 @@ export class AdminUser {
     if (this.isSuperAdmin()) {
       return true;
     }
-    
+
     // Admin can only access their assigned city
     return this.cityId === cityId;
   }

@@ -10,7 +10,10 @@ import {
 import { Delivery } from "./entities/delivery.entity";
 import { AuthorizationActor } from "../authorization/authorization.types";
 
-const DELIVERY_STATE_TRANSITIONS: Record<Delivery["status"], Delivery["status"][]> = {
+const DELIVERY_STATE_TRANSITIONS: Record<
+  Delivery["status"],
+  Delivery["status"][]
+> = {
   PENDING: ["ASSIGNED", "CANCELLED"],
   ASSIGNED: ["PICKED_UP", "FAILED", "CANCELLED"],
   PICKED_UP: ["IN_TRANSIT", "DELIVERED", "FAILED"],
@@ -76,7 +79,9 @@ export class DeliveryStateMachine {
     }
   }
 
-  private mapStatusToAction(status: Delivery["status"]): DeliveryAction | undefined {
+  private mapStatusToAction(
+    status: Delivery["status"],
+  ): DeliveryAction | undefined {
     switch (status) {
       case "PICKED_UP":
         return "PICKUP";
