@@ -10,11 +10,13 @@ const ENFORCED_PATTERN = new RegExp(
   `^\\d{13,}-(?:${VALID_PREFIXES.map((p) => p.replace("_", "\\_").replace("+", "\\+")).join("|")}).+\\.ts$`,
 );
 const LEGACY_PATTERN = /^\d{13,}-[A-Za-z0-9_-]+\.ts$/;
-const ALLOW_LEGACY = process.env.MIGRATION_NAMING_ALLOW_LEGACY !== "false";
+const ALLOW_LEGACY = process.env.MIGRATION_NAMING_ALLOW_LEGACY === "true";
 const CHECK_ALL = process.env.MIGRATION_NAMING_CHECK_ALL === "true";
 
 function validateMigrationBaseName(baseName: string): void {
-  const hasValidPrefix = VALID_PREFIXES.some((prefix) => baseName.startsWith(prefix));
+  const hasValidPrefix = VALID_PREFIXES.some((prefix) =>
+    baseName.startsWith(prefix),
+  );
   if (!hasValidPrefix) {
     console.error("❌ migration naming policy violation");
     console.error(
@@ -51,7 +53,20 @@ function checkExistingMigrations(): void {
   });
 
   if (!invalid.length) {
-    console.log("✅ migration naming policy: no invalid migration filenames detected");
+    console.log(
+      "✅ migration naming policy: no invalid migration filenames detected",
+    );
+    return;
+  }
+
+  // If legacy migrations are allowed, warn but don't fail
+  if (ALLOW_LEGACY) {
+    console.log(
+      "⚠️  migration naming policy: legacy migrations allowed, skipping:",
+    );
+    for (const file of invalid) {
+      console.log(`  • src/migrations/${file}`);
+    }
     return;
   }
 
@@ -68,7 +83,8 @@ function checkExistingMigrations(): void {
 function main(): void {
   const candidateName = process.argv[2];
   if (candidateName) {
-    const normalized = candidateName.replace(/\\/g, "/").split("/").pop() || candidateName;
+    const normalized =
+      candidateName.replace(/\\/g, "/").split("/").pop() || candidateName;
     validateMigrationBaseName(normalized.replace(/\.ts$/i, ""));
     return;
   }

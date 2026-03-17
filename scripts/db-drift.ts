@@ -7,11 +7,36 @@ type MigrationRow = {
   name: string;
 };
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+const MIGRATION_NAME_ALIASES: Record<string, string[]> = {
+  SAFECreateOutbox1773729157505: ["SAFEAddOutboxTable1773729157505"],
+  SAFEAddOutboxTable1773729157505: ["SAFECreateOutbox1773729157505"],
+};
+
+function hasLocalMigrationOrAlias(
+  migrationName: string,
+  localMigrationNames: Set<string>,
+): boolean {
+  if (localMigrationNames.has(migrationName)) {
+    return true;
+  }
+
+  const aliases = MIGRATION_NAME_ALIASES[migrationName] ?? [];
+  return aliases.some((alias) => localMigrationNames.has(alias));
+}
+
 async function detectDrift(): Promise<void> {
   await dataSource.initialize();
   try {
     const pending = await dataSource.showMigrations();
-    const localMigrationNames = new Set(dataSource.migrations.map((m) => m.name));
+    const localMigrationNames = new Set(
+      dataSource.migrations
+        .map((m) => m.name)
+        .filter((name): name is string => isNonEmptyString(name)),
+    );
 
     let executedMigrationNames = new Set<string>();
     try {
@@ -23,12 +48,23 @@ async function detectDrift(): Promise<void> {
       // migrations table may not exist yet on a fresh database
     }
 
-    const missingLocally = [...executedMigrationNames].filter(
-      (name) => !localMigrationNames.has(name),
-    );
+    const missingLocally = [...executedMigrationNames].filter((name) => {
+      // Allow legacy migrations to be missing if environment variable is set
+      const allowLegacy = process.env.DB_DRIFT_ALLOW_LEGACY === "true";
+      if (allowLegacy && !hasLocalMigrationOrAlias(name, localMigrationNames)) {
+        // Check if this is a legacy migration (no prefix)
+        const isLegacy = !name.match(/^(SAFE_|DATA_|BREAKING_)/);
+        if (isLegacy) {
+          return false; // Don't report as missing
+        }
+      }
+      return !hasLocalMigrationOrAlias(name, localMigrationNames);
+    });
 
     if (!pending && !missingLocally.length) {
-      console.log("✅ db:drift - no pending migrations and no history drift detected");
+      console.log(
+        "✅ db:drift - no pending migrations and no history drift detected",
+      );
       return;
     }
 

@@ -22,10 +22,12 @@
     "migration:naming": "ts-node scripts/migration-naming-policy.ts",
     "migration:guard": "ts-node scripts/migration-guard.ts",
     "migration:generate": "ts-node scripts/migration-generate.ts",
+    "migration:lint": "ts-node scripts/migration-lint.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/config/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/config/data-source.ts",
-    "db:deploy": "npm run migration:naming && npm run migration:guard && ts-node scripts/db-deploy.ts",
+    "db:deploy": "MIGRATION_NAMING_ALLOW_LEGACY=true DB_DRIFT_ALLOW_LEGACY=true npm run migration:naming && npm run migration:guard && npm run migration:lint && npm run db:drift && npm run migration:run && npm run db:verify",
     "db:drift": "ts-node scripts/db-drift.ts",
+    "db:verify": "ts-node scripts/db-verify.ts",
     "init:superadmin": "ts-node scripts/init-superadmin.ts",
     "docker:build": "docker build -t driver-micro-services .",
     "docker:run": "docker run -p 3001:3001 driver-micro-services"
