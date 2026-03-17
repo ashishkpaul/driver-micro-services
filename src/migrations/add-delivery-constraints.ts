@@ -11,22 +11,18 @@ export class AddDeliveryConstraints1773636896561 implements MigrationInterface {
       WHERE status IN ('ASSIGNED', 'PICKED_UP')
     `);
 
-    // Create index for offer queries
+    // Create index for offer queries (defensive - only if table exists)
     await queryRunner.query(`
-      CREATE INDEX idx_offer_delivery_status
-      ON driver_offers(delivery_id, status)
-    `);
-
-    // Add check constraint to ensure only one active delivery per driver
-    await queryRunner.query(`
-      ALTER TABLE deliveries
-      ADD CONSTRAINT chk_delivery_unique_active_per_driver
-      EXCLUDE USING GIST (
-        driver_id WITH =,
-        status WITH &&
-        (SELECT ARRAY['ASSIGNED', 'PICKED_UP']::text[])
-      )
-      WHERE (status IN ('ASSIGNED', 'PICKED_UP'))
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'driver_offers'
+        ) THEN
+          CREATE INDEX IF NOT EXISTS idx_offer_delivery_status
+          ON driver_offers(delivery_id, status);
+        END IF;
+      END $$;
     `);
   }
 

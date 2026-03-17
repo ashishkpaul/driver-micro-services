@@ -11,7 +11,7 @@ export default new DataSource({
   username: process.env.DB_USER || "driver_user",
   password: process.env.DB_PASSWORD || "driver_password",
   database: process.env.DB_NAME || "driver_service",
-  entities: ["src/**/*.entity.ts"],
+  entities: ["src/**/*.entity.ts", "src/domain-events/outbox.entity.ts"],
   migrations: ["src/migrations/*.ts"],
   migrationsTableName: "_migrations",
   migrationsTransactionMode: "each",

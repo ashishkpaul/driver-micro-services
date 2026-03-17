@@ -6,16 +6,26 @@ import { RedisService } from "../redis/redis.service";
 @Injectable()
 export class PushNotificationService {
   private readonly logger = new Logger(PushNotificationService.name);
-  private firebaseApp: admin.app.App;
+  private firebaseApp: admin.app.App | null = null;
 
   constructor(private readonly redisService: RedisService) {
-    this.firebaseApp = admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      }),
-    });
+    try {
+      if (!admin.apps.length) {
+        this.firebaseApp = admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          }),
+        });
+      }
+      this.logger.log("Firebase initialized successfully");
+    } catch (error) {
+      this.logger.warn(
+        `Firebase not configured — push notifications disabled. Error: ${error.message}`,
+      );
+      this.firebaseApp = null;
+    }
   }
 
   /**
@@ -35,6 +45,13 @@ export class PushNotificationService {
       const token = await this.redisService.getClient().get(`push:${driverId}`);
       if (!token) {
         this.logger.debug(`No push token for driver ${driverId}`);
+        return false;
+      }
+
+      if (!this.firebaseApp) {
+        this.logger.warn(
+          "Firebase not initialized, skipping push notification",
+        );
         return false;
       }
 

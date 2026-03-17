@@ -10,7 +10,7 @@ import { Delivery } from "./entities/delivery.entity";
 import { Assignment } from "../assignment/entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
-import { OutboxService } from "../services/outbox.service";
+import { OutboxService } from "../domain-events/outbox.service";
 
 @Injectable()
 export class DeliveryStateMachine {

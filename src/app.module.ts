@@ -37,6 +37,7 @@ import { ScheduleModule } from "@nestjs/schedule";
           synchronize: false,
           migrationsRun: false,
           logging: config.get("DB_LOGGING") === "true",
+          autoLoadEntities: true,
         }) as TypeOrmModuleOptions,
     }),
     AuthModule,

@@ -4,7 +4,9 @@ import { AssignmentModule } from "../assignment/assignment.module";
 import { RedisModule } from "../redis/redis.module";
 
 @Module({
-  imports: [AssignmentModule, RedisModule],
+  imports: [RedisModule, AssignmentModule],
   controllers: [EventsController],
+  providers: [],
+  exports: [],
 })
 export class EventsModule {}

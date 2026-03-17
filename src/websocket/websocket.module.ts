@@ -1,6 +1,6 @@
 // src/websocket/websocket.module.ts
 
-import { Module, Global } from "@nestjs/common";
+import { Module, Global, forwardRef } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 
 import { WebSocketGatewayHandler } from "./websocket.gateway";
@@ -19,7 +19,7 @@ import { DeliveriesModule } from "../deliveries/deliveries.module";
       secret: process.env.JWT_SECRET || "driver-service-secret",
     }),
     DriversModule,
-    DeliveriesModule,
+    forwardRef(() => DeliveriesModule),
     RedisModule,
   ],
   providers: [

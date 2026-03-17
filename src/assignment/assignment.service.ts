@@ -1,17 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, DataSource } from "typeorm";
 
 import { DriversService } from "../drivers/drivers.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
 import { Assignment } from "./entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
-import { WebSocketService } from "../websocket/websocket.service"; // ✅ NEW
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { AssignmentAuthorizationService } from "./assignment.authorization.service";
 import { AuthorizationActor } from "../authorization/authorization.types";
 import { DriverCapabilityService } from "../drivers/driver-capability.service";
-import { PushNotificationService } from "../push/push.service"; // NEW
+import { OutboxService } from "../domain-events/outbox.service";
 
 @Injectable()
 export class AssignmentService {
@@ -23,9 +22,9 @@ export class AssignmentService {
     private readonly driversService: DriversService,
     private readonly driverCapabilityService: DriverCapabilityService,
     private readonly deliveriesService: DeliveriesService,
-    private readonly webSocketService: WebSocketService, // ✅ NEW
     private readonly assignmentAuthorizationService: AssignmentAuthorizationService,
-    private readonly pushService: PushNotificationService, // NEW
+    private readonly outboxService: OutboxService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createAndAssignDelivery(
@@ -104,13 +103,14 @@ export class AssignmentService {
     // 5. Update driver status
     await this.driversService.updateStatus(driver.id, DriverStatus.BUSY);
 
-    // 7. Emit DELIVERY_ASSIGNED_V1 to driver via WebSocket (✅ NEW)
-    const wsConnected = this.webSocketService.isDriverConnected(driver.id);
-
-    try {
-      this.webSocketService.emitDeliveryAssigned(driver.id, {
+    // 7. Publish outbox event for delivery assignment
+    await this.dataSource.transaction(async (manager) => {
+      await this.outboxService.publish(manager, "DELIVERY_ASSIGNED", {
         deliveryId: delivery.id,
         sellerOrderId,
+        channelId,
+        driverId: driver.id,
+        assignmentId: assignment.id,
         pickupLocation: {
           lat: pickupLat,
           lon: pickupLon,
@@ -119,34 +119,13 @@ export class AssignmentService {
           lat: dropLat,
           lon: dropLon,
         },
-        assignmentId: assignment.id,
         assignedAt: new Date().toISOString(),
       });
+    });
 
-      this.logger.log(
-        `Emitted DELIVERY_ASSIGNED_V1 to driver ${driver.id} via WebSocket`,
-      );
-    } catch (err) {
-      // v1 behavior: log only, no retry, no queue
-      this.logger.warn(
-        `Driver ${driver.id} not connected via WebSocket, assignment not pushed`,
-      );
-    }
-
-    // 8. Push notification fallback if not connected via WebSocket
-    if (!wsConnected) {
-      await this.pushService.sendToDriver(driver.id, {
-        title: "New delivery assigned",
-        body: `Pickup in ${Math.ceil(this.driversService.calculateDistance(driver.currentLat, driver.currentLon, pickupLat, pickupLon) / 0.5)}min`,
-        data: {
-          type: "DELIVERY_ASSIGNED",
-          deliveryId: delivery.id,
-          sellerOrderId,
-          deepLink: `/delivery/${delivery.id}`,
-        },
-        priority: "high",
-      });
-    }
+    this.logger.log(
+      `Published DELIVERY_ASSIGNED event for driver ${driver.id}`,
+    );
 
     this.logger.log(
       `Successfully assigned driver ${driver.id} to delivery ${delivery.id}`,
