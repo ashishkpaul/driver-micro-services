@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
 } from "typeorm";
+import { OutboxStatus } from "../domain-events/outbox-status.enum";
 
 @Entity("outbox")
 export class OutboxEvent {
@@ -16,12 +17,27 @@ export class OutboxEvent {
   @Column("jsonb")
   payload: any;
 
-  @Column()
-  status: string;
+  @Column({ type: "varchar" })
+  status: OutboxStatus;
+
+  @Column({ default: 0 })
+  retryCount: number;
+
+  @Column({ nullable: true })
+  lastError?: string;
+
+  @Column({ nullable: true })
+  nextRetryAt?: Date;
 
   @CreateDateColumn()
   createdAt: Date;
 
   @Column({ nullable: true })
-  processedAt: Date;
+  processedAt?: Date;
+
+  @Column({ nullable: true })
+  lockedAt?: Date;
+
+  @Column({ nullable: true })
+  lockedBy?: string;
 }

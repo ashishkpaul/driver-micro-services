@@ -2,8 +2,8 @@
 
 import { DataSource } from "typeorm";
 import * as dotenv from "dotenv";
-import * as path from "path";
 import * as fs from "fs";
+import { MIGRATION_ALIASES } from "./migration-aliases";
 
 dotenv.config();
 
@@ -40,19 +40,36 @@ const REQUIRED_INDEXES = [
   "idx_driver_pending",
   "idx_expires_at",
   "idx_delivery_active_driver",
+  "idx_outbox_worker",
 ];
 
 // Critical constraints that must exist
 const REQUIRED_CONSTRAINTS: string[] = [];
 
+const REQUIRED_FOREIGN_KEYS = [
+  {
+    sourceTable: "delivery_events",
+    sourceColumn: "delivery_id",
+    targetTable: "deliveries",
+    targetColumn: "id",
+  },
+  {
+    sourceTable: "admin_users",
+    sourceColumn: "city_id",
+    targetTable: "cities",
+    targetColumn: "id",
+  },
+  {
+    sourceTable: "zones",
+    sourceColumn: "city_id",
+    targetTable: "cities",
+    targetColumn: "id",
+  },
+];
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
-
-const MIGRATION_NAME_ALIASES: Record<string, string[]> = {
-  SAFECreateOutbox1773729157505: ["SAFEAddOutboxTable1773729157505"],
-  SAFEAddOutboxTable1773729157505: ["SAFECreateOutbox1773729157505"],
-};
 
 function hasAppliedMigrationOrAlias(
   expectedMigrationName: string,
@@ -62,7 +79,7 @@ function hasAppliedMigrationOrAlias(
     return true;
   }
 
-  const aliases = MIGRATION_NAME_ALIASES[expectedMigrationName] ?? [];
+  const aliases = MIGRATION_ALIASES[expectedMigrationName] ?? [];
   return aliases.some((alias) => appliedMigrationNames.has(alias));
 }
 
@@ -135,6 +152,48 @@ async function verifyConstraints(): Promise<string[]> {
   return errors;
 }
 
+async function verifyForeignKeys(): Promise<string[]> {
+  const errors: string[] = [];
+
+  const queryRunner = dataSource.createQueryRunner();
+  await queryRunner.connect();
+
+  for (const fk of REQUIRED_FOREIGN_KEYS) {
+    const result = await queryRunner.query(
+      `
+        SELECT 1
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+         AND ccu.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND tc.table_name = $1
+          AND kcu.column_name = $2
+          AND ccu.table_name = $3
+          AND ccu.column_name = $4
+        LIMIT 1
+      `,
+      [fk.sourceTable, fk.sourceColumn, fk.targetTable, fk.targetColumn],
+    );
+
+    if (result.length === 0) {
+      errors.push(
+        `❌ Missing foreign key: ${fk.sourceTable}.${fk.sourceColumn} -> ${fk.targetTable}.${fk.targetColumn}`,
+      );
+    } else {
+      console.log(
+        `✅ Foreign key exists: ${fk.sourceTable}.${fk.sourceColumn} -> ${fk.targetTable}.${fk.targetColumn}`,
+      );
+    }
+  }
+
+  await queryRunner.release();
+  return errors;
+}
+
 async function verifyOutboxTable(): Promise<string[]> {
   const errors: string[] = [];
 
@@ -154,6 +213,15 @@ async function verifyOutboxTable(): Promise<string[]> {
     { name: "event_type", type: "character varying", nullable: "NO" },
     { name: "payload", type: "jsonb", nullable: "NO" },
     { name: "status", type: "character varying", nullable: "NO" },
+    { name: "retry_count", type: "integer", nullable: "NO" },
+    { name: "last_error", type: "text", nullable: "YES" },
+    {
+      name: "next_retry_at",
+      type: "timestamp without time zone",
+      nullable: "YES",
+    },
+    { name: "locked_at", type: "timestamp without time zone", nullable: "YES" },
+    { name: "locked_by", type: "character varying", nullable: "YES" },
     { name: "created_at", type: "timestamp without time zone", nullable: "NO" },
   ];
 
@@ -231,6 +299,7 @@ async function main() {
   allErrors.push(...(await verifyTables()));
   allErrors.push(...(await verifyIndexes()));
   allErrors.push(...(await verifyConstraints()));
+  allErrors.push(...(await verifyForeignKeys()));
   allErrors.push(...(await verifyOutboxTable()));
   allErrors.push(...(await verifyMigrationStatus()));
 

@@ -2,6 +2,7 @@
 
 import "dotenv/config";
 import dataSource from "../src/config/data-source";
+import { MIGRATION_ALIASES } from "./migration-aliases";
 
 type MigrationRow = {
   name: string;
@@ -11,11 +12,6 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-const MIGRATION_NAME_ALIASES: Record<string, string[]> = {
-  SAFECreateOutbox1773729157505: ["SAFEAddOutboxTable1773729157505"],
-  SAFEAddOutboxTable1773729157505: ["SAFECreateOutbox1773729157505"],
-};
-
 function hasLocalMigrationOrAlias(
   migrationName: string,
   localMigrationNames: Set<string>,
@@ -24,7 +20,7 @@ function hasLocalMigrationOrAlias(
     return true;
   }
 
-  const aliases = MIGRATION_NAME_ALIASES[migrationName] ?? [];
+  const aliases = MIGRATION_ALIASES[migrationName] ?? [];
   return aliases.some((alias) => localMigrationNames.has(alias));
 }
 
