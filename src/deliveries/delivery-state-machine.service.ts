@@ -104,7 +104,7 @@ export class DeliveryStateMachine {
       );
 
       // 8. Publish outbox event
-      await this.outbox.publish(manager, "DELIVERY_ASSIGNED", {
+      await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
         deliveryId: delivery.id,
         driverId,
         assignmentId: assignment.id,

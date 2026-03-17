@@ -12,7 +12,11 @@ export default new DataSource({
   password: process.env.DB_PASSWORD || "driver_password",
   database: process.env.DB_NAME || "driver_service",
   entities: ["src/**/*.entity.ts", "src/domain-events/outbox.entity.ts"],
-  migrations: ["src/migrations/*.ts"],
+  migrations: [
+    process.env.NODE_ENV === "production"
+      ? "dist/src/migrations/*.js"
+      : "src/migrations/*.ts",
+  ],
   migrationsTableName: "_migrations",
   migrationsTransactionMode: "each",
   namingStrategy: new SnakeNamingStrategy(),

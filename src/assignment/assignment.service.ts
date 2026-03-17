@@ -105,7 +105,7 @@ export class AssignmentService {
 
     // 7. Publish outbox event for delivery assignment
     await this.dataSource.transaction(async (manager) => {
-      await this.outboxService.publish(manager, "DELIVERY_ASSIGNED", {
+      await this.outboxService.publish(manager, "DELIVERY_ASSIGNED_V1", {
         deliveryId: delivery.id,
         sellerOrderId,
         channelId,

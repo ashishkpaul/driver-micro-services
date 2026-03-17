@@ -1,3 +1,5 @@
+import "./observability/tracing";
+
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ValidationPipe } from "@nestjs/common";
@@ -7,7 +9,7 @@ import * as compression from "compression";
 import { Logger } from "winston";
 import { WinstonModule } from "nest-winston";
 import * as winston from "winston";
-import { IoAdapter } from "@nestjs/platform-socket.io"; // Add this
+import { IoAdapter } from "@nestjs/platform-socket.io";
 
 async function bootstrap() {
   // Logger setup

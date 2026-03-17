@@ -1,11 +1,10 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, EntityManager } from "typeorm";
-import { OutboxEvent } from "./outbox.entity";
+import { OutboxEvent, EventVersion, VersionedEventType } from "./outbox.entity";
 import { OutboxStatus } from "./outbox-status.enum";
-import { WebSocketService } from "../websocket/websocket.service";
-import { WebhooksService } from "../webhooks/webhooks.service";
-import { PushNotificationService } from "../push/push.service";
+import { HandlerRegistry } from "./handlers/handler.registry";
+import { randomUUID } from "crypto";
 
 @Injectable()
 export class OutboxService {
@@ -14,77 +13,68 @@ export class OutboxService {
   constructor(
     @InjectRepository(OutboxEvent)
     private outboxRepository: Repository<OutboxEvent>,
-    private wsService: WebSocketService,
-    private vendureSyncService: WebhooksService,
-    private pushService: PushNotificationService,
+    private handlerRegistry: HandlerRegistry,
   ) {}
 
   async publish(
     manager: EntityManager,
-    eventType: string,
+    eventType: VersionedEventType,
     payload: any,
+    version: EventVersion = 1,
   ): Promise<void> {
+    // Validate versioned event type
+    if (!this.isValidVersionedEventType(eventType)) {
+      throw new Error(`Unknown versioned event type: ${eventType}`);
+    }
+
+    // Generate deterministic idempotency key
+    const idempotencyKey = this.generateIdempotencyKey(eventType, payload);
+
+    // Check for existing event with same idempotency key
+    const existingEvent = await manager.findOne(OutboxEvent, {
+      where: { idempotencyKey },
+    });
+
+    if (existingEvent) {
+      this.logger.warn(
+        `Duplicate outbox event detected for idempotency key: ${idempotencyKey}. Skipping creation.`,
+      );
+      return;
+    }
+
     await manager.save(OutboxEvent, {
       eventType,
       payload,
       status: OutboxStatus.PENDING,
       retryCount: 0,
       createdAt: new Date(),
+      idempotencyKey,
+      version,
     });
 
     this.logger.log(
-      `Outbox event published: ${eventType} for delivery assignment`,
+      `Outbox event published: ${eventType} (v${version}) with idempotency key: ${idempotencyKey}`,
     );
   }
 
+  private isValidVersionedEventType(eventType: string): boolean {
+    // Check if the event type follows the versioned pattern
+    const versionedPattern = /^[A-Z_]+_V[1-3]$/;
+    return versionedPattern.test(eventType);
+  }
+
   async handle(event: OutboxEvent): Promise<void> {
-    switch (event.eventType) {
-      case "DELIVERY_ASSIGNED": {
-        const driverId = String(event.payload?.driverId ?? "");
-        if (!driverId) {
-          throw new Error("DELIVERY_ASSIGNED payload missing driverId");
-        }
-
-        await this.wsService.emitDeliveryAssigned(driverId, event.payload);
-
-        if (event.payload?.sellerOrderId && event.payload?.channelId) {
-          await this.vendureSyncService.emitDeliveryAssigned({
-            sellerOrderId: event.payload.sellerOrderId,
-            channelId: event.payload.channelId,
-            driverId,
-            assignmentId: String(event.payload.assignmentId ?? ""),
-            assignedAt:
-              typeof event.payload.assignedAt === "string"
-                ? event.payload.assignedAt
-                : new Date().toISOString(),
-          });
-        } else {
-          this.logger.warn(
-            `Outbox event ${event.id} missing sellerOrderId/channelId; skipping Vendure webhook`,
-          );
-        }
-
-        const wsConnected = this.wsService.isDriverConnected(driverId);
-        await this.pushService.notifyOffer(
-          {
-            offerId: String(event.payload.assignmentId ?? event.id),
-            deliveryId: String(event.payload.deliveryId ?? ""),
-            expiresAt: event.payload.expiresAt || new Date().toISOString(),
-            offerPayload: {
-              estimatedEarning: event.payload.estimatedEarning ?? "0",
-              estimatedPickupTime: event.payload.estimatedPickupTime ?? 0,
-              estimatedDistanceKm: event.payload.estimatedDistanceKm ?? 0,
-            },
-          },
-          driverId,
-          wsConnected,
-        );
-        return;
-      }
-
-      default:
-        this.logger.warn(`Unknown outbox event type: ${event.eventType}`);
+    // Strict validation at entry point
+    if (!event.eventType) {
+      throw new Error(`Missing eventType for outbox event ${event.id}`);
     }
+
+    this.logger.debug(
+      `Delegating event ${event.id} of type ${event.eventType} to handler registry`,
+    );
+
+    // Delegate to handler registry - no business logic here
+    await this.handlerRegistry.handle(event);
   }
 
   async processPendingEvents(): Promise<void> {
@@ -109,5 +99,18 @@ export class OutboxService {
       status: OutboxStatus.COMPLETED,
       processedAt: new Date(),
     });
+  }
+
+  private generateIdempotencyKey(eventType: string, payload: any): string {
+    // Generate deterministic idempotency key based on event type and payload
+    const deliveryId = payload?.deliveryId || payload?.assignmentId || "";
+    const driverId = payload?.driverId || "";
+    const timestamp = payload?.assignedAt || new Date().toISOString();
+
+    // Create a deterministic key for the specific event
+    const key = `${eventType}_${deliveryId}_${driverId}_${new Date(timestamp).getTime()}`;
+
+    // Add a random suffix to handle edge cases where timestamps might be identical
+    return `${key}_${randomUUID().slice(0, 8)}`;
   }
 }

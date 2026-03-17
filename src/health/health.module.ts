@@ -3,11 +3,16 @@ import { TerminusModule } from "@nestjs/terminus";
 import { HealthController } from "./health.controller";
 import { RedisHealthIndicator } from "./redis.health";
 import { TypeOrmHealthIndicator } from "./typeorm.health";
+import { OutboxHealthIndicator } from "./outbox.health";
 import { RedisModule } from "../redis/redis.module";
 
 @Module({
   imports: [TerminusModule, RedisModule],
   controllers: [HealthController],
-  providers: [RedisHealthIndicator, TypeOrmHealthIndicator],
+  providers: [
+    RedisHealthIndicator,
+    TypeOrmHealthIndicator,
+    OutboxHealthIndicator,
+  ],
 })
 export class HealthModule {}

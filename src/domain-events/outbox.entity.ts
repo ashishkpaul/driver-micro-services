@@ -3,8 +3,60 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
 } from "typeorm";
 import { OutboxStatus } from "./outbox-status.enum";
+
+// Event version types for type safety
+export type EventVersion = 1 | 2 | 3;
+
+// Versioned event types
+export type VersionedEventType =
+  | "DELIVERY_ASSIGNED_V1"
+  | "DELIVERY_ASSIGNED_V2"
+  | "DELIVERY_ASSIGNED_V3"
+  | "DELIVERY_COMPLETED_V1"
+  | "DELIVERY_COMPLETED_V2"
+  | "DELIVERY_COMPLETED_V3"
+  | "DELIVERY_FAILED_V1"
+  | "DELIVERY_FAILED_V2"
+  | "DELIVERY_FAILED_V3"
+  | "DRIVER_STATUS_CHANGED_V1"
+  | "DRIVER_STATUS_CHANGED_V2"
+  | "DRIVER_STATUS_CHANGED_V3"
+  | "DRIVER_ONLINE_V1"
+  | "DRIVER_ONLINE_V2"
+  | "DRIVER_ONLINE_V3"
+  | "DRIVER_OFFLINE_V1"
+  | "DRIVER_OFFLINE_V2"
+  | "DRIVER_OFFLINE_V3"
+  | "DELIVERY_CANCELLED_V1"
+  | "DELIVERY_CANCELLED_V2"
+  | "DELIVERY_CANCELLED_V3"
+  | "DELIVERY_REASSIGNED_V1"
+  | "DELIVERY_REASSIGNED_V2"
+  | "DELIVERY_REASSIGNED_V3"
+  | "DELIVERY_PICKUP_CONFIRMED_V1"
+  | "DELIVERY_PICKUP_CONFIRMED_V2"
+  | "DELIVERY_PICKUP_CONFIRMED_V3"
+  | "DELIVERY_DROPOFF_CONFIRMED_V1"
+  | "DELIVERY_DROPOFF_CONFIRMED_V2"
+  | "DELIVERY_DROPOFF_CONFIRMED_V3"
+  | "DELIVERY_ETA_UPDATED_V1"
+  | "DELIVERY_ETA_UPDATED_V2"
+  | "DELIVERY_ETA_UPDATED_V3"
+  | "DELIVERY_LOCATION_UPDATED_V1"
+  | "DELIVERY_LOCATION_UPDATED_V2"
+  | "DELIVERY_LOCATION_UPDATED_V3"
+  | "DELIVERY_STATUS_CHANGED_V1"
+  | "DELIVERY_STATUS_CHANGED_V2"
+  | "DELIVERY_STATUS_CHANGED_V3"
+  | "DELIVERY_PRIORITY_CHANGED_V1"
+  | "DELIVERY_PRIORITY_CHANGED_V2"
+  | "DELIVERY_PRIORITY_CHANGED_V3"
+  | "DELIVERY_ROUTE_UPDATED_V1"
+  | "DELIVERY_ROUTE_UPDATED_V2"
+  | "DELIVERY_ROUTE_UPDATED_V3";
 
 @Entity("outbox")
 export class OutboxEvent {
@@ -40,4 +92,10 @@ export class OutboxEvent {
 
   @Column({ nullable: true })
   lockedBy?: string;
+
+  @Column({ unique: true, nullable: false })
+  idempotencyKey: string;
+
+  @Column({ default: 1 })
+  version: EventVersion;
 }

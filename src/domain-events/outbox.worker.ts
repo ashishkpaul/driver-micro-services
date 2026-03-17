@@ -2,23 +2,27 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { DataSource } from "typeorm";
 import { randomUUID } from "crypto";
-import { OutboxEvent } from "./outbox.entity";
+import { OutboxEvent, EventVersion } from "./outbox.entity";
 import { OutboxStatus } from "./outbox-status.enum";
 import { OutboxService } from "./outbox.service";
+import pLimit from "p-limit";
+import { trace, SpanStatusCode, SpanKind } from "@opentelemetry/api";
 
 // Raw row from PostgreSQL (snake_case)
 type RawOutboxRow = {
   id: number;
-  event_type: string | null; // Critical: can be null from DB
+  event_type: string;
   payload: any;
-  status: string;
+  status: OutboxStatus;
   retry_count: number;
-  last_error: string | null;
-  next_retry_at: string | null;
-  created_at: string;
-  processed_at: string | null;
-  locked_at: string | null;
-  locked_by: string | null;
+  last_error?: string;
+  next_retry_at?: Date;
+  created_at: Date;
+  processed_at?: Date;
+  locked_at?: Date;
+  locked_by?: string;
+  idempotency_key: string;
+  version: number;
 };
 
 @Injectable()
@@ -63,32 +67,39 @@ export class OutboxWorker {
 
       this.logger.log(`Processing ${rawRows.length} outbox event(s)`);
 
-      let successCount = 0;
-      let failCount = 0;
+      // Concurrency limiting: Max 10 concurrent event processing
+      const limit = pLimit(10);
 
-      for (const rawRow of rawRows) {
-        const event = this.toOutboxEvent(rawRow);
+      // Process events concurrently with limiting
+      const processingPromises = rawRows.map((rawRow) =>
+        limit(async () => {
+          const event = this.toOutboxEvent(rawRow);
 
-        // Pre-validation before handing to service
-        if (!event.eventType) {
-          this.logger.error(
-            `Row ${event.id} has null/undefined eventType. ` +
-              `Raw event_type: ${rawRow.event_type}. ` +
-              `Forcing immediate failure.`,
-          );
-          await this.forceFail(event.id, "NULL_EVENT_TYPE");
-          failCount++;
-          continue;
-        }
+          // Pre-validation before handing to service
+          if (!event.eventType) {
+            this.logger.error(
+              `Row ${event.id} has null/undefined eventType. ` +
+                `Raw event_type: ${rawRow.event_type}. ` +
+                `Forcing immediate failure.`,
+            );
+            await this.forceFail(event.id, "NULL_EVENT_TYPE");
+            return { success: false, id: event.id };
+          }
 
-        try {
-          await this.processSingle(rawRow, event);
-          successCount++;
-        } catch (error) {
-          failCount++;
-          // Error handling happens in processSingle
-        }
-      }
+          try {
+            await this.processSingle(rawRow, event);
+            return { success: true, id: event.id };
+          } catch (error) {
+            // Error handling happens in processSingle
+            return { success: false, id: event.id };
+          }
+        }),
+      );
+
+      const results = await Promise.all(processingPromises);
+
+      const successCount = results.filter((r) => r.success).length;
+      const failCount = results.filter((r) => !r.success).length;
 
       const duration = Date.now() - startTime;
       this.logger.log(
@@ -124,7 +135,7 @@ export class OutboxWorker {
         `
           SELECT id, event_type, payload, status, retry_count,
                  last_error, next_retry_at, created_at, processed_at,
-                 locked_at, locked_by
+                 locked_at, locked_by, idempotency_key
           FROM outbox
           WHERE status = 'PENDING'
             AND (next_retry_at IS NULL OR next_retry_at <= now())
@@ -299,6 +310,8 @@ export class OutboxWorker {
       processedAt: row.processed_at ? new Date(row.processed_at) : undefined,
       lockedAt: row.locked_at ? new Date(row.locked_at) : undefined,
       lockedBy: row.locked_by || undefined,
+      idempotencyKey: row.idempotency_key || `BACKFILL_${rowId}`,
+      version: (row.version || 1) as EventVersion,
     };
   }
 }

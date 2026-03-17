@@ -32,5 +32,24 @@ module.exports = {
       // Memory safety
       max_memory_restart: "512M",
     },
+    {
+      name: "outbox-worker",
+      script: "dist/worker.js",
+      instances: 2, // Fixed number, not "max" for workers
+      exec_mode: "cluster",
+      env: { NODE_ENV: "production" },
+      autorestart: true,
+      max_memory_restart: "256M",
+      // Worker-specific settings
+      watch: false,
+      max_restarts: 10,
+      restart_delay: 3000,
+      kill_timeout: 5000,
+      listen_timeout: 5000,
+      // Worker logging
+      out_file: "logs/worker-out.log",
+      error_file: "logs/worker-error.log",
+      merge_logs: true,
+    },
   ],
 };

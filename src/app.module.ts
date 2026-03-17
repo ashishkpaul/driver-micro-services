@@ -15,6 +15,9 @@ import { WebSocketModule } from "./websocket/websocket.module";
 import { AuthModule } from "./auth/auth.module";
 import { AdminModule } from "./modules/admin.module";
 import { ScheduleModule } from "@nestjs/schedule";
+import { DomainEventsApiModule } from "./domain-events/domain-events.module";
+import { AdminDeadLetterController } from "./controllers/admin-deadletter.controller";
+import { AdminArchiveController } from "./controllers/admin-archive.controller";
 
 @Module({
   imports: [
@@ -49,6 +52,7 @@ import { ScheduleModule } from "@nestjs/schedule";
     AssignmentModule,
     EventsModule,
     WebhooksModule,
+    DomainEventsApiModule,
   ],
   providers: [],
 })

@@ -1,0 +1,47 @@
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { HandlerRegistry } from "./handlers/handler.registry";
+import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
+
+@Injectable()
+export class DomainEventsStartupService implements OnModuleInit {
+  private readonly logger = new Logger(DomainEventsStartupService.name);
+
+  constructor(
+    private handlerRegistry: HandlerRegistry,
+    private deliveryAssignedHandler: DeliveryAssignedHandler,
+  ) {}
+
+  onModuleInit() {
+    this.registerHandlers();
+    this.validateHandlers();
+  }
+
+  private registerHandlers(): void {
+    // Register all event handlers
+    this.handlerRegistry.register(
+      "DELIVERY_ASSIGNED",
+      this.deliveryAssignedHandler,
+    );
+
+    this.logger.log("All event handlers registered successfully");
+  }
+
+  private validateHandlers(): void {
+    try {
+      // Define all required event types
+      const requiredEventTypes = ["DELIVERY_ASSIGNED"];
+
+      // Validate that all required handlers are registered
+      this.handlerRegistry.validateHandlers(requiredEventTypes);
+
+      // Log statistics
+      const stats = this.handlerRegistry.getStats();
+      this.logger.log(
+        `Handler registry initialized with ${stats.handlerCount} handlers for event types: ${stats.eventTypes.join(", ")}`,
+      );
+    } catch (error) {
+      this.logger.error(`Handler validation failed: ${error.message}`);
+      throw error;
+    }
+  }
+}
