@@ -42,8 +42,11 @@ export class DeliveriesController {
   }
 
   @Get("drivers/:driverId/active")
-  findActiveForDriver(@Param("driverId") driverId: string) {
-    return this.deliveriesService.findActiveForDriver(driverId);
+  async findActiveForDriver(@Param("driverId") driverId: string) {
+    const delivery = await this.deliveriesService.findActiveForDriver(driverId);
+    return {
+      delivery: delivery || null,
+    };
   }
 
   @Patch(":id/assign")

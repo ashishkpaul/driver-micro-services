@@ -16,6 +16,7 @@ import { WebSocketJwtGuard } from "./websocket.guard";
 import { WebSocketService } from "./websocket.service";
 import { DriversService } from "../drivers/drivers.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
+import { OffersService } from "../offers/offers.service";
 
 import {
   LocationUpdateEvent,
@@ -30,6 +31,7 @@ import { handleDriverHeartbeat } from "./events/presence.handler";
 import { WebSocketMetricsService } from "./websocket-metrics.service";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { RedisService } from "../redis/redis.service";
+import { JwtService } from "@nestjs/jwt";
 
 @WebSocketGateway({
   namespace: "/driver",
@@ -48,8 +50,10 @@ export class WebSocketGatewayHandler
     private readonly wsService: WebSocketService,
     private readonly driversService: DriversService,
     private readonly deliveriesService: DeliveriesService,
+    private readonly offersService: OffersService,
     private readonly metrics: WebSocketMetricsService,
     private readonly redisService: RedisService,
+    private readonly jwtService: JwtService,
   ) {}
 
   afterInit(server: Server) {
@@ -57,20 +61,44 @@ export class WebSocketGatewayHandler
   }
 
   async handleConnection(client: Socket) {
-    const driverId = client.data.driverId;
+    // Extract token from multiple possible sources
+    const token =
+      client.handshake.auth?.token ||
+      client.handshake.headers?.authorization?.replace("Bearer ", "");
 
-    if (!driverId) {
-      this.logger.warn("WS connection without driverId — disconnecting");
+    if (!token) {
+      this.logger.warn("WS connection without token — disconnecting");
       client.disconnect();
       return;
     }
 
-    client.join(`driver:${driverId}`);
-    // Fire-and-forget metrics to prevent Redis stalls from blocking connections
-    this.metrics.onConnect(driverId).catch(() => {});
-    await this.driversService.updateStatus(driverId, DriverStatus.AVAILABLE);
+    try {
+      const payload = this.jwtService.verify(token);
+      const driverId = payload.driverId || payload.sub;
 
-    this.logger.log(`Driver ${driverId} connected`);
+      if (!driverId) {
+        this.logger.warn(
+          "WS connection without driverId in payload — disconnecting",
+        );
+        client.disconnect();
+        return;
+      }
+
+      client.data.driverId = driverId;
+      client.join(`driver:${driverId}`);
+
+      // Fire-and-forget metrics to prevent Redis stalls from blocking connections
+      this.metrics.onConnect(driverId).catch(() => {});
+      await this.driversService.updateStatus(driverId, DriverStatus.AVAILABLE);
+
+      this.logger.log(`Driver ${driverId} connected`);
+    } catch (error) {
+      this.logger.warn(
+        "WS connection with invalid token — disconnecting",
+        error,
+      );
+      client.disconnect();
+    }
   }
 
   async handleDisconnect(client: Socket) {
@@ -177,12 +205,15 @@ export class WebSocketGatewayHandler
     // Get active delivery for driver
     const delivery = await this.deliveriesService.findActiveForDriver(driverId);
 
-    // Get pending offers for driver (this would need to be implemented in OffersService)
-    const offers: any[] = []; // TODO: Implement pending offers query
+    // Get pending offers for driver
+    const allOffers = await this.offersService.getDriverOffers(driverId);
+    const pendingOffers = allOffers.filter(
+      (offer) => offer.status === "PENDING",
+    );
 
     return {
       delivery,
-      offers,
+      offers: pendingOffers,
     };
   }
 }
