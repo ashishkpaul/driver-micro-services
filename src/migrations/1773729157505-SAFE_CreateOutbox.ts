@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class SAFECreateOutbox1773729157505 implements MigrationInterface {
-  name = "SAFECreateOutbox1773729157505";
+export class SAFEAddOutboxTable1773729157505 implements MigrationInterface {
+  name = "SAFEAddOutboxTable1773729157505";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create outbox table for domain events

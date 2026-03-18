@@ -1,5 +1,3 @@
-#!/usr/bin/env ts-node
-
 import "dotenv/config";
 import dataSource from "../src/config/data-source";
 import { MIGRATION_ALIASES } from "./migration-aliases";
@@ -8,72 +6,60 @@ type MigrationRow = {
   name: string;
 };
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0;
+function normalize(name: string): string {
+  return name.replace(/_/g, "");
 }
 
-function hasLocalMigrationOrAlias(
-  migrationName: string,
-  localMigrationNames: Set<string>,
-): boolean {
-  if (localMigrationNames.has(migrationName)) {
-    return true;
-  }
+function matchesAlias(name: string, set: Set<string>): boolean {
+  const aliases = MIGRATION_ALIASES[name] || [];
 
-  const aliases = MIGRATION_ALIASES[migrationName] ?? [];
-  return aliases.some((alias) => localMigrationNames.has(alias));
+  return aliases.some((a) => set.has(normalize(a)));
 }
 
-async function detectDrift(): Promise<void> {
+async function checkDrift(): Promise<void> {
   await dataSource.initialize();
+
   try {
-    const pending = await dataSource.showMigrations();
-    const localMigrationNames = new Set(
-      dataSource.migrations
-        .map((m) => m.name)
-        .filter((name): name is string => isNonEmptyString(name)),
+    const executedRows: MigrationRow[] = await dataSource.query(
+      `SELECT name FROM _migrations ORDER BY id`,
     );
 
-    let executedMigrationNames = new Set<string>();
-    try {
-      const rows = (await dataSource.query(
-        'SELECT name FROM "_migrations" ORDER BY id ASC',
-      )) as MigrationRow[];
-      executedMigrationNames = new Set(rows.map((row) => row.name));
-    } catch {
-      // migrations table may not exist yet on a fresh database
-    }
+    const executed = executedRows.map((r) => normalize(r.name));
 
-    const missingLocally = [...executedMigrationNames].filter((name) => {
-      // Allow legacy migrations to be missing if environment variable is set
-      const allowLegacy = process.env.DB_DRIFT_ALLOW_LEGACY === "true";
-      if (allowLegacy && !hasLocalMigrationOrAlias(name, localMigrationNames)) {
-        // Check if this is a legacy migration (no prefix)
-        const isLegacy = !name.match(/^(SAFE_|DATA_|BREAKING_)/);
-        if (isLegacy) {
-          return false; // Don't report as missing
-        }
-      }
-      return !hasLocalMigrationOrAlias(name, localMigrationNames);
-    });
+    const code = dataSource.migrations.map((m: any) =>
+      normalize(m.name || m.constructor?.name),
+    );
 
-    if (!pending && !missingLocally.length) {
-      console.log(
-        "✅ db:drift - no pending migrations and no history drift detected",
-      );
+    const executedSet = new Set(executed);
+
+    const codeSet = new Set(code);
+
+    const missing = executed.filter(
+      (n) => !codeSet.has(n) && !matchesAlias(n, codeSet),
+    );
+
+    const pending = code.filter(
+      (n) => !executedSet.has(n) && !matchesAlias(n, executedSet),
+    );
+
+    if (!missing.length && !pending.length) {
+      console.log("✅ db:drift check passed");
+
       return;
     }
 
-    console.error("❌ db:drift detected");
-    if (pending) {
-      console.error("  - Pending migrations exist");
+    console.log("\n❌ db:drift detected");
+
+    if (pending.length) {
+      console.log("  - Pending migrations:");
+
+      pending.forEach((n) => console.log(`    • ${n}`));
     }
 
-    if (missingLocally.length) {
-      console.error("  - Executed migrations missing from codebase:");
-      for (const migrationName of missingLocally) {
-        console.error(`    • ${migrationName}`);
-      }
+    if (missing.length) {
+      console.log("  - Executed migrations missing from code:");
+
+      missing.forEach((n) => console.log(`    • ${n}`));
     }
 
     process.exit(1);
@@ -82,7 +68,4 @@ async function detectDrift(): Promise<void> {
   }
 }
 
-detectDrift().catch((error) => {
-  console.error("❌ db:drift failed:", error?.message || error);
-  process.exit(1);
-});
+checkDrift();
