@@ -10,6 +10,9 @@ import { Logger } from "winston";
 import { WinstonModule } from "nest-winston";
 import * as winston from "winston";
 import { IoAdapter } from "@nestjs/platform-socket.io";
+import { CorrelationInterceptor } from "./interceptors/correlation.interceptor";
+import { TracingInterceptor } from "./interceptors/tracing.interceptor";
+import { ApiResponseInterceptor } from "./interceptors/api-response.interceptor";
 
 async function bootstrap() {
   // Logger setup
@@ -66,6 +69,13 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
     }),
+  );
+
+  // Global interceptors
+  app.useGlobalInterceptors(
+    new CorrelationInterceptor(),
+    new TracingInterceptor(),
+    new ApiResponseInterceptor(),
   );
 
   const port = configService.get("PORT", 3001);

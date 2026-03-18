@@ -13,6 +13,7 @@ import {
   BadRequestException,
   UseGuards,
   Req,
+  ParseUUIDPipe,
 } from "@nestjs/common";
 import { Request } from "express";
 import { DriversService } from "./drivers.service";
@@ -46,14 +47,14 @@ export class DriversController {
   @Patch(":id/activate")
   @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
-  activate(@Param("id") id: string) {
+  activate(@Param("id", ParseUUIDPipe) id: string) {
     return this.driversService.setActive(id, true);
   }
 
   @Patch(":id/deactivate")
   @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
-  deactivate(@Param("id") id: string) {
+  deactivate(@Param("id", ParseUUIDPipe) id: string) {
     return this.driversService.setActive(id, false);
   }
 
@@ -61,7 +62,7 @@ export class DriversController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.ADMIN_DELETE_DRIVER)
-  remove(@Param("id") id: string) {
+  remove(@Param("id", ParseUUIDPipe) id: string) {
     return this.driversService.remove(id);
   }
 
@@ -85,22 +86,22 @@ export class DriversController {
     );
   }
 
-  @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.driversService.findOne(id);
-  }
-
   @Get("me")
   @UseGuards(AuthGuard("jwt"))
   getMe(@Req() req: Request & { user: any }) {
     return this.driversService.findById(req.user.driverId);
   }
 
+  @Get(":id")
+  findOne(@Param("id", ParseUUIDPipe) id: string) {
+    return this.driversService.findOne(id);
+  }
+
   @Patch(":id/location")
   @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.DRIVER_UPDATE_OWN_LOCATION)
   updateLocation(
-    @Param("id") id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: UpdateDriverLocationDto,
   ) {
     return this.driversService.updateLocation(id, dto.lat, dto.lon);
@@ -109,7 +110,10 @@ export class DriversController {
   @Patch(":id/status")
   @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.DRIVER_UPDATE_DELIVERY_STATUS)
-  updateStatus(@Param("id") id: string, @Body() dto: UpdateDriverStatusDto) {
+  updateStatus(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDriverStatusDto,
+  ) {
     return this.driversService.updateStatus(id, dto.status);
   }
 }

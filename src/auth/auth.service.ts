@@ -13,6 +13,7 @@ import { AdminLoginDto } from "../dto/admin.dto";
 import { Role } from "./roles.enum";
 import { GoogleAuthService } from "./google-auth.service";
 import { RolePermissions } from "./permissions";
+import { RedisService } from "../redis/redis.service";
 
 @Injectable()
 export class AuthService {
@@ -21,6 +22,7 @@ export class AuthService {
     private readonly driversService: DriversService,
     public readonly adminService: AdminService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -199,5 +201,57 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
       driver,
     };
+  }
+
+  /**
+   * Request Email OTP
+   */
+  async requestEmailOtp(email: string): Promise<void> {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit OTP
+
+    // Store in Redis with a 5-minute TTL
+    await this.redisService
+      .getClient()
+      .setex(`auth:otp:${email.toLowerCase()}`, 300, otp);
+
+    // TODO: Integrate actual email provider (SendGrid/AWS SES) here.
+    console.log(`[DEV MODE] OTP for ${email} is ${otp}`);
+  }
+
+  /**
+   * Verify Email OTP & Login
+   */
+  async verifyEmailOtp(email: string, otp: string) {
+    const normalizedEmail = email.toLowerCase();
+    const storedOtp = await this.redisService
+      .getClient()
+      .get(`auth:otp:${normalizedEmail}`);
+
+    if (!storedOtp || storedOtp !== otp) {
+      throw new UnauthorizedException("Invalid or expired OTP");
+    }
+
+    // Clean up OTP to prevent reuse
+    await this.redisService.getClient().del(`auth:otp:${normalizedEmail}`);
+
+    let driver = await this.driversService.findByGoogleSub(normalizedEmail); // Assuming you add findByEmail
+
+    if (!driver) {
+      // Create pending driver if they don't exist
+      driver = await this.driversService.createGooglePendingDriver({
+        name: "Driver",
+        email: normalizedEmail,
+        googleSub: normalizedEmail,
+      });
+    }
+
+    if (!driver.isActive) {
+      return {
+        status: "PENDING_APPROVAL",
+        driver: { id: driver.id, email: driver.email },
+      };
+    }
+
+    return this.login(driver);
   }
 }

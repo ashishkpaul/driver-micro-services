@@ -24,10 +24,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         };
       }
 
-      // Check if it's a driver token
-      if (payload.driverId) {
+      // ✅ FIX: Check explicit 'type' field instead of guessing
+      if (payload.type === "driver") {
         return {
-          driverId: payload.driverId,
+          driverId: payload.sub, // Fallback mapped mapping
           sub: payload.sub,
           type: "driver",
           role: payload.role || "DRIVER",
@@ -37,28 +37,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           status: payload.status,
           cityId: payload.cityId,
           zoneId: payload.zoneId,
-          deviceId: payload.deviceId,
         };
       }
 
-      // Check if it's an admin token
-      if (payload.userId && payload.role) {
-        const permissions =
-          RolePermissions[payload.role as keyof typeof RolePermissions] || [];
-
+      if (payload.type === "admin") {
         return {
-          userId: payload.userId,
-          email: payload.email,
-          role: payload.role,
-          cityId: payload.cityId,
+          userId: payload.sub, // Fallback mapped mapping
           sub: payload.sub,
           type: "admin",
-          permissions: payload.permissions || permissions,
+          role: payload.role,
+          email: payload.email,
+          permissions: payload.permissions,
           isActive: payload.isActive,
+          cityId: payload.cityId,
         };
       }
 
-      throw new UnauthorizedException("Invalid token payload");
+      throw new UnauthorizedException("Invalid token payload structure");
     } catch (error) {
       throw new UnauthorizedException(
         "Token validation failed: " + error.message,

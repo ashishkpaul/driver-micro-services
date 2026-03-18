@@ -4,6 +4,7 @@ import {
   Body,
   Req,
   ForbiddenException,
+  BadRequestException,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { AdminLoginDto } from "../dto/admin.dto";
@@ -99,6 +100,71 @@ export class AuthController {
         "DRIVER",
         result.driver.id,
         { email: result.driver.email, authProvider: "google" },
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * POST /auth/otp/request
+   *
+   * Request Email OTP:
+   * {
+   *   "email": "driver@example.com"
+   * }
+   */
+  @Post("otp/request")
+  async requestOtp(@Body() body: { email: string }) {
+    if (!body.email) {
+      throw new BadRequestException("Email is required");
+    }
+    await this.authService.requestEmailOtp(body.email);
+    return { message: "OTP sent successfully" }; // Handled by interceptor
+  }
+
+  /**
+   * POST /auth/otp/verify
+   *
+   * Verify Email OTP & Login:
+   * {
+   *   "email": "driver@example.com",
+   *   "otp": "123456"
+   * }
+   */
+  @Post("otp/verify")
+  async verifyOtp(
+    @Body() body: { email: string; otp: string },
+    @Req() request: Request,
+  ) {
+    if (!body.email || !body.otp) {
+      throw new BadRequestException("Email and OTP are required");
+    }
+
+    const result = await this.authService.verifyEmailOtp(body.email, body.otp);
+
+    // Audit log
+    if ("status" in result && result.status === "PENDING_APPROVAL") {
+      await this.auditService.logFromRequest(
+        request,
+        "DRIVER_EMAIL_OTP_LOGIN_PENDING",
+        "DRIVER",
+        result.driver.id,
+        {
+          email: "email" in result.driver ? result.driver.email : undefined,
+          status: "PENDING_APPROVAL",
+        },
+      );
+    } else {
+      await this.auditService.logFromRequest(
+        request,
+        "DRIVER_EMAIL_OTP_LOGIN",
+        "DRIVER",
+        result.driver.id,
+        {
+          email: "email" in result.driver ? result.driver.email : undefined,
+          authProvider: "email_otp",
+        },
       );
     }
 

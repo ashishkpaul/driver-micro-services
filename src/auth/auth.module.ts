@@ -1,6 +1,7 @@
 import { Module, MiddlewareConsumer } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
+import { RedisModule } from "../redis/redis.module";
 import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
 import { JwtStrategy } from "./jwt.strategy";
@@ -19,6 +20,7 @@ import { AuthorizationModule } from "../authorization/authorization.module";
       secret: process.env.JWT_SECRET || "driver-service-secret",
       signOptions: { expiresIn: "24h" },
     }),
+    RedisModule,
     DriversModule,
     AdminModule,
     AuthorizationModule,
