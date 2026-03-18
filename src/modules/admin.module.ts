@@ -11,6 +11,7 @@ import { AuditService } from "../services/audit.service";
 import { AdminController } from "../controllers/admin.controller";
 import { AuditController } from "../controllers/audit.controller";
 import { DriverStatusController } from "../controllers/driver-status.controller";
+import { DriverAdminApplicationService } from "../application/driver-admin.application";
 import { AuditLoggingInterceptor } from "../interceptors/audit-logging.interceptor";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { DriversModule } from "../drivers/drivers.module";
@@ -24,6 +25,7 @@ import { DriversModule } from "../drivers/drivers.module";
     AdminService,
     PasswordService,
     AuditService,
+    DriverAdminApplicationService,
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditLoggingInterceptor,

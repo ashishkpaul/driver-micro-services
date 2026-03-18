@@ -5,11 +5,13 @@ import {
   Logger,
 } from "@nestjs/common";
 import Redis from "ioredis";
+import { createBreaker } from "./redis.circuit";
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private redis!: Redis;
+  private breaker: any;
 
   // Redis keys
   private readonly GEO_KEY = "drivers:geo";
@@ -26,6 +28,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       enableReadyCheck: true,
       lazyConnect: true,
     });
+
+    this.breaker = createBreaker();
 
     this.redis.on("connect", () => {
       this.logger.log("Redis connected");
@@ -71,7 +75,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.hset(this.STATUS_KEY, driverId, "AVAILABLE");
     pipeline.set(`${this.ONLINE_KEY_PREFIX}${driverId}`, "1", "EX", ttlSeconds);
 
-    await pipeline.exec();
+    await this.breaker.fire(() => pipeline.exec());
   }
 
   /**
@@ -85,7 +89,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.hset(this.STATUS_KEY, driverId, "BUSY");
     pipeline.del(`${this.ONLINE_KEY_PREFIX}${driverId}`);
 
-    await pipeline.exec();
+    await this.breaker.fire(() => pipeline.exec());
   }
 
   /**
@@ -99,7 +103,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.hset(this.STATUS_KEY, driverId, "OFFLINE");
     pipeline.del(`${this.ONLINE_KEY_PREFIX}${driverId}`);
 
-    await pipeline.exec();
+    await this.breaker.fire(() => pipeline.exec());
   }
 
   /**
@@ -132,7 +136,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       pipeline.del(`${this.ONLINE_KEY_PREFIX}${driverId}`);
     }
 
-    await pipeline.exec();
+    await this.breaker.fire(() => pipeline.exec());
   }
 
   /**
@@ -153,18 +157,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const safeRadiusKm = Math.min(radiusKm, 100);
 
     // GEOSEARCH returns: [member, distance]
-    const results = (await this.redis.call(
-      "GEOSEARCH",
-      this.GEO_KEY,
-      "FROMLONLAT",
-      lon,
-      lat,
-      "BYRADIUS",
-      safeRadiusKm,
-      "km",
-      "WITHDIST",
-      "COUNT",
-      limit,
+    const results = (await this.breaker.fire(() =>
+      this.redis.call(
+        "GEOSEARCH",
+        this.GEO_KEY,
+        "FROMLONLAT",
+        lon,
+        lat,
+        "BYRADIUS",
+        safeRadiusKm,
+        "km",
+        "WITHDIST",
+        "COUNT",
+        limit,
+      ),
     )) as [string, string][];
 
     if (!results || results.length === 0) {
@@ -180,7 +186,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       pipeline.exists(`${this.ONLINE_KEY_PREFIX}${driverId}`);
     }
 
-    const responses = await pipeline.exec();
+    const responses = await this.breaker.fire(() => pipeline.exec());
     const output: {
       driverId: string;
       distanceKm: number;
@@ -220,7 +226,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
   async ping(): Promise<boolean> {
     try {
-      const res = await this.redis.ping();
+      const res = await this.breaker.fire(() => this.redis.ping());
       return res === "PONG";
     } catch {
       return false;

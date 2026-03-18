@@ -17,7 +17,7 @@ export class OutboxService {
   ) {}
 
   async publish(
-    manager: EntityManager,
+    manager: EntityManager | null,
     eventType: VersionedEventType,
     payload: any,
     version: EventVersion = 1,
@@ -31,9 +31,13 @@ export class OutboxService {
     const idempotencyKey = this.generateIdempotencyKey(eventType, payload);
 
     // Check for existing event with same idempotency key
-    const existingEvent = await manager.findOne(OutboxEvent, {
-      where: { idempotencyKey },
-    });
+    const existingEvent = manager
+      ? await manager.findOne(OutboxEvent, {
+          where: { idempotencyKey },
+        })
+      : await this.outboxRepository.findOne({
+          where: { idempotencyKey },
+        });
 
     if (existingEvent) {
       this.logger.warn(
@@ -42,15 +46,27 @@ export class OutboxService {
       return;
     }
 
-    await manager.save(OutboxEvent, {
-      eventType,
-      payload,
-      status: OutboxStatus.PENDING,
-      retryCount: 0,
-      createdAt: new Date(),
-      idempotencyKey,
-      version,
-    });
+    if (manager) {
+      await manager.save(OutboxEvent, {
+        eventType,
+        payload,
+        status: OutboxStatus.PENDING,
+        retryCount: 0,
+        createdAt: new Date(),
+        idempotencyKey,
+        version,
+      });
+    } else {
+      await this.outboxRepository.save({
+        eventType,
+        payload,
+        status: OutboxStatus.PENDING,
+        retryCount: 0,
+        createdAt: new Date(),
+        idempotencyKey,
+        version,
+      });
+    }
 
     this.logger.log(
       `Outbox event published: ${eventType} (v${version}) with idempotency key: ${idempotencyKey}`,

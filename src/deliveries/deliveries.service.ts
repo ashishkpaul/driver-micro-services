@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, DataSource, EntityManager } from "typeorm";
 import { Delivery } from "./entities/delivery.entity";
 import { DeliveryEvent } from "./entities/delivery-event.entity";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
@@ -14,6 +14,8 @@ import { WebhooksService } from "../webhooks/webhooks.service";
 import { DeliveryEventsNotifier } from "./delivery-events.notifier";
 import { DeliveryStateMachine } from "./delivery-state-machine.service";
 import { AuthorizationActor } from "../authorization/authorization.types";
+import { OutboxService } from "../domain-events/outbox.service";
+import { VersionedEventType } from "../domain-events/outbox.entity";
 
 import {
   DeliveryAssignedDto,
@@ -42,6 +44,8 @@ export class DeliveriesService {
     private readonly webhooksService: WebhooksService,
     private readonly notifier: DeliveryEventsNotifier,
     private readonly deliveryStateMachine: DeliveryStateMachine,
+    private readonly dataSource: DataSource,
+    private readonly outbox: OutboxService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -116,37 +120,46 @@ export class DeliveriesService {
     assignmentId: string,
     actor?: AuthorizationActor,
   ): Promise<Delivery> {
-    const delivery = await this.findOne(deliveryId);
+    return this.dataSource.transaction(async (manager: EntityManager) => {
+      const delivery = await manager.findOne(Delivery, {
+        where: { id: deliveryId },
+        lock: { mode: "pessimistic_write" },
+      });
 
-    delivery.driverId = driverId;
-    delivery.status = "ASSIGNED";
-    delivery.assignedAt = new Date();
-    this.resetOtpState(delivery);
-    delivery.deliveryOtp = this.generateOtpCode();
+      if (!delivery) {
+        throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
+      }
 
-    await this.deliveryRepository.save(delivery);
+      delivery.driverId = driverId;
+      delivery.status = "ASSIGNED";
+      delivery.assignedAt = new Date();
+      this.resetOtpState(delivery);
+      delivery.deliveryOtp = this.generateOtpCode();
 
-    await this.createEvent({
-      deliveryId: delivery.id,
-      sellerOrderId: delivery.sellerOrderId,
-      eventType: "ASSIGNED",
-      metadata: {
+      await manager.save(delivery);
+
+      await this.createEvent(manager, {
+        deliveryId: delivery.id,
+        sellerOrderId: delivery.sellerOrderId,
+        eventType: "ASSIGNED",
+        metadata: {
+          driverId,
+          assignmentId,
+          deliveryOtpGenerated: true,
+        },
+      });
+
+      // Emit ASSIGNED to Vendure via Outbox
+      await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
+        sellerOrderId: delivery.sellerOrderId,
+        channelId: delivery.channelId,
         driverId,
         assignmentId,
-        deliveryOtpGenerated: true,
-      },
-    });
+        assignedAt: delivery.assignedAt.toISOString(),
+      });
 
-    // Emit ASSIGNED to Vendure (allowed)
-    await this.emitToVendure("ASSIGNED", {
-      sellerOrderId: delivery.sellerOrderId,
-      channelId: delivery.channelId,
-      driverId,
-      assignmentId,
-      assignedAt: delivery.assignedAt.toISOString(),
+      return delivery;
     });
-
-    return delivery;
   }
 
   // ---------------------------------------------------------------------------
@@ -182,7 +195,7 @@ export class DeliveriesService {
     this.resetOtpState(delivery);
     await this.deliveryRepository.save(delivery);
 
-    await this.createEvent({
+    await this.deliveryEventRepository.save({
       deliveryId: delivery.id,
       sellerOrderId: delivery.sellerOrderId,
       eventType: "ASSIGNED",
@@ -198,48 +211,57 @@ export class DeliveriesService {
     };
   }
 
-  async verifyDeliveryOtp(
+  async verifyOtp(
     deliveryId: string,
     otp: string,
     proofUrl?: string,
     actor?: AuthorizationActor,
   ): Promise<Delivery> {
-    const delivery = await this.findOne(deliveryId);
+    return this.dataSource.transaction(async (manager: EntityManager) => {
+      const delivery = await manager.findOne(Delivery, {
+        where: { id: deliveryId },
+        lock: { mode: "pessimistic_write" },
+      });
 
-    if (!delivery.deliveryOtp) {
-      throw new BadRequestException("No OTP is active for this delivery");
-    }
+      if (!delivery) {
+        throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
+      }
 
-    if (delivery.otpLockedUntil && delivery.otpLockedUntil > new Date()) {
-      throw new BadRequestException(
-        "OTP locked due to failed attempts. Please retry later.",
-      );
-    }
+      if (!delivery.deliveryOtp) {
+        throw new BadRequestException("No OTP is active for this delivery");
+      }
 
-    if (delivery.deliveryOtp !== otp) {
-      delivery.otpAttempts = (delivery.otpAttempts || 0) + 1;
-      if (delivery.otpAttempts >= this.OTP_MAX_ATTEMPTS) {
-        delivery.otpLockedUntil = new Date(
-          Date.now() + this.OTP_LOCK_DURATION_MS,
+      if (delivery.otpLockedUntil && delivery.otpLockedUntil > new Date()) {
+        throw new BadRequestException(
+          "OTP locked due to failed attempts. Please retry later.",
         );
       }
-      await this.deliveryRepository.save(delivery);
-      throw new BadRequestException("Invalid OTP");
-    }
 
-    this.resetOtpState(delivery);
-    delivery.deliveryOtp = undefined;
-    await this.deliveryRepository.save(delivery);
+      if (delivery.deliveryOtp !== otp) {
+        delivery.otpAttempts = (delivery.otpAttempts || 0) + 1;
+        if (delivery.otpAttempts >= this.OTP_MAX_ATTEMPTS) {
+          delivery.otpLockedUntil = new Date(
+            Date.now() + this.OTP_LOCK_DURATION_MS,
+          );
+        }
+        await manager.save(delivery);
+        throw new BadRequestException("Invalid OTP");
+      }
 
-    return this.updateStatusInternal(
-      deliveryId,
-      {
-        status: "DELIVERED",
-        proofUrl,
-      },
-      actor,
-      true,
-    );
+      this.resetOtpState(delivery);
+      delivery.deliveryOtp = undefined;
+      await manager.save(delivery);
+
+      return this.updateStatusInternal(
+        deliveryId,
+        {
+          status: "DELIVERED",
+          proofUrl,
+        },
+        actor,
+        true,
+      );
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -252,87 +274,100 @@ export class DeliveriesService {
     actor: AuthorizationActor | undefined,
     skipOtpCheck: boolean,
   ): Promise<Delivery> {
-    const delivery = await this.findOne(deliveryId);
-
-    if (
-      updateDto.status === "DELIVERED" &&
-      !skipOtpCheck &&
-      Boolean(delivery.deliveryOtp)
-    ) {
-      throw new BadRequestException(
-        "OTP verification required before marking as DELIVERED",
-      );
-    }
-
-    delivery.status = updateDto.status;
-
-    switch (updateDto.status) {
-      case "PICKED_UP":
-        delivery.pickedUpAt = new Date();
-        delivery.pickupProofUrl = updateDto.proofUrl;
-        break;
-
-      case "DELIVERED":
-        delivery.deliveredAt = new Date();
-        delivery.deliveryProofUrl = updateDto.proofUrl;
-        delivery.slaBreachAt = undefined;
-        break;
-
-      case "FAILED":
-        delivery.failedAt = new Date();
-        delivery.failureCode = updateDto.failureCode;
-        delivery.failureReason = updateDto.failureReason;
-        break;
-
-      case "CANCELLED":
-        delivery.status = "CANCELLED";
-        delivery.failedAt = new Date();
-        delivery.failureCode = updateDto.failureCode || "CANCELLED";
-        delivery.failureReason = updateDto.failureReason || "Cancelled";
-        break;
-    }
-
-    // 1️⃣ Persist delivery first (source of truth)
-    await this.deliveryRepository.save(delivery);
-
-    // 2️⃣ Create domain event (audit + websocket trigger source)
-    const event = await this.createEvent({
-      deliveryId: delivery.id,
-      sellerOrderId: delivery.sellerOrderId,
-      eventType: updateDto.status,
-      proofUrl: updateDto.proofUrl,
-      failureCode: updateDto.failureCode,
-      failureReason: updateDto.failureReason,
-    });
-
-    // 🔔 3️⃣ Notify WebSocket layer (THIS WAS MISSING BEFORE)
-    await this.notifier.notify(event, delivery);
-
-    // 4️⃣ Emit to Vendure ONLY if the status is allowed
-    if (this.isVendureStatus(updateDto.status)) {
-      await this.emitToVendure(updateDto.status, {
-        sellerOrderId: delivery.sellerOrderId,
-        channelId: delivery.channelId,
-        pickupProofUrl: delivery.pickupProofUrl,
-        deliveryProofUrl: delivery.deliveryProofUrl,
-        pickedUpAt: delivery.pickedUpAt?.toISOString(),
-        deliveredAt: delivery.deliveredAt?.toISOString(),
-        failure:
-          updateDto.status === "FAILED"
-            ? {
-                code: updateDto.failureCode || "UNKNOWN",
-                reason: updateDto.failureReason || "Unknown failure",
-                occurredAt: delivery.failedAt?.toISOString(),
-              }
-            : undefined,
+    return this.dataSource.transaction(async (manager: EntityManager) => {
+      const delivery = await manager.findOne(Delivery, {
+        where: { id: deliveryId },
+        lock: { mode: "pessimistic_write" },
       });
-    }
 
-    this.logger.log(
-      `Delivery ${deliveryId} status updated to ${updateDto.status}`,
-    );
+      if (!delivery) {
+        throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
+      }
 
-    return delivery;
+      if (
+        updateDto.status === "DELIVERED" &&
+        !skipOtpCheck &&
+        Boolean(delivery.deliveryOtp)
+      ) {
+        throw new BadRequestException(
+          "OTP verification required before marking as DELIVERED",
+        );
+      }
+
+      delivery.status = updateDto.status;
+
+      switch (updateDto.status) {
+        case "PICKED_UP":
+          delivery.pickedUpAt = new Date();
+          delivery.pickupProofUrl = updateDto.proofUrl;
+          break;
+
+        case "DELIVERED":
+          delivery.deliveredAt = new Date();
+          delivery.deliveryProofUrl = updateDto.proofUrl;
+          delivery.slaBreachAt = undefined;
+          break;
+
+        case "FAILED":
+          delivery.failedAt = new Date();
+          delivery.failureCode = updateDto.failureCode;
+          delivery.failureReason = updateDto.failureReason;
+          break;
+
+        case "CANCELLED":
+          delivery.status = "CANCELLED";
+          delivery.failedAt = new Date();
+          delivery.failureCode = updateDto.failureCode || "CANCELLED";
+          delivery.failureReason = updateDto.failureReason || "Cancelled";
+          break;
+      }
+
+      // 1️⃣ Persist delivery first (source of truth)
+      await manager.save(delivery);
+
+      // 2️⃣ Create domain event (audit + websocket trigger source)
+      const event = await this.createEvent(manager, {
+        deliveryId: delivery.id,
+        sellerOrderId: delivery.sellerOrderId,
+        eventType: updateDto.status,
+        proofUrl: updateDto.proofUrl,
+        failureCode: updateDto.failureCode,
+        failureReason: updateDto.failureReason,
+      });
+
+      // 🔔 3️⃣ Notify WebSocket layer (THIS WAS MISSING BEFORE)
+      await this.notifier.notify(event, delivery);
+
+      // 4️⃣ Emit to Vendure via Outbox ONLY if the status is allowed
+      if (this.isVendureStatus(updateDto.status)) {
+        await this.outbox.publish(
+          manager,
+          this.getVendureEventType(updateDto.status),
+          {
+            sellerOrderId: delivery.sellerOrderId,
+            channelId: delivery.channelId,
+            pickupProofUrl: delivery.pickupProofUrl,
+            deliveryProofUrl: delivery.deliveryProofUrl,
+            pickedUpAt: delivery.pickedUpAt?.toISOString(),
+            deliveredAt: delivery.deliveredAt?.toISOString(),
+            failure:
+              updateDto.status === "FAILED"
+                ? {
+                    code: updateDto.failureCode || "UNKNOWN",
+                    reason: updateDto.failureReason || "Unknown failure",
+                    occurredAt: delivery.failedAt?.toISOString(),
+                  }
+                : undefined,
+          },
+        );
+      }
+
+      this.logger.log(
+        `Delivery ${deliveryId} status updated to ${updateDto.status}`,
+      );
+
+      return delivery;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -389,42 +424,25 @@ export class DeliveriesService {
     );
   }
 
-  private async emitToVendure(
-    status: VendureStatus,
-    data: unknown,
-  ): Promise<void> {
+  private getVendureEventType(status: VendureStatus): VersionedEventType {
     switch (status) {
       case "ASSIGNED":
-        await this.webhooksService.emitDeliveryAssigned(
-          data as DeliveryAssignedDto,
-        );
-        break;
-
+        return "DELIVERY_ASSIGNED_V1";
       case "PICKED_UP":
-        await this.webhooksService.emitDeliveryPickedUp(
-          data as DeliveryPickedUpDto,
-        );
-        break;
-
+        return "DELIVERY_PICKUP_CONFIRMED_V1";
       case "DELIVERED":
-        await this.webhooksService.emitDeliveryDelivered(
-          data as DeliveryDeliveredDto,
-        );
-        break;
-
+        return "DELIVERY_DROPOFF_CONFIRMED_V1";
       case "FAILED":
-        await this.webhooksService.emitDeliveryFailed(
-          data as DeliveryFailedDto,
-        );
-        break;
+        return "DELIVERY_FAILED_V1";
     }
   }
 
   private async createEvent(
+    manager: EntityManager,
     eventData: Partial<DeliveryEvent>,
   ): Promise<DeliveryEvent> {
     const event = this.deliveryEventRepository.create(eventData);
-    return await this.deliveryEventRepository.save(event);
+    return await manager.save(event);
   }
 
   private generateOtpCode(): string {

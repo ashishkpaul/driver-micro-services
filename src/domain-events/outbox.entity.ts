@@ -56,7 +56,10 @@ export type VersionedEventType =
   | "DELIVERY_PRIORITY_CHANGED_V3"
   | "DELIVERY_ROUTE_UPDATED_V1"
   | "DELIVERY_ROUTE_UPDATED_V2"
-  | "DELIVERY_ROUTE_UPDATED_V3";
+  | "DELIVERY_ROUTE_UPDATED_V3"
+  | "PROOF_ACCEPTED_V1"
+  | "PROOF_ACCEPTED_V2"
+  | "PROOF_ACCEPTED_V3";
 
 @Entity("outbox")
 export class OutboxEvent {

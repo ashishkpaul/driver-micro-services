@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, In, LessThan, DataSource } from "typeorm";
+import { Cron } from "@nestjs/schedule";
 import { RedisService } from "../redis/redis.service";
 
 import { DriverOffer } from "./entities/driver-offer.entity";
@@ -262,6 +263,7 @@ export class OffersService {
     });
   }
 
+  @Cron("*/10 * * * * *")
   async expireOffers(): Promise<void> {
     const expiredOffers = await this.driverOfferRepository.find({
       where: {

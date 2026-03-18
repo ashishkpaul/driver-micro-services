@@ -14,10 +14,9 @@ import { Server, Socket } from "socket.io";
 
 import { WebSocketJwtGuard } from "./websocket.guard";
 import { WebSocketService } from "./websocket.service";
+import { DriverRealtimeService } from "../realtime/driver-realtime.service";
 import { DriversService } from "../drivers/drivers.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
-import { OffersService } from "../offers/offers.service";
-import { DriverStateService } from "../drivers/driver-state.service";
 
 import {
   LocationUpdateEvent,
@@ -49,12 +48,10 @@ export class WebSocketGatewayHandler
 
   constructor(
     private readonly wsService: WebSocketService,
+    private readonly driverRealtime: DriverRealtimeService,
     private readonly driversService: DriversService,
     private readonly deliveriesService: DeliveriesService,
-    private readonly offersService: OffersService,
-    private readonly driverStateService: DriverStateService,
     private readonly metrics: WebSocketMetricsService,
-    private readonly redisService: RedisService,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -133,7 +130,7 @@ export class WebSocketGatewayHandler
       // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
       this.metrics.messageReceived(driverId).catch(() => {});
     }
-    return handleLocationUpdate(client, data, this.driversService);
+    return this.driverRealtime.handleLocation(driverId, data);
   }
 
   @SubscribeMessage("PROOF_UPLOADED_V1")
@@ -146,6 +143,8 @@ export class WebSocketGatewayHandler
       // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
       this.metrics.messageReceived(driverId).catch(() => {});
     }
+    // Note: Proof handling still uses the existing handler for now
+    // This could be moved to DriverRealtimeService in the future
     return handleProofUploaded(client, data, this.deliveriesService);
   }
 
@@ -159,7 +158,10 @@ export class WebSocketGatewayHandler
       // Fire-and-forget metrics to prevent Redis stalls from blocking message handling
       this.metrics.messageReceived(driverId).catch(() => {});
     }
-    return handleDriverStatus(client, data, this.driversService);
+    return this.driverRealtime.handleStatus(
+      driverId,
+      data.status as DriverStatus,
+    );
   }
 
   @SubscribeMessage("PING_V1")
@@ -188,12 +190,7 @@ export class WebSocketGatewayHandler
     }
 
     // Process heartbeat and return ACK
-    return handleDriverHeartbeat(
-      client,
-      data,
-      this.redisService,
-      this.driversService,
-    );
+    return this.driverRealtime.handleHeartbeat(driverId, data);
   }
 
   @SubscribeMessage("SYNC_STATE_V1")
@@ -204,11 +201,7 @@ export class WebSocketGatewayHandler
       this.metrics.messageReceived(driverId).catch(() => {});
     }
 
-    // Use DriverStateService for clean state retrieval
-    return this.driverStateService.getState(
-      driverId,
-      this.deliveriesService,
-      this.offersService,
-    );
+    // Use DriverRealtimeService for clean state retrieval
+    return this.driverRealtime.getDriverState(driverId);
   }
 }

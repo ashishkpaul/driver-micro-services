@@ -14,16 +14,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
-// Define AuthPayload interface locally since it's not exported from auth.service
-interface AuthPayload {
-  userId?: string;
-  driverId?: string;
-  email?: string;
-  role?: string;
-  cityId?: string;
-  sub?: string;
-  type?: string;
-}
+import { AuthenticatedUser } from "../auth/auth.types";
 
 @Controller("admin/audit-logs")
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
@@ -36,7 +27,7 @@ export class AuditController {
   @Get("my-logs")
   @RequirePermissions(Permission.ADMIN_READ_AUDIT_OWN)
   async getMyLogs(
-    @Req() request: Request & { user: AuthPayload },
+    @Req() request: Request & { user: AuthenticatedUser },
     @Query("skip") skip = 0,
     @Query("take") take = 50,
     @Query("action") action?: string,
@@ -66,7 +57,7 @@ export class AuditController {
   @Get("by-action/:action")
   @RequirePermissions(Permission.SUPER_ADMIN_READ_AUDIT_ANY)
   async getByAction(
-    @Req() request: Request & { user: AuthPayload },
+    @Req() request: Request & { user: AuthenticatedUser },
     @Param("action") action: string,
     @Query("skip") skip = 0,
     @Query("take") take = 50,
@@ -89,7 +80,7 @@ export class AuditController {
   @Get("by-resource/:resourceType/:resourceId")
   @RequirePermissions(Permission.SUPER_ADMIN_READ_AUDIT_ANY)
   async getByResource(
-    @Req() request: Request & { user: AuthPayload },
+    @Req() request: Request & { user: AuthenticatedUser },
     @Param("resourceType") resourceType: string,
     @Param("resourceId", ParseUUIDPipe) resourceId: string,
     @Query("skip") skip = 0,
@@ -109,7 +100,7 @@ export class AuditController {
   @Get("by-date-range")
   @RequirePermissions(Permission.SUPER_ADMIN_READ_AUDIT_ANY)
   async getByDateRange(
-    @Req() request: Request & { user: AuthPayload },
+    @Req() request: Request & { user: AuthenticatedUser },
     @Query("startDate") startDate: string,
     @Query("endDate") endDate: string,
     @Query("skip") skip = 0,
@@ -142,7 +133,7 @@ export class AuditController {
    */
   @Get("stats")
   @RequirePermissions(Permission.SUPER_ADMIN_READ_SYSTEM_STATS)
-  async getStats(@Req() request: Request & { user: AuthPayload }) {
+  async getStats(@Req() request: Request & { user: AuthenticatedUser }) {
     return this.auditService.getStats();
   }
 
@@ -152,7 +143,7 @@ export class AuditController {
   @Get("cleanup")
   @RequirePermissions(Permission.SUPER_ADMIN_READ_SYSTEM_STATS)
   async cleanupOldLogs(
-    @Req() request: Request & { user: AuthPayload },
+    @Req() request: Request & { user: AuthenticatedUser },
     @Query("retentionDays") retentionDays = 90,
   ) {
     const deletedCount = await this.auditService.cleanupOldLogs(retentionDays);

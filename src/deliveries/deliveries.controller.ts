@@ -79,7 +79,7 @@ export class DeliveriesController {
     @Param("id", ParseUUIDPipe) id: string,
     @Body() verifyDeliveryOtpDto: VerifyDeliveryOtpDto,
   ) {
-    return this.deliveriesService.verifyDeliveryOtp(
+    return this.deliveriesService.verifyOtp(
       id,
       verifyDeliveryOtpDto.otp,
       verifyDeliveryOtpDto.proofUrl,
