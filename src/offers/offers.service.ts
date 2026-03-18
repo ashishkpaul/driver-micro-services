@@ -136,7 +136,7 @@ export class OffersService {
     const acceptedAt = new Date(acceptedAtStr);
 
     return this.dataSource.transaction(async (manager) => {
-      // Lock offer row for update to prevent race conditions
+      // 1. Lock the offer row using pessimistic write
       const offer = await manager.findOne(DriverOffer, {
         where: { id: offerId },
         lock: { mode: "pessimistic_write" },
@@ -151,11 +151,11 @@ export class OffersService {
       }
 
       if (offer.status !== "PENDING") {
-        throw new ConflictException("Offer already processed");
+        throw new BadRequestException("Offer is no longer available");
       }
 
       if (offer.expiresAt < new Date()) {
-        throw new ConflictException("Offer has expired");
+        throw new BadRequestException("Offer has expired");
       }
 
       const capability =
@@ -163,7 +163,7 @@ export class OffersService {
           driverId,
         );
       if (!capability.canAccept) {
-        throw new ConflictException(
+        throw new BadRequestException(
           `Driver ${driverId} cannot accept offer: ${capability.reason || "CAPABILITY_REJECTED"}`,
         );
       }
@@ -171,11 +171,25 @@ export class OffersService {
       // Calculate response time
       const responseTimeMs = acceptedAt.getTime() - offer.createdAt.getTime();
 
-      // Update offer status
+      // 2. Mark offer as accepted
       offer.status = "ACCEPTED";
       offer.acceptedAt = acceptedAt;
       offer.driverResponseTimeMs = responseTimeMs;
       await manager.save(offer);
+
+      // 3. Mark all competing offers for this delivery as REJECTED
+      await manager.update(
+        DriverOffer,
+        { deliveryId: offer.deliveryId, status: "PENDING" },
+        { status: "REJECTED" },
+      );
+
+      // 4. Assign delivery to driver
+      await manager.update(
+        Delivery,
+        { id: offer.deliveryId },
+        { driverId: driverId, status: "ASSIGNED" },
+      );
 
       // Create assignment
       const assignment = this.assignmentRepository.create({

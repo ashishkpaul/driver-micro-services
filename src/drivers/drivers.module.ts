@@ -5,11 +5,12 @@ import { DriversService } from "./drivers.service";
 import { DriversController } from "./drivers.controller";
 import { RedisModule } from "../redis/redis.module";
 import { DriverCapabilityService } from "./driver-capability.service";
+import { DriverStateService } from "./driver-state.service";
 
 @Module({
   imports: [TypeOrmModule.forFeature([Driver]), RedisModule],
   controllers: [DriversController],
-  providers: [DriversService, DriverCapabilityService],
-  exports: [DriversService, DriverCapabilityService],
+  providers: [DriversService, DriverCapabilityService, DriverStateService],
+  exports: [DriversService, DriverCapabilityService, DriverStateService],
 })
 export class DriversModule {}

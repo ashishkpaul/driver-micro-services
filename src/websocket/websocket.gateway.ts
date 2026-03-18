@@ -17,6 +17,7 @@ import { WebSocketService } from "./websocket.service";
 import { DriversService } from "../drivers/drivers.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
 import { OffersService } from "../offers/offers.service";
+import { DriverStateService } from "../drivers/driver-state.service";
 
 import {
   LocationUpdateEvent,
@@ -51,6 +52,7 @@ export class WebSocketGatewayHandler
     private readonly driversService: DriversService,
     private readonly deliveriesService: DeliveriesService,
     private readonly offersService: OffersService,
+    private readonly driverStateService: DriverStateService,
     private readonly metrics: WebSocketMetricsService,
     private readonly redisService: RedisService,
     private readonly jwtService: JwtService,
@@ -202,18 +204,11 @@ export class WebSocketGatewayHandler
       this.metrics.messageReceived(driverId).catch(() => {});
     }
 
-    // Get active delivery for driver
-    const delivery = await this.deliveriesService.findActiveForDriver(driverId);
-
-    // Get pending offers for driver
-    const allOffers = await this.offersService.getDriverOffers(driverId);
-    const pendingOffers = allOffers.filter(
-      (offer) => offer.status === "PENDING",
+    // Use DriverStateService for clean state retrieval
+    return this.driverStateService.getState(
+      driverId,
+      this.deliveriesService,
+      this.offersService,
     );
-
-    return {
-      delivery,
-      offers: pendingOffers,
-    };
   }
 }
