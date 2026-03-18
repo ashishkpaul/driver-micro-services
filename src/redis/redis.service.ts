@@ -12,6 +12,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private redis!: Redis;
   private breaker: any;
+  private isHealthy = true;
 
   // Redis keys
   private readonly GEO_KEY = "drivers:geo";
@@ -29,7 +30,30 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       lazyConnect: true,
     });
 
-    this.breaker = createBreaker();
+    try {
+      this.breaker = createBreaker();
+
+      // Set up circuit breaker event listeners
+      this.breaker.on("open", () => {
+        this.isHealthy = false;
+        this.logger.warn("Redis circuit breaker OPEN - Redis unavailable");
+      });
+
+      this.breaker.on("close", () => {
+        this.isHealthy = true;
+        this.logger.log("Redis circuit breaker CLOSED - Redis recovered");
+      });
+
+      this.breaker.on("halfOpen", () => {
+        this.logger.log("Redis circuit breaker HALF-OPEN - Testing recovery");
+      });
+    } catch (err) {
+      this.logger.error(
+        "Circuit breaker initialization failed, Redis disabled",
+        err,
+      );
+      this.isHealthy = false;
+    }
 
     this.redis.on("connect", () => {
       this.logger.log("Redis connected");
@@ -75,7 +99,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.hset(this.STATUS_KEY, driverId, "AVAILABLE");
     pipeline.set(`${this.ONLINE_KEY_PREFIX}${driverId}`, "1", "EX", ttlSeconds);
 
-    await this.breaker.fire(() => pipeline.exec());
+    await this.safeExecute(() => pipeline.exec());
   }
 
   /**
@@ -89,7 +113,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.hset(this.STATUS_KEY, driverId, "BUSY");
     pipeline.del(`${this.ONLINE_KEY_PREFIX}${driverId}`);
 
-    await this.breaker.fire(() => pipeline.exec());
+    await this.safeExecute(() => pipeline.exec());
   }
 
   /**
@@ -103,7 +127,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     pipeline.hset(this.STATUS_KEY, driverId, "OFFLINE");
     pipeline.del(`${this.ONLINE_KEY_PREFIX}${driverId}`);
 
-    await this.breaker.fire(() => pipeline.exec());
+    await this.safeExecute(() => pipeline.exec());
   }
 
   /**
@@ -136,7 +160,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       pipeline.del(`${this.ONLINE_KEY_PREFIX}${driverId}`);
     }
 
-    await this.breaker.fire(() => pipeline.exec());
+    await this.safeExecute(() => pipeline.exec());
   }
 
   /**
@@ -157,7 +181,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const safeRadiusKm = Math.min(radiusKm, 100);
 
     // GEOSEARCH returns: [member, distance]
-    const results = (await this.breaker.fire(() =>
+    const results = (await this.safeExecute(() =>
       this.redis.call(
         "GEOSEARCH",
         this.GEO_KEY,
@@ -186,7 +210,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       pipeline.exists(`${this.ONLINE_KEY_PREFIX}${driverId}`);
     }
 
-    const responses = await this.breaker.fire(() => pipeline.exec());
+    const responses = await this.safeExecute(() => pipeline.exec());
     const output: {
       driverId: string;
       distanceKm: number;
@@ -226,7 +250,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
   async ping(): Promise<boolean> {
     try {
-      const res = await this.breaker.fire(() => this.redis.ping());
+      const res = await this.safeExecute(() => this.redis.ping());
       return res === "PONG";
     } catch {
       return false;
@@ -234,9 +258,55 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Safe execute with retry and fallback
+   */
+  private async safeExecute<T>(operation: () => Promise<T>): Promise<T | null> {
+    // If circuit breaker is open, skip Redis entirely
+    if (!this.isHealthy) {
+      this.logger.warn("Redis unhealthy, skipping operation");
+      return null;
+    }
+
+    // Retry logic with exponential backoff
+    const maxRetries = 2;
+    const baseDelay = 50;
+
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        return await this.breaker.fire(operation);
+      } catch (error) {
+        if (i === maxRetries) {
+          this.logger.error("Redis operation failed after retries", error);
+          return null;
+        }
+
+        // Exponential backoff
+        const delay = baseDelay * Math.pow(2, i);
+        await this.sleep(delay);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Utility sleep function
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
    * Get the underlying Redis client for low-level operations
    */
   getClient(): Redis {
     return this.redis;
+  }
+
+  /**
+   * Get health status
+   */
+  isRedisHealthy(): boolean {
+    return this.isHealthy;
   }
 }
