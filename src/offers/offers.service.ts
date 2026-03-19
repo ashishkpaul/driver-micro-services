@@ -16,6 +16,7 @@ import { Assignment } from "../assignment/entities/assignment.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { DriverCapabilityService } from "../drivers/driver-capability.service";
 import { OutboxService } from "../domain-events/outbox.service"; // ADDED
+import { WebSocketService } from "../websocket/websocket.service"; // ADDED
 
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { AcceptOfferDto } from "./dto/accept-offer.dto";
@@ -36,6 +37,7 @@ export class OffersService {
     private readonly dataSource: DataSource,
     private readonly driverCapabilityService: DriverCapabilityService,
     private readonly outbox: OutboxService, // ADDED
+    private readonly wsService: WebSocketService, // ADDED
   ) {}
 
   async createOfferForDriver(createOfferDto: CreateOfferDto): Promise<{
@@ -119,6 +121,14 @@ export class OffersService {
     pipeline.expire(`driver:${driverId}:offers`, expiresInSeconds);
 
     await pipeline.exec();
+
+    // Emit offer to driver over WebSocket (real-time offer card in PWA)
+    await this.wsService.emitToDriver(driverId, "OFFER_CREATED_V2", {
+      offerId: savedOffer.id,
+      deliveryId,
+      expiresAt: savedOffer.expiresAt.toISOString(),
+      offerPayload,
+    });
 
     return {
       success: true,

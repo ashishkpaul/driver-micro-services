@@ -45,6 +45,14 @@ export class WebSocketService {
   }
 
   /**
+   * Generic method to emit any event to a specific driver
+   */
+  async emitToDriver(driverId: string, event: string, data: any) {
+    this.server.to(this.room(driverId)).emit(event, data);
+    this.metrics.messageSent(driverId).catch(() => {});
+  }
+
+  /**
    * Check if driver is connected
    */
   isDriverConnected(driverId: string): boolean {
