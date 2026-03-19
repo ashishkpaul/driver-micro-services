@@ -138,7 +138,28 @@ export class EventsController {
         deliveryId,
         message: "Delivery assigned successfully",
       };
-    } catch (error) {
+    } catch (error: any) {
+      // PostgreSQL unique violation code: 23505
+      const isUniqueViolation =
+        error?.code === "23505" ||
+        error?.message?.includes("unique constraint");
+
+      if (isUniqueViolation) {
+        this.logger.warn(
+          `Idempotency: Delivery already exists for sellerOrderId=${payload.sellerOrderId}. Returning 200.`,
+        );
+
+        // Heal the Redis state: set the key so subsequent checks don't even hit the DB
+        await this.redisService
+          .getClient()
+          .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
+
+        return {
+          status: "ignored",
+          message: "Duplicate delivery suppressed by DB constraint",
+        };
+      }
+
       this.logger.error(
         `Failed to process seller order ${payload.sellerOrderId}:`,
         error,

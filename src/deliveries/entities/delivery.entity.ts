@@ -17,7 +17,7 @@ import {
 } from "class-validator";
 
 @Entity("deliveries")
-@Index(["sellerOrderId"])
+@Index(["sellerOrderId"], { unique: true })
 @Index(["status"])
 @Index(["driverId"])
 @Index(["expectedPickupAt"])

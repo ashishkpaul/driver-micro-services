@@ -149,14 +149,8 @@ export class DeliveriesService {
         },
       });
 
-      // Emit ASSIGNED to Vendure via Outbox
-      await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
-        sellerOrderId: delivery.sellerOrderId,
-        channelId: delivery.channelId,
-        driverId,
-        assignmentId,
-        assignedAt: delivery.assignedAt.toISOString(),
-      });
+      // NOTE: Outbox publish responsibility moved to AssignmentService.createAndAssignDelivery()
+      // to prevent duplicate DELIVERY_ASSIGNED_V1 events
 
       return delivery;
     });
