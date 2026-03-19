@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, In, LessThan, DataSource } from "typeorm";
@@ -24,6 +25,8 @@ import { RejectOfferDto } from "./dto/reject-offer.dto";
 
 @Injectable()
 export class OffersService {
+  private readonly logger = new Logger(OffersService.name);
+
   constructor(
     @InjectRepository(DriverOffer)
     private readonly driverOfferRepository: Repository<DriverOffer>,
@@ -296,16 +299,18 @@ export class OffersService {
 
   @Cron("*/10 * * * * *")
   async expireOffers(): Promise<void> {
-    const expiredOffers = await this.driverOfferRepository.find({
-      where: {
+    const result = await this.driverOfferRepository
+      .createQueryBuilder()
+      .update(DriverOffer)
+      .set({ status: "EXPIRED" })
+      .where("status = :status AND expiresAt < :now", {
         status: "PENDING",
-        expiresAt: LessThan(new Date()),
-      },
-    });
+        now: new Date(),
+      })
+      .execute();
 
-    for (const offer of expiredOffers) {
-      offer.status = "EXPIRED";
-      await this.driverOfferRepository.save(offer);
+    if (result.affected && result.affected > 0) {
+      this.logger.log(`Expired ${result.affected} stale offer(s)`);
     }
   }
 
@@ -360,8 +365,8 @@ export class OffersService {
 
     if (!nextDriver) {
       // ⚠️ CRITICAL: All available drivers have been exhausted
-      console.warn(
-        `[OffersService] Exhausted all candidates for delivery ${deliveryId}. Manual intervention required.`,
+      this.logger.warn(
+        `Exhausted all candidates for delivery ${deliveryId}. Manual intervention required.`,
       );
       // Future: Trigger an SNS/SLA alert to the Operations Dashboard here
       return;

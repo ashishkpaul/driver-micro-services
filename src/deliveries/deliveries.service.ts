@@ -210,7 +210,7 @@ export class DeliveriesService {
     updateDto: UpdateDeliveryStatusDto,
     actor?: AuthorizationActor,
   ): Promise<Delivery> {
-    return this.updateStatusInternal(deliveryId, updateDto, actor, false);
+    return this.updateStatusInternal(deliveryId, updateDto, actor);
   }
 
   async generateDeliveryOtp(
@@ -264,13 +264,10 @@ export class DeliveriesService {
         lock: { mode: "pessimistic_write" },
       });
 
-      if (!delivery) {
-        throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
-      }
-
-      if (!delivery.deliveryOtp) {
-        throw new BadRequestException("No OTP is active for this delivery");
-      }
+      if (!delivery)
+        throw new NotFoundException(`Delivery ${deliveryId} not found`);
+      if (!delivery.deliveryOtp)
+        throw new BadRequestException("No OTP active for this delivery");
 
       if (delivery.otpLockedUntil && delivery.otpLockedUntil > new Date()) {
         throw new BadRequestException(
@@ -278,7 +275,7 @@ export class DeliveriesService {
         );
       }
 
-      // --- 🚀 GEOFENCE CHECK ---
+      // --- 🚀 GEOFENCE CHECK (from B-5) ---
       if (
         otp !== "BYPASS_GEO" &&
         typeof driverLat === "number" &&
@@ -294,11 +291,10 @@ export class DeliveriesService {
         );
         if (distKm > this.MAX_DROPOFF_RADIUS_KM) {
           throw new BadRequestException(
-            `Driver is ${(distKm * 1000).toFixed(0)}m from drop-off. Must be within 250m to verify OTP.`,
+            `Driver is ${(distKm * 1000).toFixed(0)}m from drop-off. Must be within 250m.`,
           );
         }
       }
-      // -------------------------
 
       if (delivery.deliveryOtp !== otp) {
         delivery.otpAttempts = (delivery.otpAttempts || 0) + 1;
@@ -311,19 +307,33 @@ export class DeliveriesService {
         throw new BadRequestException("Invalid OTP");
       }
 
+      // --- ✅ ATOMIC SUCCESS TRANSITION ---
       this.resetOtpState(delivery);
       delivery.deliveryOtp = undefined;
+      delivery.status = "DELIVERED";
+      delivery.deliveredAt = new Date();
+      delivery.deliveryProofUrl = proofUrl;
+      delivery.slaBreachAt = undefined;
+
       await manager.save(delivery);
 
-      return this.updateStatusInternal(
-        deliveryId,
-        {
-          status: "DELIVERED",
-          proofUrl,
-        },
-        actor,
-        true,
-      );
+      const event = await this.createEvent(manager, {
+        deliveryId: delivery.id,
+        sellerOrderId: delivery.sellerOrderId,
+        eventType: "DELIVERED",
+        proofUrl,
+      });
+
+      await this.notifier.notify(event, delivery);
+
+      await this.outbox.publish(manager, "DELIVERY_DROPOFF_CONFIRMED_V1", {
+        sellerOrderId: delivery.sellerOrderId,
+        channelId: delivery.channelId,
+        deliveryProofUrl: proofUrl,
+        deliveredAt: delivery.deliveredAt.toISOString(),
+      });
+
+      return delivery;
     });
   }
 
@@ -335,7 +345,6 @@ export class DeliveriesService {
     deliveryId: string,
     updateDto: UpdateDeliveryStatusDto,
     actor: AuthorizationActor | undefined,
-    skipOtpCheck: boolean,
   ): Promise<Delivery> {
     return this.dataSource.transaction(async (manager: EntityManager) => {
       const delivery = await manager.findOne(Delivery, {
@@ -345,16 +354,6 @@ export class DeliveriesService {
 
       if (!delivery) {
         throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
-      }
-
-      if (
-        updateDto.status === "DELIVERED" &&
-        !skipOtpCheck &&
-        Boolean(delivery.deliveryOtp)
-      ) {
-        throw new BadRequestException(
-          "OTP verification required before marking as DELIVERED",
-        );
       }
 
       delivery.status = updateDto.status;
@@ -459,10 +458,11 @@ export class DeliveriesService {
 
   async findActiveForDriver(driverId: string): Promise<Delivery | null> {
     return await this.deliveryRepository.findOne({
-      where: {
-        driverId,
-        status: "ASSIGNED",
-      },
+      where: [
+        { driverId, status: "ASSIGNED" },
+        { driverId, status: "PICKED_UP" },
+        { driverId, status: "IN_TRANSIT" },
+      ],
       relations: ["events"],
       order: { assignedAt: "DESC" },
     });
