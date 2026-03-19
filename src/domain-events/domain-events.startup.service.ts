@@ -21,7 +21,17 @@ export class DomainEventsStartupService implements OnModuleInit {
   private registerHandlers(): void {
     // Register all event handlers
     this.handlerRegistry.register(
-      "DELIVERY_ASSIGNED",
+      "DELIVERY_ASSIGNED_V1",
+      this.deliveryAssignedHandler,
+    );
+
+    this.handlerRegistry.register(
+      "DELIVERY_ASSIGNED_V2",
+      this.deliveryAssignedHandler,
+    );
+
+    this.handlerRegistry.register(
+      "DELIVERY_ASSIGNED_V3",
       this.deliveryAssignedHandler,
     );
 
@@ -38,6 +48,8 @@ export class DomainEventsStartupService implements OnModuleInit {
       // Define all required event types
       const requiredEventTypes = [
         "DELIVERY_ASSIGNED_V1",
+        "DELIVERY_ASSIGNED_V2",
+        "DELIVERY_ASSIGNED_V3",
         "DELIVERY_CANCELLED_V1",
       ];
 
