@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { HandlerRegistry } from "./handlers/handler.registry";
 import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
+import { DeliveryCancelledHandler } from "./handlers/delivery-cancelled.handler";
 
 @Injectable()
 export class DomainEventsStartupService implements OnModuleInit {
@@ -9,6 +10,7 @@ export class DomainEventsStartupService implements OnModuleInit {
   constructor(
     private handlerRegistry: HandlerRegistry,
     private deliveryAssignedHandler: DeliveryAssignedHandler,
+    private deliveryCancelledHandler: DeliveryCancelledHandler,
   ) {}
 
   onModuleInit() {
@@ -23,13 +25,21 @@ export class DomainEventsStartupService implements OnModuleInit {
       this.deliveryAssignedHandler,
     );
 
+    this.handlerRegistry.register(
+      "DELIVERY_CANCELLED_V1",
+      this.deliveryCancelledHandler,
+    );
+
     this.logger.log("All event handlers registered successfully");
   }
 
   private validateHandlers(): void {
     try {
       // Define all required event types
-      const requiredEventTypes = ["DELIVERY_ASSIGNED"];
+      const requiredEventTypes = [
+        "DELIVERY_ASSIGNED_V1",
+        "DELIVERY_CANCELLED_V1",
+      ];
 
       // Validate that all required handlers are registered
       this.handlerRegistry.validateHandlers(requiredEventTypes);

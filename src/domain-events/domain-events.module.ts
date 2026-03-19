@@ -5,6 +5,7 @@ import { OutboxService } from "./outbox.service";
 import { OutboxWorker } from "./outbox.worker";
 import { HandlerRegistry } from "./handlers/handler.registry";
 import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
+import { DeliveryCancelledHandler } from "./handlers/delivery-cancelled.handler";
 import { DomainEventsStartupService } from "./domain-events.startup.service";
 
 import { WebSocketModule } from "../websocket/websocket.module";
@@ -23,6 +24,7 @@ import { PushModule } from "../push/push.module";
     OutboxWorker,
     HandlerRegistry,
     DeliveryAssignedHandler,
+    DeliveryCancelledHandler,
     DomainEventsStartupService,
   ],
   exports: [OutboxService],
@@ -36,7 +38,12 @@ export class DomainEventsModule {}
     WebhooksModule,
     PushModule,
   ],
-  providers: [OutboxService, HandlerRegistry, DeliveryAssignedHandler],
+  providers: [
+    OutboxService,
+    HandlerRegistry,
+    DeliveryAssignedHandler,
+    DeliveryCancelledHandler,
+  ],
   exports: [OutboxService],
 })
 export class DomainEventsApiModule {}

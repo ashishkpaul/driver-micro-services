@@ -28,7 +28,12 @@ import {
  * Vendure only accepts this strict subset of states.
  * Internal delivery states MAY be broader.
  */
-type VendureStatus = "ASSIGNED" | "PICKED_UP" | "DELIVERED" | "FAILED";
+type VendureStatus =
+  | "ASSIGNED"
+  | "PICKED_UP"
+  | "DELIVERED"
+  | "FAILED"
+  | "CANCELLED";
 
 @Injectable()
 export class DeliveriesService {
@@ -386,12 +391,6 @@ export class DeliveriesService {
       failureCode: "CANCELLED",
       failureReason: reason || "Cancelled by driver or system",
     });
-
-    await this.webhooksService.emitDeliveryCancelled({
-      sellerOrderId: delivery.sellerOrderId,
-      channelId: delivery.channelId,
-      reason: reason || "Cancelled by driver or system",
-    });
   }
 
   async findActiveForDriver(driverId: string): Promise<Delivery | null> {
@@ -414,7 +413,8 @@ export class DeliveriesService {
       status === "ASSIGNED" ||
       status === "PICKED_UP" ||
       status === "DELIVERED" ||
-      status === "FAILED"
+      status === "FAILED" ||
+      status === "CANCELLED"
     );
   }
 
@@ -428,6 +428,8 @@ export class DeliveriesService {
         return "DELIVERY_DROPOFF_CONFIRMED_V1";
       case "FAILED":
         return "DELIVERY_FAILED_V1";
+      case "CANCELLED":
+        return "DELIVERY_CANCELLED_V1";
     }
   }
 
