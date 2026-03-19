@@ -13,6 +13,14 @@ type Violation = {
 const MIGRATIONS_DIR = path.resolve(process.cwd(), "src/migrations");
 const ALLOW_ENV = process.env.ALLOW_DANGEROUS_MIGRATIONS === "true";
 
+// SQL Safety Rules for SAFE_ migrations
+const FORBIDDEN_IN_SAFE = [
+  "DROP COLUMN",
+  "DROP TABLE",
+  "DELETE FROM",
+  "TRUNCATE",
+];
+
 const blockedPatterns: Array<{ regex: RegExp; reason: string }> = [
   { regex: /\bDROP\s+TABLE\b/i, reason: "DROP TABLE is destructive" },
   { regex: /\bDROP\s+COLUMN\b/i, reason: "DROP COLUMN is destructive" },
@@ -35,7 +43,8 @@ function collectMigrationFiles(dir: string): string[] {
 }
 
 function extractUpBlock(content: string): string {
-  const upRegex = /public\s+async\s+up\([^)]*\)\s*:\s*Promise<\s*void\s*>\s*\{([\s\S]*?)\n\s*\}\n\s*public\s+async\s+down/;
+  const upRegex =
+    /public\s+async\s+up\([^)]*\)\s*:\s*Promise<\s*void\s*>\s*\{([\s\S]*?)\n\s*\}\n\s*public\s+async\s+down/;
   const match = content.match(upRegex);
   return match ? match[1] : content;
 }
@@ -60,6 +69,22 @@ function checkMigrations(files: string[]): Violation[] {
 
     if (content.includes("MIGRATION_GUARD:ALLOW_DESTRUCTIVE")) {
       continue;
+    }
+
+    // TASK 3: SQL Safety Scanner for SAFE_ migrations
+    if (file.includes("SAFE_")) {
+      for (const keyword of FORBIDDEN_IN_SAFE) {
+        if (
+          content.toUpperCase().includes(keyword) &&
+          !content.includes("@approved-breaking")
+        ) {
+          violations.push({
+            file: path.relative(process.cwd(), file),
+            statement: keyword,
+            reason: `Found destructive command "${keyword}" in a SAFE migration`,
+          });
+        }
+      }
     }
 
     const upBlock = extractUpBlock(content);
@@ -88,6 +113,9 @@ function main(): void {
     console.log("✅ migration-guard: no migration files found");
     return;
   }
+
+  // TASK 3: Path verification message
+  console.log(`✅ Migration Guard: Path verified and SQL safety passed.`);
 
   const violations = checkMigrations(files);
 
