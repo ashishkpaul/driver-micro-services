@@ -34,7 +34,7 @@ describe("Outbox Integrity (e2e)", () => {
       // Insert corrupted row directly
       await dataSource.query(
         `INSERT INTO outbox (event_type, payload, status, retry_count) 
-         VALUES (NULL, '{"test": true}', 'PENDING', 0)`
+         VALUES (NULL, '{"test": true}', 'PENDING', 0)`,
       );
 
       // Wait for worker to process (cron runs every 5s)
@@ -42,7 +42,7 @@ describe("Outbox Integrity (e2e)", () => {
 
       // Verify row is now FAILED
       const result = await dataSource.query(
-        `SELECT status, retry_count, last_error FROM outbox WHERE event_type IS NULL`
+        `SELECT status, retry_count, last_error FROM outbox WHERE event_type IS NULL`,
       );
 
       expect(result[0].status).toBe("FAILED");
@@ -53,13 +53,13 @@ describe("Outbox Integrity (e2e)", () => {
     it("should process valid rows correctly", async () => {
       await dataSource.query(
         `INSERT INTO outbox (event_type, payload, status, retry_count) 
-         VALUES ('DELIVERY_ASSIGNED', '{"driverId": "driver-123"}', 'PENDING', 0)`
+         VALUES ('DELIVERY_ASSIGNED', '{"driverId": "driver-123"}', 'PENDING', 0)`,
       );
 
       await new Promise((resolve) => setTimeout(resolve, 6000));
 
       const result = await dataSource.query(
-        `SELECT status FROM outbox WHERE event_type = 'DELIVERY_ASSIGNED'`
+        `SELECT status FROM outbox WHERE event_type = 'DELIVERY_ASSIGNED'`,
       );
 
       expect(result[0].status).toBe("COMPLETED");
@@ -68,13 +68,13 @@ describe("Outbox Integrity (e2e)", () => {
     it("should quarantine rows with empty string event_type", async () => {
       await dataSource.query(
         `INSERT INTO outbox (event_type, payload, status, retry_count) 
-         VALUES ('', '{"test": true}', 'PENDING', 0)`
+         VALUES ('', '{"test": true}', 'PENDING', 0)`,
       );
 
       await new Promise((resolve) => setTimeout(resolve, 6000));
 
       const result = await dataSource.query(
-        `SELECT status FROM outbox WHERE event_type = ''`
+        `SELECT status FROM outbox WHERE event_type = ''`,
       );
 
       expect(result[0].status).toBe("FAILED");
@@ -86,11 +86,11 @@ describe("Outbox Integrity (e2e)", () => {
       const insertResult = await dataSource.query(
         `INSERT INTO outbox (event_type, payload, status, retry_count) 
          VALUES ('DELIVERY_ASSIGNED', '{}', 'PENDING', 5)
-         RETURNING *`
+         RETURNING *`,
       );
 
       const row = insertResult[0];
-      
+
       // Verify snake_case in raw result
       expect(row).toHaveProperty("event_type");
       expect(row).toHaveProperty("retry_count");

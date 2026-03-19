@@ -15,6 +15,7 @@ import { Delivery } from "../deliveries/entities/delivery.entity";
 import { Assignment } from "../assignment/entities/assignment.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { DriverCapabilityService } from "../drivers/driver-capability.service";
+import { OutboxService } from "../domain-events/outbox.service"; // ADDED
 
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { AcceptOfferDto } from "./dto/accept-offer.dto";
@@ -34,6 +35,7 @@ export class OffersService {
     private readonly redisService: RedisService,
     private readonly dataSource: DataSource,
     private readonly driverCapabilityService: DriverCapabilityService,
+    private readonly outbox: OutboxService, // ADDED
   ) {}
 
   async createOfferForDriver(createOfferDto: CreateOfferDto): Promise<{
@@ -192,15 +194,39 @@ export class OffersService {
         { driverId: driverId, status: "ASSIGNED" },
       );
 
-      // Create assignment
+      // FIX: Fetch the delivery row to get the real sellerOrderId (Vendure ID)
+      const delivery = await manager.findOne(Delivery, {
+        where: { id: offer.deliveryId },
+      });
+
+      if (!delivery) {
+        throw new NotFoundException(
+          `Delivery ${offer.deliveryId} not found during offer acceptance`,
+        );
+      }
+
+      // Create assignment with the CORRECT ID
       const assignment = this.assignmentRepository.create({
-        sellerOrderId: offer.deliveryId, // Note: In V2, deliveryId maps to sellerOrderId
+        sellerOrderId: delivery.sellerOrderId, // FIXED: Now uses Vendure ID, not internal UUID
         driverId,
       });
       const savedAssignment = await manager.save(assignment);
 
       // Mark driver as BUSY
       await manager.update(Driver, driverId, { status: DriverStatus.BUSY });
+
+      // 6. Publish outbox event (ADDED)
+      // This triggers DeliveryAssignedHandler -> WebSocket + Vendure webhook
+      await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
+        deliveryId: offer.deliveryId,
+        sellerOrderId: delivery.sellerOrderId,
+        channelId: delivery.channelId,
+        driverId,
+        assignmentId: savedAssignment.id,
+        assignedAt: new Date().toISOString(),
+        pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
+        dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
+      });
 
       return {
         success: true,

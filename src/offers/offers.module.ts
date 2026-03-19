@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { RedisModule } from "../redis/redis.module";
 import { DriversModule } from "../drivers/drivers.module";
+import { DomainEventsModule } from "../domain-events/domain-events.module"; // ADDED
 
 // Controllers
 import { OffersController } from "./offers.controller";
@@ -21,6 +22,7 @@ import { Assignment } from "../assignment/entities/assignment.entity";
     TypeOrmModule.forFeature([DriverOffer, Driver, Delivery, Assignment]),
     RedisModule,
     DriversModule,
+    DomainEventsModule, // ADDED
   ],
   controllers: [OffersController, V2OffersController],
   providers: [OffersService],
