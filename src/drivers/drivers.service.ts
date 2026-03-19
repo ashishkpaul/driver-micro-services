@@ -229,6 +229,11 @@ export class DriversService {
     });
   }
 
+  async findNearestAvailable(lat: number, lon: number): Promise<Driver | null> {
+    const available = await this.findAvailable(lat, lon, 5); // 5km radius
+    return available.length > 0 ? available[0] : null;
+  }
+
   /* ------------------------------------------------------------------ */
   /* Driver lifecycle                                                     */
   /* ------------------------------------------------------------------ */

@@ -6,7 +6,9 @@ import {
   BadRequestException,
   Logger,
 } from "@nestjs/common";
-import { AssignmentService } from "../assignment/assignment.service";
+import { DeliveriesService } from "../deliveries/deliveries.service"; // ADDED
+import { DriversService } from "../drivers/drivers.service"; // ADDED
+import { OffersService } from "../offers/offers.service"; // ADDED
 import { ConfigService } from "@nestjs/config";
 import {
   IsNumber,
@@ -66,7 +68,9 @@ export class EventsController {
   private readonly eventIdTtlSeconds = 60 * 60 * 24;
 
   constructor(
-    private assignmentService: AssignmentService,
+    private deliveriesService: DeliveriesService, // REPLACED AssignmentService
+    private driversService: DriversService, // ADDED
+    private offersService: OffersService, // ADDED
     private configService: ConfigService,
     private redisService: RedisService,
   ) {
@@ -115,28 +119,56 @@ export class EventsController {
     this.logger.log(`Received seller order ready: ${payload.sellerOrderId}`);
 
     try {
-      // Create delivery and assign driver (v1: immediate assignment, no acceptance workflow)
-      const deliveryId = await this.assignmentService.createAndAssignDelivery(
-        payload.sellerOrderId,
-        payload.channelId,
+      // 1. Create the delivery record (V2: PENDING status)
+      const delivery = await this.deliveriesService.create({
+        sellerOrderId: payload.sellerOrderId,
+        channelId: payload.channelId,
+        pickupLat: payload.pickup.lat,
+        pickupLon: payload.pickup.lon,
+        dropLat: payload.drop.lat,
+        dropLon: payload.drop.lon,
+      });
+
+      // 2. Find nearest available driver
+      const nearestDriver = await this.driversService.findNearestAvailable(
         payload.pickup.lat,
         payload.pickup.lon,
-        payload.drop.lat,
-        payload.drop.lon,
       );
+
+      if (!nearestDriver) {
+        this.logger.warn(
+          `No available drivers for order ${payload.sellerOrderId}`,
+        );
+        // Mark as processed so Vendure stops retrying; fallback logic handles re-dispatch
+        await this.redisService
+          .getClient()
+          .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
+        return {
+          status: "queued",
+          deliveryId: delivery.id,
+          message: "No drivers available",
+        };
+      }
+
+      // 3. Create offer — This triggers OFFER_CREATED_V2 via WebSocket
+      await this.offersService.createOfferForDriver({
+        driverId: nearestDriver.id,
+        deliveryId: delivery.id,
+        expiresInSeconds: 30,
+      });
 
       await this.redisService
         .getClient()
         .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
 
       this.logger.log(
-        `Successfully processed seller order ${payload.sellerOrderId}, delivery ID: ${deliveryId}`,
+        `V2: Created offer for order ${payload.sellerOrderId}, delivery ID: ${delivery.id}`,
       );
 
       return {
         status: "success",
-        deliveryId,
-        message: "Delivery assigned successfully",
+        deliveryId: delivery.id,
+        message: "Offer broadcasted to nearest driver",
       };
     } catch (error: any) {
       // PostgreSQL unique violation code: 23505
@@ -210,7 +242,7 @@ export class EventsController {
     }
   }
 
-  // ⚠️ V1 RULE: No driver acceptance workflow
-  // The assignment-response endpoint has been removed in v1
-  // Assignment is immediate and final
+  // ✅ V2 WORKFLOW: Driver acceptance workflow is now active
+  // Offers are created and drivers can accept/reject via PWA
+  // Assignment only happens after driver acceptance
 }
