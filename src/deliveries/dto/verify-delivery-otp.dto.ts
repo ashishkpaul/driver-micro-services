@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length } from "class-validator";
+import { IsOptional, IsString, Length, IsNumber } from "class-validator";
 
 export class VerifyDeliveryOtpDto {
   @IsString()
@@ -8,4 +8,12 @@ export class VerifyDeliveryOtpDto {
   @IsOptional()
   @IsString()
   proofUrl?: string;
+
+  @IsOptional()
+  @IsNumber()
+  driverLat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  driverLon?: number;
 }

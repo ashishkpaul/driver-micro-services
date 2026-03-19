@@ -83,6 +83,8 @@ export class DeliveriesController {
       id,
       verifyDeliveryOtpDto.otp,
       verifyDeliveryOtpDto.proofUrl,
+      verifyDeliveryOtpDto.driverLat,
+      verifyDeliveryOtpDto.driverLon,
     );
   }
 }

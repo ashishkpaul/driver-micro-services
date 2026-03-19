@@ -255,29 +255,24 @@ export class OffersService {
   }> {
     const { offerId, driverId, reason } = rejectOfferDto;
 
-    // Find and validate offer
     const offer = await this.driverOfferRepository.findOne({
       where: { id: offerId },
     });
-    if (!offer) {
-      throw new NotFoundException("Offer not found");
-    }
 
-    if (offer.driverId !== driverId) {
-      throw new BadRequestException("Invalid driver for this offer");
-    }
-
-    if (offer.status !== "PENDING") {
+    if (!offer) throw new NotFoundException("Offer not found");
+    if (offer.driverId !== driverId)
+      throw new BadRequestException("Invalid driver");
+    if (offer.status !== "PENDING")
       throw new ConflictException("Offer already processed");
-    }
 
-    // Update offer status
+    // 1. Persist the rejection
     offer.status = "REJECTED";
     offer.rejectedAt = new Date();
-    if (reason) {
-      offer.rejectionReason = reason;
-    }
+    if (reason) offer.rejectionReason = reason;
     await this.driverOfferRepository.save(offer);
+
+    // 🚀 FIX [B-6]: Trigger the next candidate in the queue
+    await this.triggerNextCandidate(offer.deliveryId);
 
     return {
       success: true,
@@ -337,11 +332,46 @@ export class OffersService {
     };
   }
 
-  private async triggerNextCandidate(
-    deliveryId: string,
-  ): Promise<string | undefined> {
-    // Simplified - in real implementation, this would find the next available driver
-    // and create a new offer
-    return undefined;
+  private async triggerNextCandidate(deliveryId: string): Promise<void> {
+    // 1. Reload delivery and verify it still needs a driver
+    const delivery = await this.deliveryRepository.findOne({
+      where: { id: deliveryId },
+    });
+    if (!delivery || delivery.status !== "PENDING") {
+      return; // Already assigned, cancelled, or doesn't exist
+    }
+
+    // 2. Identify drivers who have already rejected or been offered this delivery
+    const previousOffers = await this.driverOfferRepository.find({
+      where: { deliveryId },
+      select: ["driverId"],
+    });
+    const excludedDriverIds = previousOffers.map((o) => o.driverId);
+
+    // 3. Find all currently available drivers
+    const candidates = await this.driverRepository.find({
+      where: { status: DriverStatus.AVAILABLE },
+    });
+
+    // 4. Select the first available driver not in the exclusion list
+    const nextDriver = candidates.find(
+      (d) => !excludedDriverIds.includes(d.id),
+    );
+
+    if (!nextDriver) {
+      // ⚠️ CRITICAL: All available drivers have been exhausted
+      console.warn(
+        `[OffersService] Exhausted all candidates for delivery ${deliveryId}. Manual intervention required.`,
+      );
+      // Future: Trigger an SNS/SLA alert to the Operations Dashboard here
+      return;
+    }
+
+    // 5. Dispatch a fresh offer to the next driver
+    await this.createOfferForDriver({
+      driverId: nextDriver.id,
+      deliveryId,
+      expiresInSeconds: 30, // Standard PWA offer window
+    });
   }
 }

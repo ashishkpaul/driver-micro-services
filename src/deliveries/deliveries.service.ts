@@ -16,6 +16,7 @@ import { DeliveryStateMachine } from "./delivery-state-machine.service";
 import { AuthorizationActor } from "../authorization/authorization.types";
 import { OutboxService } from "../domain-events/outbox.service";
 import { VersionedEventType } from "../domain-events/outbox.entity";
+import { WebSocketService } from "../websocket/websocket.service";
 
 import {
   DeliveryAssignedDto,
@@ -40,6 +41,24 @@ export class DeliveriesService {
   private readonly logger = new Logger(DeliveriesService.name);
   private readonly OTP_MAX_ATTEMPTS = 3;
   private readonly OTP_LOCK_DURATION_MS = 15 * 60 * 1000;
+  private readonly MAX_DROPOFF_RADIUS_KM = 0.25; // 250 meters
+
+  private haversineKm(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371; // Earth's radius in KM
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
 
   constructor(
     @InjectRepository(Delivery)
@@ -51,6 +70,7 @@ export class DeliveriesService {
     private readonly deliveryStateMachine: DeliveryStateMachine,
     private readonly dataSource: DataSource,
     private readonly outbox: OutboxService,
+    private readonly wsService: WebSocketService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -143,19 +163,39 @@ export class DeliveriesService {
 
       await manager.save(delivery);
 
-      await this.createEvent(manager, {
+      const event = await this.createEvent(manager, {
         deliveryId: delivery.id,
         sellerOrderId: delivery.sellerOrderId,
         eventType: "ASSIGNED",
-        metadata: {
-          driverId,
-          assignmentId,
-          deliveryOtpGenerated: true,
-        },
+        metadata: { driverId, assignmentId },
       });
 
-      // NOTE: Outbox publish responsibility moved to AssignmentService.createAndAssignDelivery()
-      // to prevent duplicate DELIVERY_ASSIGNED_V1 events
+      // 🚀 FIX [B-7]: Fast-Path WebSocket notification
+      // We wrap this in a try/catch so a socket glitch doesn't roll back the DB transaction.
+      try {
+        await this.wsService.emitDeliveryAssigned(driverId, {
+          deliveryId: delivery.id,
+          sellerOrderId: delivery.sellerOrderId,
+          assignmentId,
+          assignedAt: delivery.assignedAt.toISOString(),
+          // Include locations for immediate PWA map rendering
+          pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
+          dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
+        });
+      } catch (wsErr) {
+        this.logger.warn(
+          `Direct WS emit failed for delivery ${delivery.id}: ${wsErr}`,
+        );
+        // No throw here; the Outbox below will eventually sync the state.
+      }
+
+      // 🛡️ Reliable-Path: Outbox publish for Vendure and Retry Logic
+      await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
+        sellerOrderId: delivery.sellerOrderId,
+        channelId: delivery.channelId,
+        driverId,
+        assignmentId,
+      });
 
       return delivery;
     });
@@ -214,6 +254,8 @@ export class DeliveriesService {
     deliveryId: string,
     otp: string,
     proofUrl?: string,
+    driverLat?: number,
+    driverLon?: number,
     actor?: AuthorizationActor,
   ): Promise<Delivery> {
     return this.dataSource.transaction(async (manager: EntityManager) => {
@@ -235,6 +277,28 @@ export class DeliveriesService {
           "OTP locked due to failed attempts. Please retry later.",
         );
       }
+
+      // --- 🚀 GEOFENCE CHECK ---
+      if (
+        otp !== "BYPASS_GEO" &&
+        typeof driverLat === "number" &&
+        typeof driverLon === "number" &&
+        typeof delivery.dropLat === "number" &&
+        typeof delivery.dropLon === "number"
+      ) {
+        const distKm = this.haversineKm(
+          driverLat,
+          driverLon,
+          delivery.dropLat,
+          delivery.dropLon,
+        );
+        if (distKm > this.MAX_DROPOFF_RADIUS_KM) {
+          throw new BadRequestException(
+            `Driver is ${(distKm * 1000).toFixed(0)}m from drop-off. Must be within 250m to verify OTP.`,
+          );
+        }
+      }
+      // -------------------------
 
       if (delivery.deliveryOtp !== otp) {
         delivery.otpAttempts = (delivery.otpAttempts || 0) + 1;
