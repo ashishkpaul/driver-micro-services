@@ -20,6 +20,7 @@ import {
 @Index(["sellerOrderId"], { unique: true })
 @Index(["status"])
 @Index(["driverId"])
+@Index("idx_deliveries_status_driver", ["status", "driverId"])
 @Index(["expectedPickupAt"])
 @Index(["expectedDeliveryAt"])
 @Index(["slaBreachAt"])

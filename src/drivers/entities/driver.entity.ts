@@ -19,6 +19,8 @@ import {
 import { DriverStatus } from "../enums/driver-status.enum";
 
 @Entity("drivers")
+@Index("idx_drivers_status_city", ["status", "cityId"])
+@Index("idx_drivers_status_zone", ["status", "zoneId"])
 export class Driver {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
