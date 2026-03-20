@@ -22,4 +22,10 @@ export default new DataSource({
   namingStrategy: new SnakeNamingStrategy(),
   synchronize: false,
   logging: process.env.NODE_ENV === "test" ? false : ["error"],
+  extra: {
+    max: parseInt(process.env.DB_POOL_MAX || "20", 10),
+    min: parseInt(process.env.DB_POOL_MIN || "5", 10),
+    idleTimeoutMillis: 30000,
+    statement_timeout: 10000, // 10 seconds to prevent hanging queries
+  },
 });

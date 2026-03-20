@@ -26,6 +26,12 @@ export const databaseConfig: TypeOrmModuleOptions = {
   namingStrategy: new SnakeNamingStrategy(),
   migrationsTableName: "_migrations",
   migrationsTransactionMode: "each",
+  extra: {
+    max: parseInt(process.env.DB_POOL_MAX || "20", 10),
+    min: parseInt(process.env.DB_POOL_MIN || "5", 10),
+    idleTimeoutMillis: 30000,
+    statement_timeout: 10000, // 10 seconds to prevent hanging queries
+  },
   // `cli` option is not part of TypeOrmModuleOptions in this environment
   // Keep migrations settings above; migration directory config is handled elsewhere if needed
 };
