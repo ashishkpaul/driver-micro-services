@@ -94,11 +94,12 @@
     "winston": "^3.13.0"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.3.2",
+    "@nestjs/cli": "^11.0.16",
     "@nestjs/schematics": "^10.1.2",
     "@nestjs/testing": "^10.3.0",
     "@types/bcrypt": "^6.0.0",
     "@types/compression": "^1.7.5",
+    "@types/dotenv": "^6.1.1",
     "@types/express": "^4.17.21",
     "@types/geojson": "^7946.0.16",
     "@types/ioredis": "^4.28.10",

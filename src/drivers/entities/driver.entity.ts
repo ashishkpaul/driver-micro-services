@@ -125,6 +125,7 @@ export class Driver {
   @Column({ name: "google_sub", nullable: true })
   googleSub?: string;
 
-  @Column({ name: "auth_provider", default: "legacy" })
-  authProvider: "legacy" | "google" | "email";
+// Corrected logic for the authProvider property
+@Column({ name: "auth_provider", default: "legacy" })
+authProvider: "legacy" | "google" | "email" = "legacy";
 }

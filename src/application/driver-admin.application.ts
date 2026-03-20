@@ -150,8 +150,19 @@ export class DriverAdminApplicationService {
       errors: number;
     };
   }> {
-    const results = [];
-    const errors = [];
+    // FIX: Define types for these arrays so TS doesn't infer "never[]"
+    const results: Array<{
+      driverId: string;
+      status: "success" | "skipped" | "error";
+      driver?: Driver;
+      message?: string;
+    }> = [];
+    
+    const errors: Array<{
+      driverId: string;
+      status: "error";
+      message: string;
+    }> = [];
 
     for (const driverId of driverIds) {
       try {
@@ -194,11 +205,12 @@ export class DriverAdminApplicationService {
           status: "success" as const,
           driver: updatedDriver,
         });
-      } catch (error) {
+      } catch (error: any) { // FIX: Use 'any' or check type for the catch variable
+        const errorMessage = error instanceof Error ? error.message : String(error);
         errors.push({
           driverId,
           status: "error" as const,
-          message: error.message,
+          message: errorMessage,
         });
       }
     }

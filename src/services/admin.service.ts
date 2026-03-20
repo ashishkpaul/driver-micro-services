@@ -57,7 +57,7 @@ export class AdminService {
     );
 
     // Validate city exists if provided
-    let city = null;
+    let city: City | null = null;
     if (createAdminDto.cityId) {
       city = await this.cityRepository.findOne({
         where: { id: createAdminDto.cityId },
