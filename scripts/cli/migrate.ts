@@ -358,6 +358,23 @@ export class ${className} implements MigrationInterface {
   return filePath;
 }
 
+// ── Advisory lock helpers ─────────────────────────────────────────────────────
+
+// Application-specific lock key — unique integer that identifies this project.
+// Must be consistent across all environments. Never reuse the same key for a
+// different application on the same Postgres instance.
+const ADVISORY_LOCK_KEY = 847291;
+
+async function acquireAdvisoryLock(ds: DataSource): Promise<void> {
+  // pg_advisory_lock blocks until the lock is available (no timeout).
+  // It is automatically released when the session ends — crash-safe.
+  await ds.query(`SELECT pg_advisory_lock($1)`, [ADVISORY_LOCK_KEY]);
+}
+
+async function releaseAdvisoryLock(ds: DataSource): Promise<void> {
+  await ds.query(`SELECT pg_advisory_unlock($1)`, [ADVISORY_LOCK_KEY]);
+}
+
 // ── Orphan-only drift check (used only inside --run pipeline) ─────────────────────────────────────────────────────────
 
 /**
@@ -742,7 +759,7 @@ async function runGenerate(opts: {
 async function runMigrate(opts: { config: string; skipSimulate?: boolean }): Promise<void> {
   console.log(fmt.header('Run Migrations'));
 
-  const total = 5;
+  const total = 6;  // bumped from 5 — lock step added
 
   // Step 1 — Baseline check
   console.log(`\n  ${fmt.step(1, total, 'Baseline check')}`);
@@ -767,32 +784,58 @@ async function runMigrate(opts: { config: string; skipSimulate?: boolean }): Pro
     process.exit(1);
   }
 
-  // Step 4 — Simulation (dry run)
-  console.log(`\n  ${fmt.step(4, total, 'Simulation (dry run)')}`);
-  if (!opts.skipSimulate) {
-    await runSimulation(opts.config);
-  } else {
-    console.log(fmt.warn('Simulation skipped (--skip-simulate flag set)'));
-  }
+  // Step 4 — Acquire advisory lock
+  // Acquired here — after cheap static checks but before simulation and apply.
+  // Minimises lock hold time while protecting the critical section.
+  console.log(`\n  ${fmt.step(4, total, 'Schema lock')}`);
 
-  // Step 5 — Apply migrations
-  console.log(`\n  ${fmt.step(5, total, 'Apply migrations')}`);
-  mustExec(
-    'npx',
-    ['typeorm-ts-node-commonjs', 'migration:run', '-d', opts.config],
-    'Migration run',
-  );
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod          = require(path.resolve(process.cwd(), opts.config));
+  const lockDs: DataSource = mod.default ?? mod;
+  await lockDs.initialize();
 
-  // Post-apply schema verification
-  console.log('');
-  const verifyScript = fs.existsSync('scripts/db/verify.ts')
-    ? 'scripts/db/verify.ts'
-    : 'scripts/db-verify.ts';
-  const verifyResult = exec('npx', ['ts-node', verifyScript], { silent: true });
-  if (verifyResult.status !== 0) {
-    console.log(fmt.warn('Schema verification had warnings — check: npm run db:verify'));
-  } else {
-    console.log(fmt.ok('Schema verification passed'));
+  try {
+    await acquireAdvisoryLock(lockDs);
+    console.log(fmt.ok(`Advisory lock acquired (key: ${ADVISORY_LOCK_KEY})`));
+
+    // Step 5 — Simulation (dry run)
+    console.log(`\n  ${fmt.step(5, total, 'Simulation (dry run)')}`);
+    if (!opts.skipSimulate) {
+      await runSimulation(opts.config);
+    } else {
+      console.log(fmt.warn('Simulation skipped (--skip-simulate flag set)'));
+    }
+
+    // Step 6 — Apply migrations
+    console.log(`\n  ${fmt.step(6, total, 'Apply migrations')}`);
+    mustExec(
+      'npx',
+      ['typeorm-ts-node-commonjs', 'migration:run', '-d', opts.config],
+      'Migration run',
+    );
+
+    // Post-apply schema verification
+    console.log('');
+    const verifyScript = fs.existsSync('scripts/db/verify.ts')
+      ? 'scripts/db/verify.ts'
+      : 'scripts/db-verify.ts';
+    const verifyResult = exec('npx', ['ts-node', verifyScript], { silent: true });
+    if (verifyResult.status !== 0) {
+      console.log(fmt.warn('Schema verification had warnings — check: npm run db:verify'));
+    } else {
+      console.log(fmt.ok('Schema verification passed'));
+    }
+
+  } finally {
+    // Always release — even if simulation or apply threw.
+    // pg_advisory_unlock is a no-op if the lock was never acquired.
+    try {
+      await releaseAdvisoryLock(lockDs);
+      console.log(fmt.ok('Advisory lock released'));
+    } catch {
+      // Session ending will auto-release the lock — not critical to log.
+    }
+    await lockDs.destroy();
   }
 
   console.log(fmt.header('✅ Migrations Applied Successfully'));
