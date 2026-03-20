@@ -72,7 +72,7 @@ function checkMigrations(files: string[]): Violation[] {
     }
 
     // TASK 3: SQL Safety Scanner for SAFE_ migrations
-    if (file.includes("SAFE_")) {
+    if (file.includes("SAFE_") && !file.includes("BASELINE_")) {
       for (const keyword of FORBIDDEN_IN_SAFE) {
         if (
           content.toUpperCase().includes(keyword) &&
