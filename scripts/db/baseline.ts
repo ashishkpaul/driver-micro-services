@@ -20,7 +20,7 @@ export function ensureBaselineExists() {
 
   const timestamp = "0000000000000";
 
-  const fileName = `${timestamp}-SAFE_BASELINE_Initial.ts`;
+  const fileName = `${timestamp}-BASELINE_Initial.ts`;
 
   const template = `
 import { MigrationInterface, QueryRunner }
@@ -28,7 +28,7 @@ from "typeorm";
 
 /**
  * INTENT: Initial baseline migration
- * TYPE: SAFE
+ * TYPE: BASELINE
  * RISK: LOW
  * ROLLBACK: SAFE
  *

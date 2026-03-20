@@ -42,6 +42,7 @@ function lintMigration(filePath: string): string[] {
   const filename = path.basename(filePath);
 
   const migrationType = getMigrationType(filename);
+  const isBaseline = filename.includes("BASELINE");
   const errors: string[] = [];
 
   // Skip linting for migrations without proper prefix (backward compatibility)
@@ -49,6 +50,29 @@ function lintMigration(filePath: string): string[] {
     console.log(
       `⚠️  Skipping linting for migration without prefix: ${filename}`,
     );
+    return errors;
+  }
+
+  // Skip strict SAFE checks for baseline migrations
+  if (migrationType === "SAFE" && isBaseline) {
+    // Baseline migrations can have DROP TABLE in down() for rollback
+    // Only check for other dangerous patterns
+    const baselineForbiddenPatterns = [
+      /ALTER TYPE/i,
+      /RENAME COLUMN/i,
+      /RENAME TABLE/i,
+    ];
+    for (const pattern of baselineForbiddenPatterns) {
+      const contentWithoutComments = content
+        .replace(/--.*$/gm, "")
+        .replace(/\/\/.*$/gm, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "");
+      if (pattern.test(contentWithoutComments)) {
+        errors.push(
+          `❌ Forbidden pattern found in baseline migration: ${pattern.source}`,
+        );
+      }
+    }
     return errors;
   }
 

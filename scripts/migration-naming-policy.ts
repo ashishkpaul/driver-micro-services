@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 const MIGRATIONS_DIR = path.resolve(process.cwd(), "src/migrations");
-const VALID_PREFIXES = ["SAFE_", "DATA_", "BREAKING_", "FIX_", "SAFE_BASELINE_"] as const;
+const VALID_PREFIXES = ["SAFE_", "DATA_", "BREAKING_", "FIX_", "BASELINE_"] as const;
 
 const ENFORCED_PATTERN = new RegExp(
   `^\\d{13,}-(?:${VALID_PREFIXES.map((p) => p.replace("_", "\\_").replace("+", "\\+")).join("|")}).+\\.ts$`,

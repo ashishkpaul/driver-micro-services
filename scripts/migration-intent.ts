@@ -8,7 +8,7 @@ if (!fs.existsSync(migrationsDir)) {
   process.exit(1);
 }
 
-const validPrefixes = ["SAFE_", "DATA_", "BREAKING_", "FIX_", "SAFE_BASELINE_"];
+const validPrefixes = ["SAFE_", "DATA_", "BREAKING_", "FIX_", "BASELINE_"];
 let failed = false;
 
 for (const file of fs.readdirSync(migrationsDir)) {
