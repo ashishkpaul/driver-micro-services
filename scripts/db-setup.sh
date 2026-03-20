@@ -10,7 +10,7 @@ echo "1️⃣ Checking environment..."
 
 if [ ! -f ".env" ]; then
   echo "❌ .env missing"
-  echo "Copy .env.example"
+  echo "Copy .env.example → .env and fill in your values"
   exit 1
 fi
 
@@ -19,7 +19,10 @@ echo "✅ env ok"
 echo ""
 echo "2️⃣ Installing dependencies..."
 
-npm install
+# FIXED: use 'npm ci' instead of 'npm install'
+# npm install can mutate package-lock.json and install different versions
+# npm ci is deterministic, fails fast if lock is stale, correct for CI and setup scripts
+npm ci
 
 echo "✅ deps installed"
 
