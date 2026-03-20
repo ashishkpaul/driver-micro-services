@@ -6,6 +6,8 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Min,
+  Max,
 } from "class-validator";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 
@@ -61,10 +63,13 @@ export class AdminDriverListQueryDto {
   search?: string;
 
   @IsOptional()
+  @Min(0)
   @Transform(({ value }) => (value === undefined ? value : Number(value)))
   skip?: number;
 
   @IsOptional()
+  @Min(1)
+  @Max(100)
   @Transform(({ value }) => (value === undefined ? value : Number(value)))
   take?: number;
 }

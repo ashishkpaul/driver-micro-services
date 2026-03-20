@@ -1,4 +1,5 @@
 // src/dto/admin.dto.ts
+import { Transform } from "class-transformer";
 import {
   IsEmail,
   IsEnum,
@@ -6,6 +7,8 @@ import {
   IsString,
   IsUUID,
   MinLength,
+  Min,
+  Max,
 } from "class-validator";
 import { Role } from "../auth/roles.enum";
 
@@ -76,8 +79,13 @@ export class AdminListQueryDto {
   role?: Role;
 
   @IsOptional()
+  @Min(0)
+  @Transform(({ value }) => (value === undefined ? value : Number(value)))
   skip?: number;
 
   @IsOptional()
+  @Min(1)
+  @Max(100)
+  @Transform(({ value }) => (value === undefined ? value : Number(value)))
   take?: number;
 }
