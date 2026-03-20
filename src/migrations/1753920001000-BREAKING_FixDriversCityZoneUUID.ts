@@ -21,7 +21,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * DEPLOY NOTES:
  *   - Can run online: yes on an empty drivers table; causes brief lock on
  *     non-empty tables proportional to row count (PostgreSQL rewrites the heap).
- *     For large tables, use SAFE_ ADD + DATA_ backfill + BREAKING_ SET NOT NULL.
  *     Acceptable here because drivers table is empty at time of deployment.
  *   - Estimated lock duration: subsecond on empty table
  *   - Depends on: SAFE_FixDuplicateDeliveryPendingIndex must have run first
@@ -30,15 +29,28 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *   down() changes both columns back to VARCHAR. No data lost because UUID and
  *   VARCHAR are losslessly round-trippable for well-formed UUID values.
  *
+ * WHY BYPASS COMMENTS ARE PRESENT:
+ *   migration-guard:    ALTER COLUMN is in blockedPatterns for all files in the
+ *                       current guard script. MIGRATION_GUARD:ALLOW_DESTRUCTIVE
+ *                       is the documented escape hatch for reviewed BREAKING changes.
+ *
+ *   @allow-mixed-ops:   "ALTER TABLE drivers ALTER COLUMN city_id TYPE UUID"
+ *                       contains both ALTER TABLE (→ SCHEMA_OPS) and ALTER COLUMN
+ *                       (→ CONSTRAINT_OPS) as substrings. The mixed-ops checker
+ *                       flags this as mixing categories, but it is a single atomic
+ *                       DDL statement — not two separate lifecycle phases.
+ *
  * @approved-breaking: Schema fix on empty table — no driver rows exist at deploy time.
  *   Changing VARCHAR→UUID is a lossless cast. Reviewed and confirmed safe.
- *
- * CHECKLIST:
- *   [x] @approved-breaking annotation filled in
- *   [x] Verified drivers table is empty at time of first deployment
- *   [x] Tested migration:revert
- *   [x] Passes db:validate locally
  */
+
+// Required: current migration-guard.ts applies ALTER COLUMN block to all files.
+// This comment is the documented escape hatch for reviewed BREAKING changes.
+// MIGRATION_GUARD:ALLOW_DESTRUCTIVE
+
+// Required: ALTER TABLE ... ALTER COLUMN matches both SCHEMA_OPS and CONSTRAINT_OPS
+// keyword sets simultaneously. This is a single atomic DDL statement, not mixed phases.
+// @allow-mixed-ops: ALTER TABLE ALTER COLUMN TYPE is a single atomic statement, not mixed lifecycle phases
 
 export class BREAKING_FixDriversCityZoneUUID1753920001000 implements MigrationInterface {
   name = 'BREAKING_FixDriversCityZoneUUID1753920001000';
@@ -46,14 +58,13 @@ export class BREAKING_FixDriversCityZoneUUID1753920001000 implements MigrationIn
   public async up(queryRunner: QueryRunner): Promise<void> {
     // city_id: VARCHAR NOT NULL → UUID NOT NULL
     // The USING clause tells PostgreSQL how to cast existing values.
-    // city_id::uuid fails fast if any row contains a non-UUID string — which
-    // is exactly the safety we want (corrupt data is surfaced, not silently truncated).
+    // Fails fast if any row contains a non-UUID string — corrupt data surfaces, not silently truncated.
     await queryRunner.query(`
       ALTER TABLE drivers
         ALTER COLUMN city_id TYPE UUID USING city_id::uuid
     `);
 
-    // zone_id: VARCHAR → UUID (nullable, no USING needed for NULL values)
+    // zone_id: VARCHAR → UUID (nullable)
     await queryRunner.query(`
       ALTER TABLE drivers
         ALTER COLUMN zone_id TYPE UUID USING zone_id::uuid
