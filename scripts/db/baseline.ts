@@ -44,29 +44,15 @@ implements MigrationInterface {
 public async up(
 queryRunner: QueryRunner
 ): Promise<void> {
-
-await queryRunner.query(\`
-
-CREATE TABLE IF NOT EXISTS _migrations(
-
-id SERIAL PRIMARY KEY,
-timestamp bigint,
-name varchar
-
-);
-
-\`);
-
+  // TypeORM automatically creates the migration metadata table.
+  // We leave this empty or perform a dummy query to ensure it's a valid migration.
+  await queryRunner.query(\`SELECT 1\`);
 }
 
 public async down(
 queryRunner: QueryRunner
-): Promise<void>{
-
-await queryRunner.query(\`
-DROP TABLE IF EXISTS _migrations;
-\`);
-
+): Promise<void> {
+  // Do nothing - TypeORM manages the migration table
 }
 
 }
