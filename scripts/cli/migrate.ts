@@ -23,6 +23,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawnSync, SpawnSyncReturns } from 'child_process';
 import { ensureBaselineExists } from "../db/baseline";
+import { DataSource } from 'typeorm';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -357,6 +358,99 @@ export class ${className} implements MigrationInterface {
   return filePath;
 }
 
+// ── Orphan-only drift check (used only inside --run pipeline) ─────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the _migrations tracking table does not exist yet.
+ * Uses information_schema so it never throws on a fresh database.
+ */
+async function isMigrationsTableMissing(
+  ds: DataSource,
+  tableName: string,
+): Promise<boolean> {
+  const rows = await ds.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name   = $1
+    ) AS "exists"
+  `, [tableName]) as Array<{ exists: boolean }>;
+  return !rows[0]?.exists;
+}
+
+function normalizeForComparison(name: string): string {
+  return name.replace(/_/g, '');
+}
+
+/**
+ * Drift check scoped to the --run pipeline.
+ *
+ * Purpose: detect migrations that were applied to the DB but whose files
+ * were subsequently deleted — these are genuine drift and should block apply.
+ *
+ * NOT a failure condition:
+ * - Pending migrations (files present, not yet applied) — that's what --run is for.
+ *
+ * @returns true if safe to proceed, false if orphaned migrations were found.
+ */
+async function checkOrphanedMigrations(configPath: string): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod        = require(path.resolve(process.cwd(), configPath));
+  const ds: DataSource = mod.default ?? mod;
+  const tableName  = (ds.options as any).migrationsTableName ?? '_migrations';
+
+  await ds.initialize();
+
+  try {
+    // Fresh DB — _migrations doesn't exist yet, nothing can be orphaned
+    if (await isMigrationsTableMissing(ds, tableName)) {
+      console.log(fmt.ok('Fresh database — no orphaned migrations possible'));
+      return true;
+    }
+
+    const appliedRows = await ds.query(
+      `SELECT name FROM ${tableName} ORDER BY id`,
+    ) as Array<{ name: string }>;
+
+    const codeNames = new Set(
+      (ds.migrations as any[]).map((m) =>
+        normalizeForComparison(m.name ?? m.constructor?.name ?? ''),
+      ),
+    );
+
+    const orphaned = appliedRows
+      .map((r) => r.name)
+      .filter((name) => !codeNames.has(normalizeForComparison(name)));
+
+    const pendingCount = (ds.migrations as any[]).filter((m) => {
+      const name = normalizeForComparison(m.name ?? m.constructor?.name ?? '');
+      const appliedSet = new Set(appliedRows.map((r) => normalizeForComparison(r.name)));
+      return !appliedSet.has(name);
+    }).length;
+
+    if (orphaned.length > 0) {
+      console.error(fmt.err(`${orphaned.length} orphaned migration(s) found in database but missing from code:`));
+      orphaned.forEach((n) => console.error(`    • ${n}`));
+      console.error('');
+      console.error('  These migrations were applied to the database but their files were deleted.');
+      console.error('  Restore the files or check git history before proceeding.');
+      return false;
+    }
+
+    if (pendingCount > 0) {
+      console.log(fmt.ok(`No orphaned migrations — ${pendingCount} pending (will be applied next)`));
+    } else {
+      console.log(fmt.ok('No drift detected — schema and code are in sync'));
+    }
+
+    return true;
+
+  } finally {
+    await ds.destroy();
+  }
+}
+
 // ── Governance runner ─────────────────────────────────────────────────────────
 
 interface GovernanceCheck {
@@ -664,11 +758,14 @@ async function runMigrate(opts: { config: string; skipSimulate?: boolean }): Pro
     process.exit(1);
   }
 
-  // Step 3 — Drift check
+  // Step 3 — Drift check (orphaned-only — pending migrations are expected here)
   console.log(`\n  ${fmt.step(3, total, 'Drift check')}`);
-  const driftScript = fs.existsSync('scripts/db/drift.ts') ? 'scripts/db/drift.ts' : 'scripts/db-drift.ts';
-  mustExec('npx', ['ts-node', driftScript], 'Drift check');
-  console.log(fmt.ok('No drift detected'));
+  const driftSafe = await checkOrphanedMigrations(opts.config);
+  if (!driftSafe) {
+    console.error(fmt.err('Drift check failed — migrations NOT applied'));
+    console.error('  Restore the missing migration file(s) and re-run.');
+    process.exit(1);
+  }
 
   // Step 4 — Simulation (dry run)
   console.log(`\n  ${fmt.step(4, total, 'Simulation (dry run)')}`);
@@ -686,12 +783,14 @@ async function runMigrate(opts: { config: string; skipSimulate?: boolean }): Pro
     'Migration run',
   );
 
-  // Step 6 — Verify schema
+  // Post-apply schema verification
   console.log('');
-  const verifyScript = fs.existsSync('scripts/db/verify.ts') ? 'scripts/db/verify.ts' : 'scripts/db-verify.ts';
+  const verifyScript = fs.existsSync('scripts/db/verify.ts')
+    ? 'scripts/db/verify.ts'
+    : 'scripts/db-verify.ts';
   const verifyResult = exec('npx', ['ts-node', verifyScript], { silent: true });
   if (verifyResult.status !== 0) {
-    console.log(fmt.warn('Schema verification had warnings — check db:verify output'));
+    console.log(fmt.warn('Schema verification had warnings — check: npm run db:verify'));
   } else {
     console.log(fmt.ok('Schema verification passed'));
   }
