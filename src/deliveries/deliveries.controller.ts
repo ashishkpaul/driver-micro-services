@@ -6,17 +6,20 @@ import {
   Patch,
   Param,
   ParseUUIDPipe,
+  UseInterceptors,
 } from "@nestjs/common";
 import { DeliveriesService } from "./deliveries.service";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
 import { UpdateDeliveryStatusDto } from "./dto/update-delivery-status.dto";
 import { VerifyDeliveryOtpDto } from "./dto/verify-delivery-otp.dto";
+import { IdempotencyInterceptor } from "../common/interceptors/idempotency.interceptor";
 
 @Controller("deliveries")
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}
 
   @Post()
+  @UseInterceptors(IdempotencyInterceptor)
   create(@Body() createDeliveryDto: CreateDeliveryDto) {
     return this.deliveriesService.create(createDeliveryDto);
   }
