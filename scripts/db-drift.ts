@@ -16,8 +16,27 @@ function matchesAlias(name: string, set: Set<string>): boolean {
   return aliases.some((a) => set.has(normalize(a)));
 }
 
+async function isFreshDatabase(dataSource: any): Promise<boolean> {
+  const result = await dataSource.query(`
+    SELECT EXISTS (
+      SELECT FROM information_schema.tables
+      WHERE table_name='_migrations'
+    );
+  `);
+
+  return !result[0].exists;
+}
+
 async function checkDrift(): Promise<void> {
   await dataSource.initialize();
+
+  if (await isFreshDatabase(dataSource)) {
+    console.log(
+      "Fresh database detected → skipping drift"
+    );
+
+    return;
+  }
 
   try {
     const executedRows: MigrationRow[] = await dataSource.query(

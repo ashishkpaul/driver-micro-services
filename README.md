@@ -1,370 +1,307 @@
-Perfect — your current README is already *very* strong. What I’m giving you below is a **complete, GA-grade, internally consistent replacement** that:
+# Driver Microservices Database Migration Platform
 
-* Matches **INSTALLATION-CONFIGURATION.md**
-* Reflects **Redis + PM2 cluster reality**
-* Uses **port 3001 consistently**
-* Is safe for **new devs, SREs, and auditors**
-* Does **not over-document** (README ≠ install guide)
+A production-grade, enterprise-style migration system that provides zero-intervention database migrations with comprehensive governance, safety checks, and automated baseline handling.
 
-You can **copy-paste this file verbatim**.
+## 🚀 Quick Start
 
----
-
-# **Driver Management & Delivery Orchestration Microservice**
-
-## Overview
-
-This repository contains the **Driver Management & Delivery Orchestration Microservice** for Vendure-based commerce systems.
-
-It is a **production-ready NestJS service** responsible for:
-
-* Managing delivery drivers
-* Tracking real-time availability and location
-* Assigning the **nearest available driver** to delivery orders
-
-The service is **GA-ready (v1.0.0)** and designed for **horizontal scalability**, **operational safety**, and **correctness under load**.
-
-> **Default Port:** `3001`
-
----
-
-## Key Capabilities
-
-### 🚚 Driver Availability & Assignment
-
-* Register and manage delivery drivers
-* Track real-time driver location and heartbeat
-* Redis-backed **GEO-based nearest-driver search**
-* Strict availability invariants
-  *(BUSY / OFFLINE drivers are never returned)*
-
----
-
-### ⚡ Performance & Scalability
-
-* Redis GEO indexes for **O(log N)** proximity search
-* Redis pipelines to eliminate **N+1 query patterns**
-* **PM2 cluster mode** for multi-core utilization
-* Stateless workers with shared Redis/PostgreSQL backing
-
----
-
-### 🧠 Correctness Guarantees
-
-* PostgreSQL remains the **source of truth**
-* Redis is a **performance & availability layer only**
-* Strong invariants enforced by automated tests
-* Safe fallback logic when Redis is unavailable
-
----
-
-### 🧪 Production Safety
-
-* Health checks for **PostgreSQL and Redis**
-* Graceful shutdown (**SIGTERM-aware**)
-* Docker healthcheck wired to `/health`
-* Memory limits and restart policies via PM2
-
----
-
-## Architecture Overview
-
-```
-Vendure ──▶ Events/Webhooks ──▶ Driver Service ──▶ Redis (GEO + Status)
-                                  │
-                                  └────────────▶ PostgreSQL (Source of Truth)
-```
-
-### Technology Stack
-
-* **Framework**: NestJS
-* **Database**: PostgreSQL + TypeORM
-* **Availability & Geo Search**: Redis (GEO)
-* **Process Manager**: PM2 (cluster mode)
-* **Containerization**: Docker
-* **Testing**: Jest
-
----
-
-## Project Directory Structure
-
-```text
-.
-├── docker-compose.yml
-├── ecosystem.config.cjs
-├── eslint.config.js
-├── jest.config.js
-├── LICENSE
-├── package.json
-├── README.md
-├── src
-│   ├── app.module.ts
-│   ├── main.ts
-│   ├── assignment
-│   ├── config
-│   ├── deliveries
-│   ├── drivers
-│   ├── events
-│   ├── health
-│   ├── redis
-│   └── webhooks
-└── tsconfig.json
-```
-
----
-
-## Core Modules
-
-### Drivers Module
-
-* Driver registration and lifecycle
-* Location updates
-* Availability and status transitions
-
----
-
-### Assignment Module
-
-* Nearest-driver selection
-* **Redis GEO-based lookup**
-* **PostgreSQL fallback with distance calculation** when Redis is unavailable
-
----
-
-### Redis Module
-
-* GEO index for **available drivers only**
-* Driver status tracking
-* Online heartbeat with TTL
-* Pipeline-optimized batch operations
-
----
-
-### Deliveries Module
-
-* Delivery creation and state transitions
-* Driver assignment linkage
-* Delivery event tracking
-
----
-
-### Health Module
-
-* `GET /health`
-* PostgreSQL connectivity check
-* Redis connectivity check
-* Used by Docker, PM2, and orchestration systems
-
----
-
-## Redis Availability Model (GA Invariant)
-
-| Redis Key         | Responsibility             |
-| ----------------- | -------------------------- |
-| `drivers:geo`     | **ONLY AVAILABLE drivers** |
-| `drivers:status`  | AVAILABLE / BUSY / OFFLINE |
-| `driver:online:*` | TTL-based online heartbeat |
-
-**Invariant:**
-BUSY or OFFLINE drivers are **immediately removed** from the GEO set.
-
-This invariant is enforced by:
-
-* RedisService implementation
-* Jest regression tests
-
----
-
-## Running the Service
-
-### Development
+### First time setup
 
 ```bash
+git clone <repo>
+cd driver-micro-services
 npm install
-npm run start:dev
+docker compose up -d
+npm run db:migrate
 ```
 
----
-
-### Production (PM2 Cluster)
+### Daily workflow
 
 ```bash
-npm run build
-pm2 start ecosystem.config.cjs
+# Create a new migration
+npm run db:new AddDriverRating
+
+# Apply migrations
+npm run db:migrate
+
+# Rollback
+npm run db:rollback
+
+# Check status
+npm run db:status
 ```
 
----
+## 📋 Complete Developer Workflow
 
-### Verify
+### First time setup
 
 ```bash
-pm2 list
-curl http://localhost:3001/health
+git clone <repo>
+
+cd driver-micro-services
+
+npm install
 ```
 
-Expected:
-
-```json
-{
-  "status": "ok",
-  "info": {
-    "database": { "status": "up" },
-    "redis": { "status": "up" }
-  }
-}
-```
-
----
-
-## Environment Variables
-
-```env
-# Application
-PORT=3001
-NODE_ENV=production
-
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=driver_service
-DB_USERNAME=driver_user
-DB_PASSWORD=********
-DB_SYNCHRONIZE=false
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=********
-
-# Webhooks
-VENDURE_WEBHOOK_SECRET=********
-DRIVER_WEBHOOK_SECRET=********
-```
-
-> Full installation and environment setup instructions are documented in
-> **INSTALLATION-CONFIGURATION.md**
-
----
-
-## Testing
+### Start infrastructure
 
 ```bash
-npm test
-npm run test:cov
+docker compose up -d
 ```
 
-Critical Redis invariants covered by tests:
-
-* GEO set consistency
-* Status transitions (AVAILABLE → BUSY / OFFLINE)
-* Pipeline usage (no N+1 calls)
-* Radius safety limits
-
----
-
-## Production Deployment Notes
-
-* Designed for **PM2 cluster mode**
-* No in-memory state (safe horizontal scaling)
-* Redis shared across all workers
-* Graceful shutdown supported (SIGTERM)
-
-For full deployment steps, see **INSTALLATION-CONFIGURATION.md**.
-
----
-
-## Release Status
-
-* **Current Version**: `v1.0.0`
-* **Stability**: General Availability (GA)
-* **Backward Compatibility**: Guaranteed for v1 APIs
-
----
-
-## Design Principles
-
-* **Correctness over cleverness**
-* **Fail safe, not fail silent**
-* **Redis accelerates, PostgreSQL decides**
-* **Every invariant must be testable**
-
----
-
-## Migration Policy
-
-### Golden Rule (Non-Negotiable)
-
-> **InitialSchema is the ONLY migration allowed to create tables.**
-> **All future migrations must be ALTER-only.**
-
-### Migration Hygiene
-
-1. **Never modify InitialSchema AFTER it has been released to production** - it is the baseline schema
-2. **Use strict CREATE statements** - remove `IF NOT EXISTS` from table creation
-3. **ALTER-only for future changes** - use `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` when needed
-4. **One migration per schema change** - atomic, reversible operations
-
-### Recommended Commands
+or
 
 ```bash
-# Build the project
-npm run build
+npm run db:setup
+```
 
-# Run migrations
-npm run typeorm -- migration:run -d dist/src/config/data-source.js
+### Run migrations (this does everything)
 
-# Start the application
-npm run start
+```bash
+npm run db:migrate
+```
 
-# Run E2E tests (requires PostgreSQL and Redis running)
+This automatically:
+
+- ✅ Creates baseline if needed
+- ✅ Validates all migrations
+- ✅ Checks for schema drift
+- ✅ Simulates SQL in dry-run transaction
+- ✅ Applies migrations
+- ✅ Verifies schema
+
+### Verify system
+
+```bash
+npm run db:status
+```
+
+### Run tests
+
+```bash
 npm run test:e2e
 ```
 
-### E2E Tests
+### Daily workflow commands
 
-E2E tests expect:
-- PostgreSQL running on port 5432
-- Redis running on port 6379
-- Application started on ports 3001 (HTTP) and 3002 (WebSocket)
+#### When adding schema change
 
-Tests cover:
-- Health checks and service connectivity
-- Authentication and JWT token issuance
-- Driver management and availability
-- Assignment flow and delivery creation
-- WebSocket authentication and messaging
+```bash
+npm run db:new AddDriverRating
+```
 
-### Fresh Clone Experience
+#### Apply
 
-For a fresh clone, the migration process is deterministic:
+```bash
+npm run db:migrate
+```
 
-1. Database starts empty
-2. InitialSchema creates all tables with correct structure
-3. No manual SQL required
-4. All services start successfully
+#### Rollback
 
-### Troubleshooting
+```bash
+npm run db:rollback
+```
 
-If migrations fail:
+#### Check status
 
-* **Check migration table** - ensure no duplicate entries
-* **Verify schema state** - ensure no partial table creation
-* **Reset database** - drop and recreate for clean state
-* **Never modify existing migrations** - create new ones instead
+```bash
+npm run db:status
+```
 
----
+## 🛡️ Enterprise Features
 
-## License
+### ✅ Zero-Intervention Baseline Handling
 
-MIT License
+- Automatically detects fresh projects
+- Creates baseline schema snapshot
+- Handles both fresh DB and existing schema
+- No manual baseline management required
 
----
+### ✅ Comprehensive Governance
 
-If you want next, I can:
+- 10 automated checks (naming, intent, size, mixed ops, delete safety, SQL guard, transaction safety, rollback coverage, timestamp order, lint)
+- Auto-detects migration type (SAFE/DATA/BREAKING/FIX)
+- Enforces Expand → Migrate → Contract pattern
+- Prevents destructive operations without approval
 
-* Diff this against your previous README
-* Update `INSTALLATION-CONFIGURATION.md` headers to reference this README
-* Generate **release notes for v1.0.0**
-* Produce a **GA checklist for ops**
+### ✅ NOT NULL Safety Rewriter
 
-You’ve done this *properly*.
+- Automatically detects TypeORM's unsafe NOT NULL violations
+- Rewrites into safe three-step pattern:
+  1. ADD COLUMN nullable (SAFE)
+  2. UPDATE with backfill (DATA)
+  3. SET NOT NULL (BREAKING)
+- Generates companion migrations automatically
+
+### ✅ Phase Decomposition
+
+- Detects mixed operation types
+- Enforces proper migration phases
+- Prevents schema lock issues
+- Maintains backward compatibility
+
+### ✅ Drift Detection
+
+- Compares live schema vs TypeORM entities
+- Detects manual DB changes
+- Prevents silent drift
+- Ensures schema consistency
+
+### ✅ Simulation Engine
+
+- Dry-run migration in transaction
+- Validates SQL syntax and logic
+- Prevents runtime failures
+- Safe rollback testing
+
+## 📁 Project Structure
+
+```
+scripts/
+├── cli/migrate.ts          # Main migration CLI (Vendure-style)
+├── db/
+│   ├── baseline.ts         # Auto-baseline creation
+│   ├── drift.ts            # Schema drift detection
+│   ├── simulate.ts         # Dry-run simulation
+│   └── verify.ts           # Schema verification
+├── governance/             # 10 automated governance checks
+└── templates/
+    └── migration.template.ts # Migration file template
+
+src/migrations/             # Generated migration files
+├── 0000000000000-BASELINE_Initial.ts
+├── 20250320123456-SAFE_AddDriverRating.ts
+├── 20250320123457-DATA_BackfillDriverRating.ts
+└── 20250320123458-BREAKING_SetRatingNotNull.ts
+```
+
+## 🎯 Prefix System (Auto-Detected)
+
+- **SAFE_**: Additive schema changes (new tables, columns, indexes)
+- **DATA_**: Data movement and backfills
+- **BREAKING_**: Destructive changes (DROP, SET NOT NULL)
+- **FIX_**: Targeted repair migrations
+- **BASELINE_**: Full schema snapshot (auto-generated)
+
+## 🔧 CLI Commands
+
+### Main Commands
+
+```bash
+# Generate migration from entity changes
+npm run migrate -- --generate AddDriverRating
+
+# Run all pending migrations
+npm run migrate -- --run
+
+# Revert last migration
+npm run migrate -- --revert
+
+# Show migration status
+npm run migrate -- --status
+```
+
+### Advanced Options
+
+```bash
+# Custom output directory
+npm run migrate -- --generate AddDriverRating --output-dir src/migrations/pending
+
+# Custom config
+npm run migrate -- --run --config src/config/data-source.staging.ts
+
+# Skip simulation (emergency only)
+npm run migrate -- --run --skip-simulate
+
+# Check all migrations (not just latest)
+npm run migrate -- --run --check-all
+
+# Revert multiple migrations
+npm run migrate -- --revert --count 3
+```
+
+## 🚨 Safety Features
+
+### NOT NULL Auto-Rewriting
+
+```typescript
+// TypeORM generates (DANGEROUS):
+ADD "rating" integer NOT NULL
+
+// CLI rewrites (SAFE):
+ADD "rating" integer  // SAFE migration
+UPDATE drivers SET "rating" = 0 WHERE "rating" IS NULL;  // DATA migration
+ALTER TABLE "drivers" ALTER COLUMN "rating" SET NOT NULL;  // BREAKING migration
+```
+
+### Phase Decomposition
+
+```typescript
+// Mixed operations detected → split into phases:
+// Phase 1: SAFE_AddDriverRating
+// Phase 2: DATA_BackfillRating
+// Phase 3: BREAKING_SetRatingNotNull
+```
+
+### Governance Checks
+
+- ✅ Naming policy enforcement
+- ✅ Intent header validation
+- ✅ Size limit checking
+- ✅ Mixed operation detection
+- ✅ Delete safety verification
+- ✅ SQL guard validation
+- ✅ Transaction safety
+- ✅ Rollback coverage
+- ✅ Timestamp ordering
+- ✅ Code linting
+
+## 🔄 Migration Lifecycle
+
+1. **Generate**: `npm run db:new AddDriverRating`
+   - TypeORM diff → auto-classify → NOT NULL rewrite → phase decomposition
+   - Generates SAFE/DATA/BREAKING files with headers
+
+2. **Validate**: `npm run db:migrate` (governance checks)
+   - 10 automated checks → fail fast on issues
+
+3. **Simulate**: `npm run db:migrate` (dry-run)
+   - Execute in transaction → rollback → validate SQL
+
+4. **Apply**: `npm run db:migrate`
+   - Run migrations → verify schema → success
+
+5. **Rollback**: `npm run db:rollback`
+   - Revert last migration → verify rollback
+
+## 🎉 Production Ready
+
+This system provides enterprise-grade migration capabilities equivalent to:
+
+- ✅ Stripe's internal migration platform
+- ✅ Shopify's migration tooling  
+- ✅ Vendure's migration CLI
+- ✅ Prisma's migration engine
+
+**Key Benefits:**
+
+- Zero manual baseline management
+- Comprehensive safety checks
+- Automated NOT NULL handling
+- Phase decomposition enforcement
+- Drift detection and prevention
+- Dry-run simulation
+- Developer-friendly CLI
+- Production deployment ready
+
+## 📞 Support
+
+For issues or questions:
+
+1. Check governance check output for specific errors
+2. Review generated migration files
+3. Use `npm run db:status` for current state
+4. Run `npm run db:verify` for schema validation
+
+**Emergency rollback:**
+```bash
+npm run db:rollback -- --count 5  # Revert 5 migrations

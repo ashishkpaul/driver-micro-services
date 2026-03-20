@@ -19,7 +19,8 @@ for (const file of files) {
 
   // Logic: PostgreSQL does not allow 'CREATE INDEX CONCURRENTLY' inside a transaction.
   // TypeORM migrations run in a transaction by default unless 'transaction = false' is set.
-  const containsConcurrently = /CONCURRENTLY/i.test(content);
+  const concurrentPattern = /(CREATE|DROP)\s+INDEX\s+CONCURRENTLY/i;
+  const containsConcurrently = concurrentPattern.test(content);
   const hasTransactionDisabled = /transaction\s*=\s*false/.test(content);
 
   if (containsConcurrently && !hasTransactionDisabled) {

@@ -21,14 +21,28 @@ for (const file of files) {
   // Logic: A valid migration must contain both 'public async up' and 'public async down'
   // We use regex to ensure we are matching the method signature, not just comments.
   const hasUpMethod = /public\s+async\s+up\(/.test(content);
-  const hasDownMethod = /public\s+async\s+down\(/.test(content);
 
-  if (hasUpMethod && !hasDownMethod) {
-    console.error(`❌ ROLLBACK COVERAGE MISSING: "${file}"`);
-    console.error(
-      `   Every migration must implement a 'down()' method to be reversible.`,
+  if (hasUpMethod) {
+    const downMatch = content.match(
+      /public\s+async\s+down\([\s\S]*?\{([\s\S]*?)\}/,
     );
-    failed = true;
+
+    if (!downMatch) {
+      console.error(`❌ ROLLBACK COVERAGE MISSING: "${file}"`);
+      console.error(
+        `   Every migration must implement a 'down()' method to be reversible.`,
+      );
+      failed = true;
+    } else {
+      const downBody = downMatch[1].trim();
+      if (downBody.length < 10) {
+        console.error(`❌ Empty down(): "${file}"`);
+        console.error(
+          `   The down() method is too short, likely empty or just whitespace.`,
+        );
+        failed = true;
+      }
+    }
   }
 }
 

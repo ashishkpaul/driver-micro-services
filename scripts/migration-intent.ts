@@ -2,7 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 
 const migrationsDir = path.resolve(process.cwd(), "src/migrations");
-const validPrefixes = ["SAFE_", "DATA_", "BREAKING_", "FIX_"];
+
+if (!fs.existsSync(migrationsDir)) {
+  console.error("❌ src/migrations not found");
+  process.exit(1);
+}
+
+const validPrefixes = ["SAFE_", "DATA_", "BREAKING_", "FIX_", "SAFE_BASELINE_"];
 let failed = false;
 
 for (const file of fs.readdirSync(migrationsDir)) {
