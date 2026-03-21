@@ -48,19 +48,23 @@ isActive!: boolean;
 })
 status!: DriverStatus;
 
-@Column({
-  name: "current_lat",
-  type: "numeric",
-  nullable: true
-})
-currentLat?: number;
+  @Column({
+    name: "current_lat",
+    type: "numeric",
+    precision: 10,
+    scale: 8,
+    nullable: true
+  })
+  currentLat?: number;
 
-@Column({
-  name: "current_lon",
-  type: "numeric",
-  nullable: true,
-})
-currentLon?: number;
+  @Column({
+    name: "current_lon",
+    type: "numeric",
+    precision: 10,
+    scale: 8,
+    nullable: true
+  })
+  currentLon?: number;
 
 @Column({
   name: "city_id",

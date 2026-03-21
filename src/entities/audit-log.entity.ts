@@ -8,10 +8,10 @@ import {
 } from "typeorm";
 
 @Entity("audit_logs")
-@Index("idx_audit_logs_user_id", ["userId"])
-@Index("idx_audit_logs_action", ["action"])
-@Index("idx_audit_logs_resource", ["resourceType", "resourceId"])
-@Index("idx_audit_logs_created_at", ["createdAt"])
+// @Index("idx_audit_logs_user_id", ["userId"])
+// @Index("idx_audit_logs_action", ["action"])
+// @Index("idx_audit_logs_resource", ["resourceType", "resourceId"])
+// @Index("idx_audit_logs_created_at", ["createdAt"])
 export class AuditLog {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

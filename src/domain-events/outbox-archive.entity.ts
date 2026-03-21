@@ -11,7 +11,7 @@ export class OutboxArchiveEvent {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ type: 'varchar' })
   eventType: string;
 
   @Column("jsonb")

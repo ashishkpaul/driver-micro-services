@@ -22,12 +22,12 @@ export class Zone {
   /* Basic Information                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column()
+  @Column({ type: 'varchar' })
   @IsString()
   @IsNotEmpty()
   name!: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   @IsString()
   @IsNotEmpty()
   code!: string; // e.g., "NORTH-BNG", "SOUTH-BNG"
@@ -41,25 +41,22 @@ export class Zone {
   @IsNotEmpty()
   cityId!: string;
 
-  @ManyToOne(() => City, { 
-    onDelete: 'RESTRICT', // Match the Baseline's RESTRICT rule
-    onUpdate: 'NO ACTION' 
+  @ManyToOne(() => City, {
+    onDelete: "RESTRICT",
+    onUpdate: "NO ACTION"
   })
-  @JoinColumn({ 
-    name: 'city_id', 
-    foreignKeyConstraintName: 'fk_zones_city' 
+  @JoinColumn({
+    name: "city_id",
+    foreignKeyConstraintName: "fk_zones_city"
   })
   city!: City;
 
   @Column({
-    type: 'polygon', // Ensure this matches the physical 'polygon' type
-    transformer: {
-      from: (v) => v,
-      to: (v) => v
-    }
+    type: 'polygon',
+    nullable: true
   })
   @IsNotEmpty()
-  boundary?: Polygon; // Geographic boundary of the zone
+  boundary?: string;
 
   /* ------------------------------------------------------------------ */
   /* Timestamps                                                         */

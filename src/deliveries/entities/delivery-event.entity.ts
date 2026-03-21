@@ -71,6 +71,7 @@ export class DeliveryEvent {
 
   @ManyToOne(() => Delivery, (delivery) => delivery.events, {
     onDelete: "CASCADE",
+    onUpdate: "NO ACTION"
   })
   @JoinColumn({
     name: "delivery_id",

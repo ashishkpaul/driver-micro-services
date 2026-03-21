@@ -81,16 +81,16 @@ isActive!: boolean;
 })
 cityId?: string;
 
-@ManyToOne(() => City,{
-  nullable:true,
-  onDelete:"SET NULL",
-  onUpdate:"NO ACTION"
+@ManyToOne(() => City, {
+  nullable: true,
+  onDelete: "SET NULL",
+  onUpdate: "NO ACTION"
 })
 @JoinColumn({
-  name:"city_id",
-  foreignKeyConstraintName:"fk_admin_users_city"
+  name: "city_id",
+  foreignKeyConstraintName: "fk_admin_users_city"
 })
-  city?: City;
+city?: City;
 
   /* ------------------------------------------------------------------ */
   /* Audit & Tracking                                                   */

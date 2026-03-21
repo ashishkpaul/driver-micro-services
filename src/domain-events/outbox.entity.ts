@@ -63,18 +63,30 @@ export type VersionedEventType =
   | "PROOF_ACCEPTED_V3";
 
 @Entity('outbox')
-@Index('idx_outbox_worker', ['status', 'nextRetryAt'], { 
-  where: "(status = 'PENDING'::outbox_status_enum)" // Must match Postgres's cast string exactly
-})
-@Index('idx_outbox_locked', ['lockedAt'], { 
-  where: "(status = 'PROCESSING'::outbox_status_enum)" 
-})
+@Index(
+  'idx_outbox_worker',
+  ['status', 'nextRetryAt'],
+  {
+    where: "(status = 'PENDING'::outbox_status_enum)"
+  }
+)
+@Index(
+  'idx_outbox_locked',
+  ['lockedAt'],
+  {
+    where: "(status = 'PROCESSING'::outbox_status_enum)"
+  }
+)
 export class OutboxEvent {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  eventType: string;
+  @Column({ 
+    name: 'event_type', 
+    type: 'varchar',
+    length: 255
+  })
+  eventType!: string;
 
   @Column("jsonb")
   payload: any;
@@ -82,16 +94,17 @@ export class OutboxEvent {
   @Column({
     type: 'enum',
     enum: OutboxStatus,
-    enumName: 'outbox_status_enum' // This prevents the RENAME/CREATE loop
+    enumName: 'outbox_status_enum', // Verify this name exists in pg_type
+    nullable: false
   })
-  status: OutboxStatus;
+  status!: OutboxStatus;
 
   @Column({ default: 0 })
   retryCount: number;
 
   @Column({ 
     name: 'last_error', 
-    type: 'text', 
+    type: 'varchar', // Changed from 'text' to 'varchar'
     nullable: true 
   })
   lastError?: string;
