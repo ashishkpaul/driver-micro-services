@@ -5,8 +5,8 @@ import {
 } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, Not } from "typeorm";
-import { DriverOffer } from "../offers/entities/driver-offer.entity";
-import { Delivery } from "./entities/delivery.entity";
+import { DriverOffer, DriverOfferStatus } from "../offers/entities/driver-offer.entity";
+import { Delivery, DeliveryStatus } from "./entities/delivery.entity";
 import { Assignment } from "../assignment/entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
@@ -68,12 +68,12 @@ export class DeliveryStateMachine {
       }
 
       // 3. Accept offer
-      offer.status = "ACCEPTED";
+      offer.status = DriverOfferStatus.ACCEPTED;
       offer.acceptedAt = new Date();
       await manager.save(offer);
 
       // 4. Assign delivery
-      delivery.status = "ASSIGNED";
+      delivery.status = DeliveryStatus.ASSIGNED;
       delivery.driverId = driverId;
       delivery.assignedAt = new Date();
       await manager.save(delivery);
@@ -97,10 +97,10 @@ export class DeliveryStateMachine {
         DriverOffer,
         {
           deliveryId: delivery.id,
-          status: "PENDING",
+          status: DriverOfferStatus.PENDING,
           id: Not(offer.id),
         },
-        { status: "EXPIRED" },
+        { status: DriverOfferStatus.EXPIRED },
       );
 
       // 8. Publish outbox event

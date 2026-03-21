@@ -25,6 +25,7 @@ import { AuditService } from "../services/audit.service";
 import { Request } from "express";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
+import { AdminRole } from "../entities/admin-user.entity";
 
 @Controller("admin/users")
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
@@ -80,13 +81,13 @@ export class AdminController {
 
     // SUPER_ADMIN can see all, ADMIN can only see their city
     let filterCityId = cityId;
-    if (request.user.role === "ADMIN" && !filterCityId) {
+    if (request.user.role === AdminRole.ADMIN && !filterCityId) {
       filterCityId = request.user.cityId;
     }
 
     const result = await this.adminService.findAll(
       filterCityId,
-      role,
+      role as AdminRole,
       skip,
       take,
     );

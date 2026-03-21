@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, IsNull, LessThan, Repository } from "typeorm";
-import { Delivery } from "./entities/delivery.entity";
+import { Delivery, DeliveryStatus } from "./entities/delivery.entity";
 import { RedisService } from "../redis/redis.service";
 
 @Injectable()
@@ -31,7 +31,7 @@ export class SlaMonitorService {
 
       const pickupBreaches = await this.deliveryRepository.find({
         where: {
-          status: "ASSIGNED",
+          status: DeliveryStatus.ASSIGNED,
           expectedPickupAt: LessThan(now),
           slaBreachAt: IsNull(),
         },
@@ -39,7 +39,7 @@ export class SlaMonitorService {
 
       const deliveryBreaches = await this.deliveryRepository.find({
         where: {
-          status: In(["PICKED_UP", "IN_TRANSIT"]),
+          status: In([DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT]),
           expectedDeliveryAt: LessThan(now),
           slaBreachAt: IsNull(),
         },

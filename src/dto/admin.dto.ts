@@ -11,6 +11,7 @@ import {
   Max,
 } from "class-validator";
 import { Role } from "../auth/roles.enum";
+import { AdminRole } from "../entities/admin-user.entity";
 
 export class CreateAdminDto {
   @IsEmail()
@@ -20,8 +21,8 @@ export class CreateAdminDto {
   @MinLength(8)
   password!: string;
 
-  @IsEnum(Role)
-  role!: Role;
+  @IsEnum(AdminRole)
+  role!: AdminRole;
 
   @IsOptional()
   @IsUUID()
@@ -38,8 +39,8 @@ export class UpdateAdminDto {
   email?: string;
 
   @IsOptional()
-  @IsEnum(Role)
-  role?: Role;
+  @IsEnum(AdminRole)
+  role?: AdminRole;
 
   @IsOptional()
   @IsUUID()
@@ -61,7 +62,7 @@ export class AdminLoginDto {
 export class AdminResponseDto {
   id!: string;
   email!: string;
-  role!: Role;
+  role!: AdminRole;
   isActive!: boolean;
   cityId?: string;
   lastLoginAt?: Date;
@@ -75,8 +76,8 @@ export class AdminListQueryDto {
   cityId?: string;
 
   @IsOptional()
-  @IsEnum(Role)
-  role?: Role;
+  @IsEnum(AdminRole)
+  role?: AdminRole;
 
   @IsOptional()
   @Min(0)

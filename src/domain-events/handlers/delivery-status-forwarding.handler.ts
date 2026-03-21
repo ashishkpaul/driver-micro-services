@@ -1,159 +1,97 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WebhooksService } from '../../webhooks/webhooks.service';
-import { WebSocketService } from '../../websocket/websocket.service';
 import { EventHandler } from './base.handler';
 import { OutboxEvent } from '../outbox.entity';
 
-/**
- * src/domain-events/handlers/delivery-status-forwarding.handler.ts
- *
- * CRITICAL-4 FIX: Several event types were published to the outbox but had
- * no registered handler. The outbox worker threw "No handler registered for
- * event type: DELIVERY_PICKUP_CONFIRMED_V1" (and similar), retried 10 times,
- * and permanently failed. Drivers never received proof confirmation.
- * PICKED_UP and DELIVERED status changes were silently lost.
- *
- * Unhandled types before this fix:
- *   DELIVERY_PICKUP_CONFIRMED_V1  — publishd from updateStatusInternal (PICKED_UP)
- *   DELIVERY_DROPOFF_CONFIRMED_V1 — published from verifyOtp + updateStatusInternal (DELIVERED)
- *   DELIVERY_FAILED_V1            — published from updateStatusInternal (FAILED)
- *   PROOF_ACCEPTED_V1             — published from verifyOtp
- *
- * Responsibility: forward each event to Vendure via webhooksService and
- * notify the driver over WebSocket where applicable. Mirrors the pattern
- * established by DeliveryAssignedHandler.
- */
 @Injectable()
 export class DeliveryStatusForwardingHandler implements EventHandler {
   private readonly logger = new Logger(DeliveryStatusForwardingHandler.name);
 
-  constructor(
-    private readonly webhooksService: WebhooksService,
-    private readonly wsService: WebSocketService,
-  ) {}
+  constructor(private webhookService: WebhooksService) {}
 
   async handle(event: OutboxEvent): Promise<void> {
-    if (!event.eventType) {
-      throw new Error(`Missing eventType for outbox event ${event.id}`);
-    }
+    const eventType = event.eventType;
+    const payload = event.payload;
 
-    this.logger.debug(
-      `Forwarding status event ${event.eventType} (id=${event.id})`,
-    );
+    this.logger.debug(`Handling event ${event.id} (${eventType})`);
 
-    switch (event.eventType) {
-      case 'DELIVERY_PICKUP_CONFIRMED_V1':
-      case 'DELIVERY_PICKUP_CONFIRMED_V2':
-      case 'DELIVERY_PICKUP_CONFIRMED_V3':
-        await this.handlePickedUp(event);
+    switch (eventType) {
+      case 'DELIVERY_ASSIGNED_V1':
+        await this.handleDeliveryAssigned(event);
         break;
-
-      case 'DELIVERY_DROPOFF_CONFIRMED_V1':
-      case 'DELIVERY_DROPOFF_CONFIRMED_V2':
-      case 'DELIVERY_DROPOFF_CONFIRMED_V3':
-        await this.handleDelivered(event);
+      case 'DELIVERY_PICKED_UP_V1':
+        await this.handleDeliveryPickedUp(event);
         break;
-
-      case 'DELIVERY_FAILED_V1':
-      case 'DELIVERY_FAILED_V2':
-      case 'DELIVERY_FAILED_V3':
-        await this.handleFailed(event);
+      case 'DELIVERY_DROPPED_OFF_V1':
+        await this.handleDeliveryDroppedOff(event);
         break;
-
       case 'PROOF_ACCEPTED_V1':
-      case 'PROOF_ACCEPTED_V2':
-      case 'PROOF_ACCEPTED_V3':
         await this.handleProofAccepted(event);
         break;
-
       default:
-        throw new Error(
-          `DeliveryStatusForwardingHandler received unexpected event type: ${event.eventType}`,
-        );
+        this.logger.warn(`No handler registered for event type: ${eventType}`);
+        throw new Error(`Unknown outbox event type: ${eventType}`);
     }
   }
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  private async handleDeliveryAssigned(event: OutboxEvent): Promise<void> {
+    const payload = event.payload;
+    const { sellerOrderId, channelId, driverId, assignmentId, assignedAt } = payload;
 
-  private async handlePickedUp(event: OutboxEvent): Promise<void> {
-    const { sellerOrderId, channelId, pickupProofUrl, pickedUpAt } = event.payload ?? {};
+    this.logger.log(`Processing DELIVERY_ASSIGNED_V1 for seller order ${sellerOrderId}`);
 
-    if (!sellerOrderId || !channelId) {
-      throw new Error(
-        `DELIVERY_PICKUP_CONFIRMED payload missing sellerOrderId/channelId (event ${event.id})`,
-      );
-    }
-
-    await this.webhooksService.emitDeliveryPickedUp({
+    // Notify Vendure via webhook
+    await this.webhookService.emitDeliveryAssigned({
       sellerOrderId,
       channelId,
-      pickupProofUrl: pickupProofUrl ?? '',
-      pickedUpAt: pickedUpAt ?? new Date().toISOString(),
+      driverId,
+      assignmentId,
+      assignedAt: assignedAt || new Date().toISOString(),
     });
-
-    this.logger.log(`Forwarded PICKUP_CONFIRMED to Vendure for order ${sellerOrderId}`);
   }
 
-  private async handleDelivered(event: OutboxEvent): Promise<void> {
-    const { sellerOrderId, channelId, deliveryProofUrl, deliveredAt } = event.payload ?? {};
+  private async handleDeliveryPickedUp(event: OutboxEvent): Promise<void> {
+    const payload = event.payload;
+    const { sellerOrderId, channelId, pickupProofUrl, pickedUpAt } = payload;
 
-    if (!sellerOrderId || !channelId) {
-      throw new Error(
-        `DELIVERY_DROPOFF_CONFIRMED payload missing sellerOrderId/channelId (event ${event.id})`,
-      );
-    }
+    this.logger.log(`Processing DELIVERY_PICKED_UP_V1 for seller order ${sellerOrderId}`);
 
-    await this.webhooksService.emitDeliveryDelivered({
+    // Notify Vendure via webhook
+    await this.webhookService.emitDeliveryPickedUp({
       sellerOrderId,
       channelId,
-      deliveryProofUrl: deliveryProofUrl ?? '',
-      deliveredAt: deliveredAt ?? new Date().toISOString(),
+      pickupProofUrl,
+      pickedUpAt: pickedUpAt || new Date().toISOString(),
     });
-
-    this.logger.log(`Forwarded DROPOFF_CONFIRMED to Vendure for order ${sellerOrderId}`);
   }
 
-  private async handleFailed(event: OutboxEvent): Promise<void> {
-    const { sellerOrderId, channelId, failure } = event.payload ?? {};
+  private async handleDeliveryDroppedOff(event: OutboxEvent): Promise<void> {
+    const payload = event.payload;
+    const { sellerOrderId, channelId, deliveryProofUrl, deliveredAt } = payload;
 
-    if (!sellerOrderId || !channelId) {
-      throw new Error(
-        `DELIVERY_FAILED payload missing sellerOrderId/channelId (event ${event.id})`,
-      );
-    }
+    this.logger.log(`Processing DELIVERY_DROPPED_OFF_V1 for seller order ${sellerOrderId}`);
 
-    await this.webhooksService.emitDeliveryFailed({
+    // Notify Vendure via webhook
+    await this.webhookService.emitDeliveryDelivered({
       sellerOrderId,
       channelId,
-      failure: {
-        code:        failure?.code       ?? 'DELIVERY_FAILED',
-        reason:      failure?.reason     ?? 'Unknown failure',
-        occurredAt:  failure?.occurredAt ?? new Date().toISOString(),
-      },
+      deliveryProofUrl,
+      deliveredAt: deliveredAt || new Date().toISOString(),
     });
-
-    this.logger.log(`Forwarded DELIVERY_FAILED to Vendure for order ${sellerOrderId}`);
   }
 
   private async handleProofAccepted(event: OutboxEvent): Promise<void> {
-    const { driverId, deliveryId, proofType, proofUrl } = event.payload ?? {};
+    const payload = event.payload;
+    const { sellerOrderId, channelId, proofType, deliveryProofUrl } = payload;
 
-    // PROOF_ACCEPTED is a driver-facing confirmation — notify via WebSocket.
-    // It is NOT forwarded to Vendure (Vendure already knows from DROPOFF_CONFIRMED).
-    if (driverId) {
-      await this.wsService.emitProofAccepted(driverId, {
-        deliveryId: deliveryId ?? '',
-        proofType:  proofType  ?? 'unknown',
-        proofUrl:   proofUrl   ?? '',
-        acceptedAt: new Date().toISOString(),
-      });
-      this.logger.log(
-        `Emitted PROOF_ACCEPTED_V1 to driver ${driverId} for delivery ${deliveryId}`,
-      );
-    } else {
-      this.logger.warn(
-        `PROOF_ACCEPTED event ${event.id} has no driverId — WebSocket notification skipped`,
-      );
-    }
+    this.logger.log(`Processing PROOF_ACCEPTED_V1 for seller order ${sellerOrderId}, proofType: ${proofType}`);
+
+    // Notify Vendure via webhook - simplified for now
+    await this.webhookService.emitDeliveryDelivered({
+      sellerOrderId,
+      channelId,
+      deliveryProofUrl,
+      deliveredAt: new Date().toISOString(),
+    });
   }
 }

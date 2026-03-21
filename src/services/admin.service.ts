@@ -8,13 +8,12 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { PasswordService } from "./password.service";
-import { AdminUser } from "../entities/admin-user.entity";
+import { AdminUser, AdminRole } from "../entities/admin-user.entity";
 import {
   CreateAdminDto,
   UpdateAdminDto,
   AdminLoginDto,
 } from "../dto/admin.dto";
-import { Role } from "../auth/roles.enum";
 import { City } from "../entities/city.entity";
 
 @Injectable()
@@ -161,7 +160,7 @@ export class AdminService {
    */
   async findAll(
     cityId?: string,
-    role?: Role,
+    role?: AdminRole,
     skip = 0,
     take = 50,
   ): Promise<{ admins: AdminUser[]; total: number }> {
@@ -196,7 +195,7 @@ export class AdminService {
 
     // Superadmin can update any admin, regular admin can only update their own city
     if (
-      updatedBy.role !== Role.SUPER_ADMIN &&
+      updatedBy.role !== AdminRole.SUPER_ADMIN &&
       admin.cityId !== updatedBy.cityId
     ) {
       throw new BadRequestException("You can only update admins in your city");
@@ -240,12 +239,12 @@ export class AdminService {
     const admin = await this.findById(id);
 
     // Only superadmin can delete other admins
-    if (deletedBy.role !== Role.SUPER_ADMIN) {
+    if (deletedBy.role !== AdminRole.SUPER_ADMIN) {
       throw new BadRequestException("Only superadmin can delete admins");
     }
 
     // Cannot delete superadmin
-    if (admin.role === Role.SUPER_ADMIN) {
+    if (admin.role === AdminRole.SUPER_ADMIN) {
       throw new BadRequestException("Cannot delete superadmin");
     }
 
