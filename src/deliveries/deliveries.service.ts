@@ -3,6 +3,7 @@ import {
   NotFoundException,
   Logger,
   BadRequestException,
+  ConflictException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource, EntityManager } from "typeorm";
@@ -42,6 +43,17 @@ export class DeliveriesService {
   private readonly OTP_MAX_ATTEMPTS = 3;
   private readonly OTP_LOCK_DURATION_MS = 15 * 60 * 1000;
   private readonly MAX_DROPOFF_RADIUS_KM = 0.25; // 250 meters
+
+  // Task 1: Enforce Strict Delivery State Transitions
+  private readonly allowedTransitions: Record<DeliveryStatus, DeliveryStatus[]> = {
+    PENDING: [DeliveryStatus.ASSIGNED, DeliveryStatus.CANCELLED],
+    ASSIGNED: [DeliveryStatus.PICKED_UP, DeliveryStatus.FAILED, DeliveryStatus.CANCELLED],
+    PICKED_UP: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.FAILED],
+    IN_TRANSIT: [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED],
+    DELIVERED: [],
+    FAILED: [],
+    CANCELLED: [],
+  };
 
   private haversineKm(
     lat1: number,
@@ -273,6 +285,13 @@ export class DeliveriesService {
 
       if (!delivery)
         throw new NotFoundException(`Delivery ${deliveryId} not found`);
+      
+      // Task 3: Add Idempotency Protection on OTP Verification
+      if (delivery.status === DeliveryStatus.DELIVERED) {
+        this.logger.log(`Delivery ${deliveryId} is already DELIVERED. Returning idempotently.`);
+        return delivery; // Return success instead of throwing
+      }
+      
       if (!delivery.deliveryOtp)
         throw new BadRequestException("No OTP active for this delivery");
 
@@ -365,6 +384,12 @@ export class DeliveriesService {
 
       // Convert string status to enum
       const statusEnum = this.mapStringToDeliveryStatus(updateDto.status);
+      
+      // Task 1: Enforce Strict Delivery State Transitions
+      if (!this.allowedTransitions[delivery.status].includes(statusEnum)) {
+        throw new ConflictException(`Invalid state transition from ${delivery.status} to ${statusEnum}`);
+      }
+      
       delivery.status = statusEnum;
 
       switch (statusEnum) {

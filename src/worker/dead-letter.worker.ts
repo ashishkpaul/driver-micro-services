@@ -1,12 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { DeadLetterService } from "../domain-events/dead-letter.service";
+import { AlertingService } from "../services/alerting.service";
 
 @Injectable()
 export class DeadLetterWorker {
   private readonly logger = new Logger(DeadLetterWorker.name);
 
-  constructor(private deadLetterService: DeadLetterService) {}
+  constructor(
+    private deadLetterService: DeadLetterService,
+    private alertingService: AlertingService,
+  ) {}
 
   /**
    * Inspect failed events every 5 minutes
@@ -46,6 +50,8 @@ export class DeadLetterWorker {
         this.logger.error(
           "FAILURE THRESHOLD EXCEEDED: High failure rate detected in the last hour",
         );
+        // Task 5: Hook Dead-Letter & SLA Breaches to External Alerts
+        await this.alertingService.sendDeadLetterThresholdAlert(10, '1 hour');
       }
 
       this.logger.log(

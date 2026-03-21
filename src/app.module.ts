@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { TypeOrmModuleOptions } from "@nestjs/typeorm";
+import { ThrottlerModule } from "@nestjs/throttler";
 import { DriversModule } from "./drivers/drivers.module";
 import { DeliveriesModule } from "./deliveries/deliveries.module";
 import { AssignmentModule } from "./assignment/assignment.module";
@@ -16,8 +17,6 @@ import { AuthModule } from "./auth/auth.module";
 import { AdminModule } from "./modules/admin.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { DomainEventsApiModule } from "./domain-events/domain-events.module";
-import { AdminDeadLetterController } from "./controllers/admin-deadletter.controller";
-import { AdminArchiveController } from "./controllers/admin-archive.controller";
 
 @Module({
   imports: [
@@ -25,6 +24,10 @@ import { AdminArchiveController } from "./controllers/admin-archive.controller";
       isGlobal: true,
       envFilePath: [".env.local", ".env"],
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000, // 60 seconds
+      limit: 10, // 10 requests per minute
+    }]),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],

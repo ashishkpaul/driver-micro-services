@@ -4,6 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { In, IsNull, LessThan, Repository } from "typeorm";
 import { Delivery, DeliveryStatus } from "./entities/delivery.entity";
 import { RedisService } from "../redis/redis.service";
+import { AlertingService } from "../services/alerting.service";
 
 @Injectable()
 export class SlaMonitorService {
@@ -14,6 +15,7 @@ export class SlaMonitorService {
     @InjectRepository(Delivery)
     private readonly deliveryRepository: Repository<Delivery>,
     private readonly redisService: RedisService,
+    private readonly alertingService: AlertingService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -60,6 +62,11 @@ export class SlaMonitorService {
 
       await this.deliveryRepository.save([...uniqueBreaches.values()]);
       this.logger.warn(`Marked ${uniqueBreaches.size} delivery SLA breaches`);
+      
+      // Task 5: Hook Dead-Letter & SLA Breaches to External Alerts
+      if (uniqueBreaches.size > 0) {
+        await this.alertingService.sendSlaBreachAlert(uniqueBreaches.size);
+      }
     } finally {
       await this.redisService.getClient().del(this.lockKey);
     }

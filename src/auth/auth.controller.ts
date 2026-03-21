@@ -5,7 +5,9 @@ import {
   Req,
   ForbiddenException,
   BadRequestException,
+  UseGuards,
 } from "@nestjs/common";
+import { ThrottlerGuard } from "@nestjs/throttler";
 import { AuthService } from "./auth.service";
 import { AdminLoginDto } from "../dto/admin.dto";
 import { AuditService } from "../services/audit.service";
@@ -114,6 +116,7 @@ export class AuthController {
    *   "email": "driver@example.com"
    * }
    */
+  @UseGuards(ThrottlerGuard)
   @Post("otp/request")
   async requestOtp(@Body() body: { email: string }) {
     if (!body.email) {
@@ -132,6 +135,7 @@ export class AuthController {
    *   "otp": "123456"
    * }
    */
+  @UseGuards(ThrottlerGuard)
   @Post("otp/verify")
   async verifyOtp(
     @Body() body: { email: string; otp: string },

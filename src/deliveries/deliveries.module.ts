@@ -13,6 +13,7 @@ import { DeliveryStateMachine } from "./delivery-state-machine.service";
 import { SlaMonitorService } from "./sla-monitor.service";
 import { RedisModule } from "../redis/redis.module";
 import { DomainEventsModule } from "../domain-events/domain-events.module";
+import { ServicesModule } from "../services/services.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DomainEventsModule } from "../domain-events/domain-events.module";
     WebhooksModule,
     RedisModule,
     forwardRef(() => DomainEventsModule),
+    ServicesModule,
     // 🚫 DO NOT import WebSocketModule
   ],
   controllers: [DeliveriesController],

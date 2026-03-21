@@ -11,6 +11,7 @@ import { WebhooksModule } from "../webhooks/webhooks.module";
 import { PushModule } from "../push/push.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { DeadLetterWorker } from "./dead-letter.worker";
+import { ServicesModule } from "../services/services.module";
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { DeadLetterWorker } from "./dead-letter.worker";
     WebhooksModule,
     PushModule,
     WebSocketModule,
+    ServicesModule,
   ],
   providers: [DeadLetterWorker, CleanupWorker],
 })
