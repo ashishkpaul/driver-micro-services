@@ -73,4 +73,25 @@ export class OutboxEvent {
     nullable: true,
   })
   lockedBy?: string;
+
+  @Column({
+    name: "updated_at",
+    type: "timestamp",
+    nullable: true,
+  })
+  updatedAt?: Date;
+
+  @Column({
+    name: "idempotency_key",
+    type: "varchar",
+    nullable: true,
+  })
+  idempotencyKey?: string;
+
+  @Column({
+    name: "version",
+    type: "int",
+    default: 1,
+  })
+  version!: number;
 }

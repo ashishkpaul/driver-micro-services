@@ -28,12 +28,12 @@ export enum DeliveryStatus {
 
 @Entity("deliveries")
 @Index(["sellerOrderId"], { unique: true })
-@Index(["status"])
-@Index(["driverId"])
+@Index("idx_deliveries_status", ["status"])
+@Index("idx_deliveries_driver_id", ["driverId"])
 @Index("idx_deliveries_status_driver", ["status", "driverId"])
-@Index(["expectedPickupAt"])
-@Index(["expectedDeliveryAt"])
-@Index(["slaBreachAt"])
+@Index("idx_deliveries_expected_pickup_at", ["expectedPickupAt"])
+@Index("idx_deliveries_expected_delivery_at", ["expectedDeliveryAt"])
+@Index("idx_deliveries_sla_breach_at", ["slaBreachAt"])
 export class Delivery {
   @PrimaryGeneratedColumn("uuid")
   id!: string;

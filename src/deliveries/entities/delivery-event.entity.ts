@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   ManyToOne,
   Index,
+  JoinColumn,
 } from "typeorm";
 import { Delivery } from "./delivery.entity";
 import { IsEnum, IsUUID } from "class-validator";
@@ -19,8 +20,8 @@ export enum DeliveryEventType {
 }
 
 @Entity({ name: "delivery_events", schema: "public" })
-@Index(["deliveryId", "eventType"])
-@Index(["sellerOrderId"])
+@Index("idx_delivery_events_delivery_event", ["deliveryId", "eventType"])
+@Index("idx_delivery_events_seller_order_id", ["sellerOrderId"])
 export class DeliveryEvent {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
@@ -70,6 +71,10 @@ export class DeliveryEvent {
 
   @ManyToOne(() => Delivery, (delivery) => delivery.events, {
     onDelete: "CASCADE",
+  })
+  @JoinColumn({
+    name: "delivery_id",
+    foreignKeyConstraintName: "fk_delivery_events_delivery",
   })
   delivery!: Delivery;
 }

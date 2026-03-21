@@ -78,7 +78,10 @@ export class AdminUser {
   cityId?: string;
 
   @ManyToOne(() => City, { nullable: true })
-  @JoinColumn({ name: "city_id" })
+  @JoinColumn({
+    name: "city_id",
+    foreignKeyConstraintName: "fk_admin_users_city",
+  })
   city?: City;
 
   /* ------------------------------------------------------------------ */

@@ -23,6 +23,7 @@ export enum NotificationMethod {
 }
 
 @Entity("driver_offers")
+@Index("idx_driver_offers_delivery_id")
 export class DriverOffer {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -31,6 +32,7 @@ export class DriverOffer {
     type: "uuid",
   })
   @Index("idx_delivery_pending")
+  @Index("idx_driver_offers_delivery_id")
   deliveryId: string;
 
   @Column({

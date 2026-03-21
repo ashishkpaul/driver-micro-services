@@ -44,7 +44,10 @@ export class Zone {
   cityId!: string;
 
   @ManyToOne(() => City, { nullable: false })
-  @JoinColumn({ name: "city_id" })
+  @JoinColumn({
+    name: "city_id",
+    foreignKeyConstraintName: "fk_zones_city",
+  })
   city!: City;
 
   @Column({

@@ -7,7 +7,7 @@ import {
 } from "typeorm";
 
 @Entity("assignments")
-@Index(["sellerOrderId", "driverId"])
+@Index("idx_assignments_seller_driver", ["sellerOrderId", "driverId"])
 export class Assignment {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
