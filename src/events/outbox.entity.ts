@@ -11,33 +11,66 @@ export class OutboxEvent {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  eventType: string;
+  @Column({
+    name: "event_type",
+    type: "varchar",
+  })
+  eventType!: string;
 
   @Column("jsonb")
   payload: any;
 
-  @Column({ type: "varchar" })
-  status: OutboxStatus;
+  @Column({
+    type: "enum",
+    enum: OutboxStatus,
+    enumName: "outbox_status_enum",
+  })
+  status!: OutboxStatus;
 
-  @Column({ default: 0 })
-  retryCount: number;
+  @Column({
+    name: "retry_count",
+    type: "int",
+    default: 0,
+  })
+  retryCount!: number;
 
-  @Column({ nullable: true })
+  @Column({
+    name: "last_error",
+    type: "text",
+    nullable: true,
+  })
   lastError?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    name: "next_retry_at",
+    type: "timestamp",
+    nullable: true,
+  })
   nextRetryAt?: Date;
 
-  @CreateDateColumn()
-  createdAt: Date;
+  @CreateDateColumn({
+    name: "created_at",
+  })
+  createdAt!: Date;
 
-  @Column({ nullable: true })
+  @Column({
+    name: "processed_at",
+    type: "timestamp",
+    nullable: true,
+  })
   processedAt?: Date;
 
-  @Column({ nullable: true })
+  @Column({
+    name: "locked_at",
+    type: "timestamp",
+    nullable: true,
+  })
   lockedAt?: Date;
 
-  @Column({ nullable: true })
+  @Column({
+    name: "locked_by",
+    type: "varchar",
+    nullable: true,
+  })
   lockedBy?: string;
 }

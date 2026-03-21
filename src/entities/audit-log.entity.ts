@@ -16,33 +16,56 @@ export class AuditLog {
   /* User Information                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: "user_id" })
+  @Column({
+    name: "user_id",
+    type: "uuid",
+  })
   userId!: string;
 
-  @Column({ name: "user_email", nullable: true })
+  @Column({
+    name: "user_email",
+    type: "varchar",
+    nullable: true,
+  })
   userEmail?: string;
 
-  @Column({ name: "user_role", nullable: true })
+  @Column({
+    name: "user_role",
+    type: "varchar",
+    nullable: true,
+  })
   userRole?: string;
 
   /* ------------------------------------------------------------------ */
   /* Action Information                                                 */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: "action" })
+  @Column({
+    name: "action",
+    type: "varchar",
+  })
   action!: string; // e.g., "DRIVER_DISABLED", "ADMIN_CREATED", "DELIVERY_REASSIGNED"
 
-  @Column({ name: "resource_type" })
+  @Column({
+    name: "resource_type",
+    type: "varchar",
+  })
   resourceType!: string; // e.g., "DRIVER", "ADMIN", "DELIVERY"
 
-  @Column({ name: "resource_id" })
+  @Column({
+    name: "resource_id",
+    type: "uuid",
+  })
   resourceId!: string; // ID of the resource being acted upon
 
   /* ------------------------------------------------------------------ */
   /* Change Information                                                 */
   /* ------------------------------------------------------------------ */
 
-  @Column({ type: "jsonb", nullable: true })
+  @Column({
+    type: "jsonb",
+    nullable: true,
+  })
   changes?: {
     before?: any;
     after?: any;
@@ -53,13 +76,25 @@ export class AuditLog {
   /* Request Information                                                */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: "ip_address", nullable: true })
+  @Column({
+    name: "ip_address",
+    type: "varchar",
+    nullable: true,
+  })
   ipAddress?: string;
 
-  @Column({ name: "user_agent", nullable: true })
+  @Column({
+    name: "user_agent",
+    type: "varchar",
+    nullable: true,
+  })
   userAgent?: string;
 
-  @Column({ name: "request_id", nullable: true })
+  @Column({
+    name: "request_id",
+    type: "varchar",
+    nullable: true,
+  })
   requestId?: string;
 
   /* ------------------------------------------------------------------ */

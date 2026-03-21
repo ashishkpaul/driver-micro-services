@@ -36,7 +36,10 @@ export class Zone {
   /* Geographic Information                                              */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: "city_id" })
+  @Column({
+    name: "city_id",
+    type: "uuid",
+  })
   @IsNotEmpty()
   cityId!: string;
 
@@ -44,7 +47,11 @@ export class Zone {
   @JoinColumn({ name: "city_id" })
   city!: City;
 
-  @Column({ type: "polygon", spatialFeatureType: "Polygon", nullable: true })
+  @Column({
+    type: "polygon",
+    spatialFeatureType: "Polygon",
+    nullable: true,
+  })
   @IsNotEmpty()
   boundary?: Polygon; // Geographic boundary of the zone
 

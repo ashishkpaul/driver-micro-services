@@ -9,6 +9,15 @@ import {
 import { Delivery } from "./delivery.entity";
 import { IsEnum, IsUUID } from "class-validator";
 
+export enum DeliveryEventType {
+  ASSIGNED = "ASSIGNED",
+  PICKED_UP = "PICKED_UP",
+  IN_TRANSIT = "IN_TRANSIT",
+  DELIVERED = "DELIVERED",
+  FAILED = "FAILED",
+  CANCELLED = "CANCELLED",
+}
+
 @Entity({ name: "delivery_events", schema: "public" })
 @Index(["deliveryId", "eventType"])
 @Index(["sellerOrderId"])
@@ -16,44 +25,47 @@ export class DeliveryEvent {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ name: "delivery_id" })
+  @Column({
+    name: "delivery_id",
+    type: "uuid",
+  })
   @IsUUID()
   deliveryId!: string;
 
-  @Column()
+  @Column({ type: "uuid" })
   @IsUUID()
   sellerOrderId!: string;
 
-  @Column()
-  @IsEnum([
-    "ASSIGNED",
-    "PICKED_UP",
-    "IN_TRANSIT",
-    "DELIVERED",
-    "FAILED",
-    "CANCELLED",
-  ])
-  eventType!:
-    | "ASSIGNED"
-    | "PICKED_UP"
-    | "IN_TRANSIT"
-    | "DELIVERED"
-    | "FAILED"
-    | "CANCELLED";
+  @Column({
+    type: "enum",
+    enum: DeliveryEventType,
+    enumName: "delivery_event_type_enum",
+  })
+  @IsEnum(DeliveryEventType)
+  eventType!: DeliveryEventType;
 
   @Column({ type: "jsonb", nullable: true })
   metadata?: Record<string, unknown>;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   proofUrl?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   failureCode?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   failureReason?: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
   @ManyToOne(() => Delivery, (delivery) => delivery.events, {

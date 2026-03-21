@@ -18,6 +18,16 @@ import {
   MinLength,
 } from "class-validator";
 import { Role } from "../auth/roles.enum";
+
+export enum AdminRole {
+  DRIVER = "DRIVER",
+  ADMIN = "ADMIN",
+  DISPATCHER = "DISPATCHER",
+  OPS_ADMIN = "OPS_ADMIN",
+  CITY_ADMIN = "CITY_ADMIN",
+  SUPER_ADMIN = "SUPER_ADMIN",
+  SYSTEM = "SYSTEM",
+}
 import { City } from "./city.entity";
 
 @Entity("admin_users")
@@ -40,11 +50,12 @@ export class AdminUser {
 
   @Column({
     type: "enum",
-    enum: Role,
-    default: Role.ADMIN,
+    enum: AdminRole,
+    enumName: "admin_role_enum",
+    default: AdminRole.ADMIN,
   })
-  @IsEnum(Role)
-  role!: Role;
+  @IsEnum(AdminRole)
+  role!: AdminRole;
 
   /* ------------------------------------------------------------------ */
   /* Admin Control Flags                                                 */
@@ -59,7 +70,11 @@ export class AdminUser {
   /* ------------------------------------------------------------------ */
 
   @Index()
-  @Column({ name: "city_id", nullable: true })
+  @Column({
+    name: "city_id",
+    type: "uuid",
+    nullable: true,
+  })
   cityId?: string;
 
   @ManyToOne(() => City, { nullable: true })
@@ -70,10 +85,18 @@ export class AdminUser {
   /* Audit & Tracking                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column({ name: "created_by_id", nullable: true })
+  @Column({
+    name: "created_by_id",
+    type: "uuid",
+    nullable: true,
+  })
   createdById?: string;
 
-  @Column({ name: "last_login_at", nullable: true })
+  @Column({
+    name: "last_login_at",
+    type: "timestamp",
+    nullable: true,
+  })
   lastLoginAt?: Date;
 
   @CreateDateColumn({ name: "created_at" })
@@ -90,14 +113,14 @@ export class AdminUser {
    * Check if user is superadmin
    */
   isSuperAdmin(): boolean {
-    return this.role === Role.SUPER_ADMIN;
+    return this.role === AdminRole.SUPER_ADMIN;
   }
 
   /**
    * Check if user is admin (includes superadmin)
    */
   isAdmin(): boolean {
-    return [Role.ADMIN, Role.SUPER_ADMIN].includes(this.role);
+    return [AdminRole.ADMIN, AdminRole.SUPER_ADMIN].includes(this.role);
   }
 
   /**

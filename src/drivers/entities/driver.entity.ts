@@ -22,112 +22,101 @@ import { DriverStatus } from "../enums/driver-status.enum";
 @Index("idx_drivers_status_city", ["status", "cityId"])
 @Index("idx_drivers_status_zone", ["status", "zoneId"])
 export class Driver {
-  @PrimaryGeneratedColumn("uuid")
-  id!: string;
 
-  /* ------------------------------------------------------------------ */
-  /* Identity                                                            */
-  /* ------------------------------------------------------------------ */
+@PrimaryGeneratedColumn("uuid")
+id!: string;
 
-  @Column()
-  @IsNotEmpty()
-  name!: string;
+@Column({ type: "varchar" })
+name!: string;
 
-  @Column({ unique: true })
-  @IsPhoneNumber("IN")
-  phone!: string;
+@Column({ type: "varchar", unique: true })
+phone!: string;
 
-  /* ------------------------------------------------------------------ */
-  /* Admin control flags                                                  */
-  /* ------------------------------------------------------------------ */
+@Index("idx_drivers_is_active")
+@Column({ name: "is_active", type: "boolean", default: true })
+isActive!: boolean;
 
-  /**
-   * HARD enable / disable flag
-   * - false → cannot login
-   * - false → cannot receive assignments
-   * - controlled ONLY by admin APIs
-   */
-  @Index()
-  @Column({ name: "is_active", default: true })
-  @IsBoolean()
-  isActive!: boolean;
+@Index()
+@Column({
+  type: "enum",
+  enum: DriverStatus,
+  enumName: "driver_status_enum",
+  default: DriverStatus.AVAILABLE,
+})
+status!: DriverStatus;
 
-  /* ------------------------------------------------------------------ */
-  /* Driver lifecycle                                                     */
-  /* ------------------------------------------------------------------ */
+@Column({
+  name: "current_lat",
+  type: "numeric",
+  nullable: true,
+})
+currentLat?: number;
 
-  @Index()
-  @Column({
-    type: "enum",
-    enum: DriverStatus,
-    default: DriverStatus.AVAILABLE,
-  })
-  status!: DriverStatus;
+@Column({
+  name: "current_lon",
+  type: "numeric",
+  nullable: true,
+})
+currentLon?: number;
 
-  /* ------------------------------------------------------------------ */
-  /* Geo / availability                                                   */
-  /* ------------------------------------------------------------------ */
+@Column({
+  name: "city_id",
+  type: "uuid",
+})
+cityId!: string;
 
-  @Column({ name: "current_lat", type: "numeric", nullable: true })
-  @IsOptional()
-  @IsNumber()
-  @Min(-90)
-  @Max(90)
-  currentLat?: number;
+@Column({
+  name: "zone_id",
+  type: "uuid",
+  nullable: true,
+})
+zoneId?: string;
 
-  @Column({ name: "current_lon", type: "numeric", nullable: true })
-  @IsOptional()
-  @IsNumber()
-  @Min(-180)
-  @Max(180)
-  currentLon?: number;
+@Column({
+  name: "vehicle_type",
+  type: "varchar",
+  nullable: true,
+})
+vehicleType?: string;
 
-  /* ------------------------------------------------------------------ */
-  /* Multi-city / zone scoping                                            */
-  /* ------------------------------------------------------------------ */
+@Column({
+  name: "vehicle_number",
+  type: "varchar",
+  nullable: true,
+})
+vehicleNumber?: string;
 
-  @Index()
-  @Column({ name: "city_id" })
-  cityId!: string;
+@CreateDateColumn({ name: "created_at" })
+createdAt!: Date;
 
-  @Index()
-  @Column({ name: "zone_id", nullable: true })
-  zoneId?: string;
+@UpdateDateColumn({ name: "updated_at" })
+updatedAt!: Date;
 
-  /* ------------------------------------------------------------------ */
-  /* Vehicle info                                                         */
-  /* ------------------------------------------------------------------ */
+@Column({
+  name: "last_active_at",
+  type: "timestamp",
+  nullable: true,
+})
+lastActiveAt?: Date;
 
-  @Column({ name: "vehicle_type", nullable: true })
-  vehicleType?: string;
+@Column({
+  type: "varchar",
+  nullable: true,
+})
+email?: string;
 
-  @Column({ name: "vehicle_number", nullable: true })
-  vehicleNumber?: string;
+@Column({
+  name: "google_sub",
+  type: "varchar",
+  nullable: true,
+})
+googleSub?: string;
 
-  /* ------------------------------------------------------------------ */
-  /* Timestamps                                                          */
-  /* ------------------------------------------------------------------ */
+@Column({
+  name: "auth_provider",
+  type: "varchar",
+  default: "legacy",
+})
+authProvider!: "legacy" | "google" | "email";
 
-  @CreateDateColumn({ name: "created_at" })
-  createdAt!: Date;
-
-  @UpdateDateColumn({ name: "updated_at" })
-  updatedAt!: Date;
-
-  @Column({ name: "last_active_at", nullable: true })
-  lastActiveAt?: Date;
-
-  /* ------------------------------------------------------------------ */
-  /* Google SSO Authentication                                            */
-  /* ------------------------------------------------------------------ */
-
-  @Column({ nullable: true })
-  email?: string;
-
-  @Column({ name: "google_sub", nullable: true })
-  googleSub?: string;
-
-// Corrected logic for the authProvider property
-@Column({ name: "auth_provider", default: "legacy" })
-authProvider: "legacy" | "google" | "email" = "legacy";
 }

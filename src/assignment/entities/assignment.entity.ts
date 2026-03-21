@@ -12,13 +12,13 @@ export class Assignment {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column()
+  @Column({ type: "uuid" })
   sellerOrderId!: string;
 
-  @Column()
+  @Column({ type: "uuid" })
   driverId!: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
   // ⚠️ V1 RULE: No status, no acceptance workflow

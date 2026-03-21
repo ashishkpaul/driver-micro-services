@@ -9,25 +9,43 @@ import {
   BeforeUpdate,
 } from "typeorm";
 
+export enum DriverOfferStatus {
+  PENDING = "PENDING",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+  EXPIRED = "EXPIRED",
+}
+
+export enum NotificationMethod {
+  PUSH = "push",
+  WEBSOCKET = "websocket",
+  BOTH = "both",
+}
+
 @Entity("driver_offers")
 export class DriverOffer {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column("uuid")
+  @Column({
+    type: "uuid",
+  })
   @Index("idx_delivery_pending")
   deliveryId: string;
 
-  @Column("uuid")
+  @Column({
+    type: "uuid",
+  })
   @Index("idx_driver_pending")
   driverId: string;
 
   @Column({
-    type: "varchar",
-    length: 20,
-    default: "PENDING",
+    type: "enum",
+    enum: DriverOfferStatus,
+    enumName: "driver_offer_status_enum",
+    default: DriverOfferStatus.PENDING,
   })
-  status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED";
+  status: DriverOfferStatus;
 
   @Column("jsonb")
   offerPayload: {
@@ -39,34 +57,59 @@ export class DriverOffer {
     estimatedEarning: number;
   };
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: "created_at" })
   createdAt: Date;
 
-  @Column("timestamp")
+  @Column({
+    name: "expires_at",
+    type: "timestamp",
+  })
   @Index("idx_expires_at")
   expiresAt: Date;
 
-  @Column("timestamp", { nullable: true })
+  @Column({
+    name: "accepted_at",
+    type: "timestamp",
+    nullable: true,
+  })
   acceptedAt: Date;
 
-  @Column("timestamp", { nullable: true })
+  @Column({
+    name: "rejected_at",
+    type: "timestamp",
+    nullable: true,
+  })
   rejectedAt: Date;
 
-  @Column("text", { nullable: true })
+  @Column({
+    name: "rejection_reason",
+    type: "text",
+    nullable: true,
+  })
   rejectionReason: string;
 
-  @Column("timestamp", { nullable: true })
+  @Column({
+    name: "notification_sent_at",
+    type: "timestamp",
+    nullable: true,
+  })
   @Index("idx_created_at")
   notificationSentAt: Date;
 
   @Column({
-    type: "varchar",
-    length: 20,
-    default: "push",
+    name: "notification_method",
+    type: "enum",
+    enum: NotificationMethod,
+    enumName: "notification_method_enum",
+    default: NotificationMethod.PUSH,
   })
-  notificationMethod: "push" | "websocket" | "both";
+  notificationMethod: NotificationMethod;
 
-  @Column("integer", { nullable: true })
+  @Column({
+    name: "driver_response_time_ms",
+    type: "integer",
+    nullable: true,
+  })
   driverResponseTimeMs: number;
 
   @BeforeInsert()

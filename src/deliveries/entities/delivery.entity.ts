@@ -16,6 +16,16 @@ import {
   IsEnum,
 } from "class-validator";
 
+export enum DeliveryStatus {
+  PENDING = "PENDING",
+  ASSIGNED = "ASSIGNED",
+  PICKED_UP = "PICKED_UP",
+  IN_TRANSIT = "IN_TRANSIT",
+  DELIVERED = "DELIVERED",
+  FAILED = "FAILED",
+  CANCELLED = "CANCELLED",
+}
+
 @Entity("deliveries")
 @Index(["sellerOrderId"], { unique: true })
 @Index(["status"])
@@ -28,39 +38,32 @@ export class Delivery {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column()
+  @Column({ type: "uuid" })
   @IsNotEmpty()
   @IsUUID()
   sellerOrderId!: string;
 
-  @Column()
+  @Column({ type: "uuid" })
   @IsNotEmpty()
   @IsUUID()
   channelId!: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "uuid",
+    nullable: true,
+  })
   @IsUUID()
   @IsOptional()
   driverId?: string;
 
-  @Column({ default: "PENDING" })
-  @IsEnum([
-    "PENDING",
-    "ASSIGNED",
-    "PICKED_UP",
-    "IN_TRANSIT",
-    "DELIVERED",
-    "FAILED",
-    "CANCELLED",
-  ])
-  status!:
-    | "PENDING"
-    | "ASSIGNED"
-    | "PICKED_UP"
-    | "IN_TRANSIT"
-    | "DELIVERED"
-    | "FAILED"
-    | "CANCELLED";
+  @Column({
+    type: "enum",
+    enum: DeliveryStatus,
+    enumName: "delivery_status_enum",
+    default: DeliveryStatus.PENDING,
+  })
+  @IsEnum(DeliveryStatus)
+  status!: DeliveryStatus;
 
   @Column("decimal", { precision: 10, scale: 8 })
   @IsNumber()
@@ -78,28 +81,52 @@ export class Delivery {
   @IsNumber()
   dropLon!: number;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   pickupProofUrl?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   deliveryProofUrl?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   failureCode?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   failureReason?: string;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "timestamp",
+    nullable: true,
+  })
   assignedAt?: Date;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "timestamp",
+    nullable: true,
+  })
   pickedUpAt?: Date;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "timestamp",
+    nullable: true,
+  })
   deliveredAt?: Date;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "timestamp",
+    nullable: true,
+  })
   failedAt?: Date;
 
   @Column({ name: "expected_pickup_at", type: "timestamp", nullable: true })
@@ -120,10 +147,10 @@ export class Delivery {
   @Column({ name: "otp_locked_until", type: "timestamp", nullable: true })
   otpLockedUntil?: Date | null;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: "updated_at" })
   updatedAt!: Date;
 
   @OneToMany(() => DeliveryEvent, (event) => event.delivery)

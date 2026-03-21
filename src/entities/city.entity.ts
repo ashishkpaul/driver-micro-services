@@ -36,7 +36,11 @@ export class City {
   /* Geographic Information                                              */
   /* ------------------------------------------------------------------ */
 
-  @Column({ type: "point", spatialFeatureType: "Point", nullable: true })
+  @Column({
+    type: "point",
+    spatialFeatureType: "Point",
+    nullable: true,
+  })
   @IsNotEmpty()
   center?: Point; // Geographic center of the city
 
