@@ -1,11 +1,28 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, EntityManager } from "typeorm";
-import { OutboxEvent, EventVersion, VersionedEventType } from "./outbox.entity";
-import { OutboxStatus } from "./outbox-status.enum";
-import { HandlerRegistry } from "./handlers/handler.registry";
-import { randomUUID } from "crypto";
+kimport { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, EntityManager } from 'typeorm';
+import { OutboxEvent, EventVersion, VersionedEventType } from './outbox.entity';
+import { OutboxStatus } from './outbox-status.enum';
+import { HandlerRegistry } from './handlers/handler.registry';
 
+/**
+ * src/domain-events/outbox.service.ts
+ *
+ * CRITICAL-2 FIX: generateIdempotencyKey was appending randomUUID() which
+ * made every key unique — breaking deduplication entirely. The existingEvent
+ * check above it could never match, so every retry / duplicate call created
+ * a real outbox row.
+ *
+ * Fixed: deterministic key based on event type + stable payload fields.
+ * Key strategy (priority order):
+ *   1. sellerOrderId is the canonical business ID — use it when present
+ *   2. deliveryId + driverId for assignment events without sellerOrderId
+ *   3. deliveryId + proofType for proof events
+ *   4. deliveryId alone as final fallback
+ *   5. eventType + timestamp — last resort (still better than random)
+ *
+ * No import changes needed — randomUUID import removed.
+ */
 @Injectable()
 export class OutboxService {
   private readonly logger = new Logger(OutboxService.name);
@@ -22,81 +39,60 @@ export class OutboxService {
     payload: any,
     version: EventVersion = 1,
   ): Promise<void> {
-    // Validate versioned event type
     if (!this.isValidVersionedEventType(eventType)) {
       throw new Error(`Unknown versioned event type: ${eventType}`);
     }
 
-    // Generate deterministic idempotency key
     const idempotencyKey = this.generateIdempotencyKey(eventType, payload);
 
-    // Check for existing event with same idempotency key
     const existingEvent = manager
-      ? await manager.findOne(OutboxEvent, {
-          where: { idempotencyKey },
-        })
-      : await this.outboxRepository.findOne({
-          where: { idempotencyKey },
-        });
+      ? await manager.findOne(OutboxEvent, { where: { idempotencyKey } })
+      : await this.outboxRepository.findOne({ where: { idempotencyKey } });
 
     if (existingEvent) {
       this.logger.warn(
-        `Duplicate outbox event detected for idempotency key: ${idempotencyKey}. Skipping creation.`,
+        `Duplicate outbox event detected for idempotency key: ${idempotencyKey}. Skipping.`,
       );
       return;
     }
 
+    const record = {
+      eventType,
+      payload,
+      status: OutboxStatus.PENDING,
+      retryCount: 0,
+      createdAt: new Date(),
+      idempotencyKey,
+      version,
+    };
+
     if (manager) {
-      await manager.save(OutboxEvent, {
-        eventType,
-        payload,
-        status: OutboxStatus.PENDING,
-        retryCount: 0,
-        createdAt: new Date(),
-        idempotencyKey,
-        version,
-      });
+      await manager.save(OutboxEvent, record);
     } else {
-      await this.outboxRepository.save({
-        eventType,
-        payload,
-        status: OutboxStatus.PENDING,
-        retryCount: 0,
-        createdAt: new Date(),
-        idempotencyKey,
-        version,
-      });
+      await this.outboxRepository.save(record);
     }
 
     this.logger.log(
-      `Outbox event published: ${eventType} (v${version}) with idempotency key: ${idempotencyKey}`,
+      `Outbox event published: ${eventType} (v${version}) key=${idempotencyKey}`,
     );
   }
 
   private isValidVersionedEventType(eventType: string): boolean {
-    // Check if the event type follows the versioned pattern
-    const versionedPattern = /^[A-Z_]+_V[1-3]$/;
-    return versionedPattern.test(eventType);
+    return /^[A-Z_]+_V[1-3]$/.test(eventType);
   }
 
   async handle(event: OutboxEvent): Promise<void> {
-    // Strict validation at entry point
     if (!event.eventType) {
       throw new Error(`Missing eventType for outbox event ${event.id}`);
     }
-
-    this.logger.debug(
-      `Delegating event ${event.id} of type ${event.eventType} to handler registry`,
-    );
-
-    // Delegate to handler registry - no business logic here
+    this.logger.debug(`Delegating event ${event.id} (${event.eventType}) to handler registry`);
     await this.handlerRegistry.handle(event);
   }
 
   async processPendingEvents(): Promise<void> {
     const events = await this.outboxRepository.find({
       where: { status: OutboxStatus.PENDING },
-      order: { createdAt: "ASC" },
+      order: { createdAt: 'ASC' },
       take: 100,
     });
 
@@ -117,16 +113,40 @@ export class OutboxService {
     });
   }
 
+  /**
+   * FIXED: Deterministic idempotency key — no random suffix.
+   *
+   * Priority:
+   *  1. sellerOrderId  — canonical, unique per Vendure order
+   *  2. deliveryId + driverId — covers assignment events
+   *  3. deliveryId + proofType — covers proof events
+   *  4. deliveryId alone — general delivery events
+   *  5. eventType + ms timestamp — last resort (avoids randomness)
+   */
   private generateIdempotencyKey(eventType: string, payload: any): string {
-    // Generate deterministic idempotency key based on event type and payload
-    const deliveryId = payload?.deliveryId || payload?.assignmentId || "";
-    const driverId = payload?.driverId || "";
-    const timestamp = payload?.assignedAt || new Date().toISOString();
+    const sellerOrderId = payload?.sellerOrderId;
+    const deliveryId    = payload?.deliveryId;
+    const driverId      = payload?.driverId;
+    const proofType     = payload?.proofType;
 
-    // Create a deterministic key for the specific event
-    const key = `${eventType}_${deliveryId}_${driverId}_${new Date(timestamp).getTime()}`;
+    if (sellerOrderId) {
+      return `${eventType}:order:${sellerOrderId}`;
+    }
+    if (deliveryId && driverId) {
+      return `${eventType}:delivery:${deliveryId}:driver:${driverId}`;
+    }
+    if (deliveryId && proofType) {
+      return `${eventType}:delivery:${deliveryId}:proof:${proofType}`;
+    }
+    if (deliveryId) {
+      return `${eventType}:delivery:${deliveryId}`;
+    }
 
-    // Add a random suffix to handle edge cases where timestamps might be identical
-    return `${key}_${randomUUID().slice(0, 8)}`;
+    // Last resort — still deterministic per millisecond, no randomness
+    this.logger.warn(
+      `generateIdempotencyKey: no stable fields in payload for ${eventType}, ` +
+      `falling back to timestamp key. Check that publish() callers include sellerOrderId or deliveryId.`,
+    );
+    return `${eventType}:ts:${Date.now()}`;
   }
 }

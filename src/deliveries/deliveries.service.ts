@@ -6,8 +6,8 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource, EntityManager } from "typeorm";
-import { Delivery } from "./entities/delivery.entity";
-import { DeliveryEvent } from "./entities/delivery-event.entity";
+import { Delivery, DeliveryStatus } from "./entities/delivery.entity";
+import { DeliveryEvent, DeliveryEventType } from "./entities/delivery-event.entity";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
 import { UpdateDeliveryStatusDto } from "./dto/update-delivery-status.dto";
 import { WebhooksService } from "../webhooks/webhooks.service";
@@ -156,7 +156,7 @@ export class DeliveriesService {
       }
 
       delivery.driverId = driverId;
-      delivery.status = "ASSIGNED";
+      delivery.status = DeliveryStatus.ASSIGNED;
       delivery.assignedAt = new Date();
       this.resetOtpState(delivery);
       delivery.deliveryOtp = this.generateOtpCode();
@@ -166,7 +166,7 @@ export class DeliveriesService {
       const event = await this.createEvent(manager, {
         deliveryId: delivery.id,
         sellerOrderId: delivery.sellerOrderId,
-        eventType: "ASSIGNED",
+        eventType: DeliveryEventType.ASSIGNED,
         metadata: { driverId, assignmentId },
       });
 
@@ -189,12 +189,19 @@ export class DeliveriesService {
         // No throw here; the Outbox below will eventually sync the state.
       }
 
-      // 🛡️ Reliable-Path: Outbox publish for Vendure and Retry Logic
+      // 🛡️ Reliable-Path: Outbox publish for Vendure and retry logic
+      // Note: if this delivery was routed via acceptOffer() (V2 path), the
+      // outbox.service idempotency check will deduplicate on sellerOrderId
+      // and this publish will be a no-op. Both paths are intentional owners.
       await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
+        deliveryId:    delivery.id,               // added — needed for idempotency fallback
         sellerOrderId: delivery.sellerOrderId,
-        channelId: delivery.channelId,
+        channelId:     delivery.channelId,
         driverId,
         assignmentId,
+        assignedAt:    delivery.assignedAt?.toISOString() ?? new Date().toISOString(),
+        pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
+        dropLocation:   { lat: delivery.dropLat,   lon: delivery.dropLon },
       });
 
       return delivery;
@@ -237,7 +244,7 @@ export class DeliveriesService {
     await this.deliveryEventRepository.save({
       deliveryId: delivery.id,
       sellerOrderId: delivery.sellerOrderId,
-      eventType: "ASSIGNED",
+      eventType: DeliveryEventType.ASSIGNED,
       metadata: {
         otpRegenerated: true,
         at: new Date().toISOString(),
@@ -310,7 +317,7 @@ export class DeliveriesService {
       // --- ✅ ATOMIC SUCCESS TRANSITION ---
       this.resetOtpState(delivery);
       delivery.deliveryOtp = undefined;
-      delivery.status = "DELIVERED";
+      delivery.status = DeliveryStatus.DELIVERED;
       delivery.deliveredAt = new Date();
       delivery.deliveryProofUrl = proofUrl;
       delivery.slaBreachAt = undefined;
@@ -320,7 +327,7 @@ export class DeliveriesService {
       const event = await this.createEvent(manager, {
         deliveryId: delivery.id,
         sellerOrderId: delivery.sellerOrderId,
-        eventType: "DELIVERED",
+        eventType: DeliveryEventType.DELIVERED,
         proofUrl,
       });
 
@@ -356,28 +363,30 @@ export class DeliveriesService {
         throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
       }
 
-      delivery.status = updateDto.status;
+      // Convert string status to enum
+      const statusEnum = this.mapStringToDeliveryStatus(updateDto.status);
+      delivery.status = statusEnum;
 
-      switch (updateDto.status) {
-        case "PICKED_UP":
+      switch (statusEnum) {
+        case DeliveryStatus.PICKED_UP:
           delivery.pickedUpAt = new Date();
           delivery.pickupProofUrl = updateDto.proofUrl;
           break;
 
-        case "DELIVERED":
+        case DeliveryStatus.DELIVERED:
           delivery.deliveredAt = new Date();
           delivery.deliveryProofUrl = updateDto.proofUrl;
           delivery.slaBreachAt = undefined;
           break;
 
-        case "FAILED":
+        case DeliveryStatus.FAILED:
           delivery.failedAt = new Date();
           delivery.failureCode = updateDto.failureCode;
           delivery.failureReason = updateDto.failureReason;
           break;
 
-        case "CANCELLED":
-          delivery.status = "CANCELLED";
+        case DeliveryStatus.CANCELLED:
+          delivery.status = DeliveryStatus.CANCELLED;
           delivery.failedAt = new Date();
           delivery.failureCode = updateDto.failureCode || "CANCELLED";
           delivery.failureReason = updateDto.failureReason || "Cancelled";
@@ -391,7 +400,7 @@ export class DeliveriesService {
       const event = await this.createEvent(manager, {
         deliveryId: delivery.id,
         sellerOrderId: delivery.sellerOrderId,
-        eventType: updateDto.status,
+        eventType: this.mapDeliveryStatusToEventType(statusEnum),
         proofUrl: updateDto.proofUrl,
         failureCode: updateDto.failureCode,
         failureReason: updateDto.failureReason,
@@ -445,12 +454,12 @@ export class DeliveriesService {
 
   async cancelDelivery(deliveryId: string, reason?: string): Promise<void> {
     const delivery = await this.findOne(deliveryId);
-    if (delivery.status === "CANCELLED" || delivery.status === "DELIVERED") {
+    if (delivery.status === DeliveryStatus.CANCELLED || delivery.status === DeliveryStatus.DELIVERED) {
       return;
     }
 
     await this.updateStatus(deliveryId, {
-      status: "CANCELLED",
+      status: DeliveryStatus.CANCELLED,
       failureCode: "CANCELLED",
       failureReason: reason || "Cancelled by driver or system",
     });
@@ -459,9 +468,9 @@ export class DeliveriesService {
   async findActiveForDriver(driverId: string): Promise<Delivery | null> {
     return await this.deliveryRepository.findOne({
       where: [
-        { driverId, status: "ASSIGNED" },
-        { driverId, status: "PICKED_UP" },
-        { driverId, status: "IN_TRANSIT" },
+        { driverId, status: DeliveryStatus.ASSIGNED },
+        { driverId, status: DeliveryStatus.PICKED_UP },
+        { driverId, status: DeliveryStatus.IN_TRANSIT },
       ],
       relations: ["events"],
       order: { assignedAt: "DESC" },
@@ -512,5 +521,43 @@ export class DeliveriesService {
   private resetOtpState(delivery: Delivery): void {
     delivery.otpAttempts = 0;
     delivery.otpLockedUntil = undefined;
+  }
+
+  private mapStringToDeliveryStatus(status: string): DeliveryStatus {
+    switch (status) {
+      case "ASSIGNED":
+        return DeliveryStatus.ASSIGNED;
+      case "PICKED_UP":
+        return DeliveryStatus.PICKED_UP;
+      case "DELIVERED":
+        return DeliveryStatus.DELIVERED;
+      case "FAILED":
+        return DeliveryStatus.FAILED;
+      case "CANCELLED":
+        return DeliveryStatus.CANCELLED;
+      case "IN_TRANSIT":
+        return DeliveryStatus.IN_TRANSIT;
+      default:
+        return DeliveryStatus.ASSIGNED; // fallback
+    }
+  }
+
+  private mapDeliveryStatusToEventType(status: DeliveryStatus): DeliveryEventType {
+    switch (status) {
+      case DeliveryStatus.ASSIGNED:
+        return DeliveryEventType.ASSIGNED;
+      case DeliveryStatus.PICKED_UP:
+        return DeliveryEventType.PICKED_UP;
+      case DeliveryStatus.DELIVERED:
+        return DeliveryEventType.DELIVERED;
+      case DeliveryStatus.FAILED:
+        return DeliveryEventType.FAILED;
+      case DeliveryStatus.CANCELLED:
+        return DeliveryEventType.CANCELLED;
+      case DeliveryStatus.IN_TRANSIT:
+        return DeliveryEventType.IN_TRANSIT;
+      default:
+        return DeliveryEventType.ASSIGNED; // fallback
+    }
   }
 }

@@ -10,9 +10,9 @@ import { Repository, In, LessThan, DataSource } from "typeorm";
 import { Cron } from "@nestjs/schedule";
 import { RedisService } from "../redis/redis.service";
 
-import { DriverOffer } from "./entities/driver-offer.entity";
+import { DriverOffer, DriverOfferStatus } from "./entities/driver-offer.entity";
 import { Driver } from "../drivers/entities/driver.entity";
-import { Delivery } from "../deliveries/entities/delivery.entity";
+import { Delivery, DeliveryStatus } from "../deliveries/entities/delivery.entity";
 import { Assignment } from "../assignment/entities/assignment.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { DriverCapabilityService } from "../drivers/driver-capability.service";
@@ -94,7 +94,7 @@ export class OffersService {
     const offer = this.driverOfferRepository.create({
       deliveryId,
       driverId,
-      status: "PENDING",
+      status: DriverOfferStatus.PENDING,
       offerPayload,
       expiresAt: new Date(Date.now() + expiresInSeconds * 1000),
     });
@@ -188,7 +188,7 @@ export class OffersService {
       const responseTimeMs = acceptedAt.getTime() - offer.createdAt.getTime();
 
       // 2. Mark offer as accepted
-      offer.status = "ACCEPTED";
+      offer.status = DriverOfferStatus.ACCEPTED;
       offer.acceptedAt = acceptedAt;
       offer.driverResponseTimeMs = responseTimeMs;
       await manager.save(offer);
@@ -196,20 +196,16 @@ export class OffersService {
       // 3. Mark all competing offers for this delivery as REJECTED
       await manager.update(
         DriverOffer,
-        { deliveryId: offer.deliveryId, status: "PENDING" },
-        { status: "REJECTED" },
+        { deliveryId: offer.deliveryId, status: DriverOfferStatus.PENDING },
+        { status: DriverOfferStatus.REJECTED },
       );
 
-      // 4. Assign delivery to driver
-      await manager.update(
-        Delivery,
-        { id: offer.deliveryId },
-        { driverId: driverId, status: "ASSIGNED" },
-      );
-
-      // FIX: Fetch the delivery row to get the real sellerOrderId (Vendure ID)
+      // 4. Load + lock + mutate + save delivery
+      // Replaces manager.update() — we need assignedAt and deliveryOtp set,
+      // which requires loading the entity first (update() doesn't call setters).
       const delivery = await manager.findOne(Delivery, {
-        where: { id: offer.deliveryId },
+        where:  { id: offer.deliveryId },
+        lock:   { mode: 'pessimistic_write' },
       });
 
       if (!delivery) {
@@ -217,6 +213,17 @@ export class OffersService {
           `Delivery ${offer.deliveryId} not found during offer acceptance`,
         );
       }
+
+      // Set all assignment fields atomically in the same transaction
+      delivery.driverId       = driverId;
+      delivery.status         = DeliveryStatus.ASSIGNED;
+      delivery.assignedAt     = new Date();
+      delivery.otpAttempts    = 0;
+      delivery.otpLockedUntil = undefined;
+      // generateOtpCode() is private on DeliversService — inline equivalent here
+      delivery.deliveryOtp    = Math.floor(100000 + Math.random() * 900000).toString();
+
+      await manager.save(delivery);
 
       // Create assignment with the CORRECT ID
       const assignment = this.assignmentRepository.create({
@@ -269,7 +276,7 @@ export class OffersService {
       throw new ConflictException("Offer already processed");
 
     // 1. Persist the rejection
-    offer.status = "REJECTED";
+    offer.status = DriverOfferStatus.REJECTED;
     offer.rejectedAt = new Date();
     if (reason) offer.rejectionReason = reason;
     await this.driverOfferRepository.save(offer);
@@ -302,9 +309,9 @@ export class OffersService {
     const result = await this.driverOfferRepository
       .createQueryBuilder()
       .update(DriverOffer)
-      .set({ status: "EXPIRED" })
-      .where("status = :status AND expiresAt < :now", {
-        status: "PENDING",
+      .set({ status: DriverOfferStatus.EXPIRED })
+      .where("status = :status AND expires_at < :now", {
+        status: DriverOfferStatus.PENDING,
         now: new Date(),
       })
       .execute();

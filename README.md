@@ -303,5 +303,6 @@ For issues or questions:
 4. Run `npm run db:verify` for schema validation
 
 **Emergency rollback:**
+
 ```bash
 npm run db:rollback -- --count 5  # Revert 5 migrations

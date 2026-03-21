@@ -1,8 +1,23 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { HandlerRegistry } from "./handlers/handler.registry";
-import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
-import { DeliveryCancelledHandler } from "./handlers/delivery-cancelled.handler";
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HandlerRegistry } from './handlers/handler.registry';
+import { DeliveryAssignedHandler } from './handlers/delivery-assigned.handler';
+import { DeliveryCancelledHandler } from './handlers/delivery-cancelled.handler';
+import { DeliveryStatusForwardingHandler } from './handlers/delivery-status-forwarding.handler'; // NEW
 
+/**
+ * src/domain-events/domain-events.startup.service.ts
+ *
+ * CRITICAL-4 FIX: The following event types were published to the outbox but
+ * had no registered handlers. The outbox worker threw "No handler registered"
+ * on every process tick, retried each row 10 times, and permanently failed:
+ *
+ *   DELIVERY_PICKUP_CONFIRMED_V1  (all V1/V2/V3 variants)
+ *   DELIVERY_DROPOFF_CONFIRMED_V1 (all V1/V2/V3 variants)
+ *   DELIVERY_FAILED_V1            (all V1/V2/V3 variants)
+ *   PROOF_ACCEPTED_V1             (all V1/V2/V3 variants)
+ *
+ * All are now registered to DeliveryStatusForwardingHandler.
+ */
 @Injectable()
 export class DomainEventsStartupService implements OnModuleInit {
   private readonly logger = new Logger(DomainEventsStartupService.name);
@@ -11,6 +26,7 @@ export class DomainEventsStartupService implements OnModuleInit {
     private handlerRegistry: HandlerRegistry,
     private deliveryAssignedHandler: DeliveryAssignedHandler,
     private deliveryCancelledHandler: DeliveryCancelledHandler,
+    private deliveryStatusForwardingHandler: DeliveryStatusForwardingHandler, // NEW
   ) {}
 
   onModuleInit() {
@@ -19,50 +35,58 @@ export class DomainEventsStartupService implements OnModuleInit {
   }
 
   private registerHandlers(): void {
-    // Register all event handlers
-    this.handlerRegistry.register(
-      "DELIVERY_ASSIGNED_V1",
-      this.deliveryAssignedHandler,
-    );
+    // ── Assignment ────────────────────────────────────────────────────────────
+    this.handlerRegistry.register('DELIVERY_ASSIGNED_V1', this.deliveryAssignedHandler);
+    this.handlerRegistry.register('DELIVERY_ASSIGNED_V2', this.deliveryAssignedHandler);
+    this.handlerRegistry.register('DELIVERY_ASSIGNED_V3', this.deliveryAssignedHandler);
 
-    this.handlerRegistry.register(
-      "DELIVERY_ASSIGNED_V2",
-      this.deliveryAssignedHandler,
-    );
+    // ── Cancellation ──────────────────────────────────────────────────────────
+    this.handlerRegistry.register('DELIVERY_CANCELLED_V1', this.deliveryCancelledHandler);
 
-    this.handlerRegistry.register(
-      "DELIVERY_ASSIGNED_V3",
-      this.deliveryAssignedHandler,
-    );
+    // ── Status forwarding (was completely missing — CRITICAL-4 fix) ──────────
+    // Pickup confirmed
+    this.handlerRegistry.register('DELIVERY_PICKUP_CONFIRMED_V1', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('DELIVERY_PICKUP_CONFIRMED_V2', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('DELIVERY_PICKUP_CONFIRMED_V3', this.deliveryStatusForwardingHandler);
 
-    this.handlerRegistry.register(
-      "DELIVERY_CANCELLED_V1",
-      this.deliveryCancelledHandler,
-    );
+    // Dropoff confirmed
+    this.handlerRegistry.register('DELIVERY_DROPOFF_CONFIRMED_V1', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('DELIVERY_DROPOFF_CONFIRMED_V2', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('DELIVERY_DROPOFF_CONFIRMED_V3', this.deliveryStatusForwardingHandler);
 
-    this.logger.log("All event handlers registered successfully");
+    // Failed
+    this.handlerRegistry.register('DELIVERY_FAILED_V1', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('DELIVERY_FAILED_V2', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('DELIVERY_FAILED_V3', this.deliveryStatusForwardingHandler);
+
+    // Proof accepted (driver-facing WebSocket confirmation)
+    this.handlerRegistry.register('PROOF_ACCEPTED_V1', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('PROOF_ACCEPTED_V2', this.deliveryStatusForwardingHandler);
+    this.handlerRegistry.register('PROOF_ACCEPTED_V3', this.deliveryStatusForwardingHandler);
+
+    this.logger.log('All event handlers registered');
   }
 
   private validateHandlers(): void {
+    const required = [
+      'DELIVERY_ASSIGNED_V1',
+      'DELIVERY_ASSIGNED_V2',
+      'DELIVERY_ASSIGNED_V3',
+      'DELIVERY_CANCELLED_V1',
+      'DELIVERY_PICKUP_CONFIRMED_V1',
+      'DELIVERY_DROPOFF_CONFIRMED_V1',
+      'DELIVERY_FAILED_V1',
+      'PROOF_ACCEPTED_V1',
+    ];
+
     try {
-      // Define all required event types
-      const requiredEventTypes = [
-        "DELIVERY_ASSIGNED_V1",
-        "DELIVERY_ASSIGNED_V2",
-        "DELIVERY_ASSIGNED_V3",
-        "DELIVERY_CANCELLED_V1",
-      ];
-
-      // Validate that all required handlers are registered
-      this.handlerRegistry.validateHandlers(requiredEventTypes);
-
-      // Log statistics
+      this.handlerRegistry.validateHandlers(required);
       const stats = this.handlerRegistry.getStats();
       this.logger.log(
-        `Handler registry initialized with ${stats.handlerCount} handlers for event types: ${stats.eventTypes.join(", ")}`,
+        `Handler registry: ${stats.handlerCount} handlers covering ${stats.eventTypes.length} event types`,
       );
     } catch (error) {
-      this.logger.error(`Handler validation failed: ${error.message}`);
+      this.logger.error(`Handler validation failed: ${(error as Error).message}`);
       throw error;
     }
   }

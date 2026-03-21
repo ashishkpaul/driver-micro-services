@@ -214,8 +214,9 @@ export class OutboxWorker {
 
     // Quarantine logic: force fail on structural errors (Task 6 & 7)
     const isStructuralError =
-      errorMessage.includes("Unknown outbox event type") ||
-      errorMessage.includes("Missing eventType") ||
+      errorMessage.includes("Unknown outbox event type")  ||
+      errorMessage.includes("Missing eventType")          ||
+      errorMessage.includes("No handler registered for")  || // NEW: immediately quarantine unhandled types
       !rawRow.event_type;
 
     let retryCount = (rawRow.retry_count || 0) + 1;
