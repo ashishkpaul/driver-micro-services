@@ -39,19 +39,19 @@ phone!: string;
 @Column({ name: "is_active", type: "boolean", default: true })
 isActive!: boolean;
 
-@Index()
+@Index("idx_drivers_status")
 @Column({
-  type: "enum",
-  enum: DriverStatus,
-  enumName: "driver_status_enum",
-  default: DriverStatus.AVAILABLE,
+  type:"enum",
+  enum:DriverStatus,
+  enumName:"driver_status_enum",
+  default:DriverStatus.AVAILABLE
 })
 status!: DriverStatus;
 
 @Column({
   name: "current_lat",
   type: "numeric",
-  nullable: true,
+  nullable: true
 })
 currentLat?: number;
 
@@ -116,9 +116,10 @@ email?: string;
 googleSub?: string;
 
 @Column({
-  name: "auth_provider",
-  type: "varchar",
-  default: "legacy",
+  name:"auth_provider",
+  type:"varchar",
+  length:255,
+  default:"legacy"
 })
 authProvider!: "legacy" | "google" | "email";
 

@@ -69,7 +69,7 @@ export class OutboxArchiveService {
         archiveEvent.processedAt = event.processedAt;
         archiveEvent.lockedAt = event.lockedAt;
         archiveEvent.lockedBy = event.lockedBy;
-        archiveEvent.idempotencyKey = event.idempotencyKey;
+        archiveEvent.idempotencyKey = event.idempotencyKey || undefined;
         archiveEvent.archivedAt = new Date();
         return archiveEvent;
       });

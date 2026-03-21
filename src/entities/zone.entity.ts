@@ -36,24 +36,27 @@ export class Zone {
   /* Geographic Information                                              */
   /* ------------------------------------------------------------------ */
 
-  @Column({
-    name: "city_id",
-    type: "uuid",
-  })
+  @Index('idx_zones_city_id') // Add explicit index name
+  @Column({ name: 'city_id', type: 'uuid' })
   @IsNotEmpty()
   cityId!: string;
 
-  @ManyToOne(() => City, { nullable: false })
-  @JoinColumn({
-    name: "city_id",
-    foreignKeyConstraintName: "fk_zones_city",
+  @ManyToOne(() => City, { 
+    onDelete: 'RESTRICT', // Match the Baseline's RESTRICT rule
+    onUpdate: 'NO ACTION' 
+  })
+  @JoinColumn({ 
+    name: 'city_id', 
+    foreignKeyConstraintName: 'fk_zones_city' 
   })
   city!: City;
 
   @Column({
-    type: "polygon",
-    spatialFeatureType: "Polygon",
-    nullable: true,
+    type: 'polygon', // Ensure this matches the physical 'polygon' type
+    transformer: {
+      from: (v) => v,
+      to: (v) => v
+    }
   })
   @IsNotEmpty()
   boundary?: Polygon; // Geographic boundary of the zone

@@ -12,10 +12,10 @@ export class Assignment {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "uuid" })
+  @Column({ type: "varchar" })
   sellerOrderId!: string;
 
-  @Column({ type: "uuid" })
+  @Column({ type: "varchar" })
   driverId!: string;
 
   @CreateDateColumn({ name: "created_at" })

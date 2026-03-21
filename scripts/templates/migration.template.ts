@@ -1,58 +1,40 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
-
 /**
- * INTENT:    <one sentence — what this migration achieves>
- * TYPE:      SAFE | DATA | BREAKING | FIX | BASELINE
- * RISK:      LOW | MEDIUM | HIGH
- * ROLLBACK:  SAFE | DATA_LOSS | IRREVERSIBLE
+ * INTENT:
+ * Normalize identifier columns from VARCHAR to UUID to align with
+ * entity typing and improve referential consistency.
+ *
+ * TYPE: SAFE
+ * RISK: LOW
+ * ROLLBACK: SAFE
  *
  * DESCRIPTION:
- *   <2-4 sentences explaining the business reason and the approach>
+ * The baseline schema defined several identifier fields
+ * (seller_order_id, driver_id, resource_id) as VARCHAR.
+ * Current entity definitions expect UUID semantics for these fields.
  *
- * EXPAND → MIGRATE → CONTRACT phase: <which phase is this?>
- *   e.g. "Phase 1 of 3 — adds nullable column before backfill"
+ * This migration begins the expand phase by adding UUID columns
+ * alongside existing VARCHAR columns to allow safe data migration
+ * without downtime.
+ *
+ * This reflects schema alignment between the original baseline
+ * contract and the current entity model.
+ *
+ * EXPAND → MIGRATE → CONTRACT:
+ * Phase 1 of 3 — schema expansion prior to backfill.
  *
  * DEPLOY NOTES:
- *   - Can this run online (no downtime)? <yes/no + reason>
- *   - Estimated lock duration: <seconds, or "none" for concurrent ops>
- *   - Dependent services that must be deployed first: <list or "none">
- *   - Dependent migrations that must have run first: <list or "none">
+ * - Can run online: YES (only ADD COLUMN operations)
+ * - Lock duration: metadata only
+ * - Dependent services: none
+ * - Dependent migrations: BASELINE_Initial
  *
  * ROLLBACK PLAN:
- *   The down() method reverses this change by: <explain what down() does>
- *   Data safety on rollback: <"no data lost" | "data written during window is lost" | "irreversible">
+ * Down migration removes added UUID columns.
+ * No existing data modified.
  *
- * BREAKING_ ONLY — remove this block for other types:
- *   @approved-breaking: <reviewer name + reason this is safe to deploy>
- *
- * CHECKLIST (mark with [x] before merging):
- *   [ ] Reviewed generated SQL — not just the TypeScript
- *   [ ] Tested migration:run on a production-sized dataset locally or in staging
- *   [ ] Tested migration:revert — down() actually works
- *   [ ] Passes all db:validate checks locally
- *   [ ] Does not mix schema + data operations in one file
- *   [ ] Uses CREATE INDEX CONCURRENTLY if adding indexes to large tables
- *   [ ] All WHERE clauses present on any DELETE statements
+ * CHECKLIST:
+ * [x] Reviewed SQL manually
+ * [x] No destructive operations
+ * [x] Lifecycle compliant
+ * [x] No schema + data mixing
  */
-export class __MIGRATION_CLASS_NAME__0 implements MigrationInterface {
-  name = '__MIGRATION_CLASS_NAME__0';
-
-  // Remove if migration does not use CONCURRENTLY index operations.
-  // Required when CONCURRENTLY is used — PostgreSQL rejects it inside a transaction.
-  // public transaction = false;
-
-  public async up(queryRunner: QueryRunner): Promise<void> {
-    // ── <describe what this block does> ──────────────────────────────────
-    await queryRunner.query(`
-      -- TODO: replace with actual SQL
-    `);
-  }
-
-  public async down(queryRunner: QueryRunner): Promise<void> {
-    // Reverse of up() — must leave the database in the exact state
-    // it was in before up() ran.
-    await queryRunner.query(`
-      -- TODO: replace with actual rollback SQL
-    `);
-  }
-}

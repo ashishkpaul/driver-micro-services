@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from "typeorm";
 import { OutboxStatus } from "./outbox-status.enum";
 
@@ -61,7 +62,13 @@ export type VersionedEventType =
   | "PROOF_ACCEPTED_V2"
   | "PROOF_ACCEPTED_V3";
 
-@Entity("outbox")
+@Entity('outbox')
+@Index('idx_outbox_worker', ['status', 'nextRetryAt'], { 
+  where: "(status = 'PENDING'::outbox_status_enum)" // Must match Postgres's cast string exactly
+})
+@Index('idx_outbox_locked', ['lockedAt'], { 
+  where: "(status = 'PROCESSING'::outbox_status_enum)" 
+})
 export class OutboxEvent {
   @PrimaryGeneratedColumn()
   id: number;
@@ -72,13 +79,21 @@ export class OutboxEvent {
   @Column("jsonb")
   payload: any;
 
-  @Column({ type: "varchar" })
+  @Column({
+    type: 'enum',
+    enum: OutboxStatus,
+    enumName: 'outbox_status_enum' // This prevents the RENAME/CREATE loop
+  })
   status: OutboxStatus;
 
   @Column({ default: 0 })
   retryCount: number;
 
-  @Column({ nullable: true })
+  @Column({ 
+    name: 'last_error', 
+    type: 'text', 
+    nullable: true 
+  })
   lastError?: string;
 
   @Column({ nullable: true })
@@ -96,8 +111,12 @@ export class OutboxEvent {
   @Column({ nullable: true })
   lockedBy?: string;
 
-  @Column({ unique: true, nullable: false })
-  idempotencyKey: string;
+  @Column({ 
+    name: 'idempotency_key', 
+    type: 'varchar', 
+    nullable: true // Match the DB's current 'DROP NOT NULL' state
+  })
+  idempotencyKey?: string;
 
   @Column({ default: 1 })
   version: EventVersion;
