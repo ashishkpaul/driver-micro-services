@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import { Command, Option } from 'commander';
 
 // Import our new migration engine modules
-import { detectSchemaDiff } from '../migration-engine/detect-schema-diff';
+import { detectSchemaDiff, detectSchemaDiffWithTypes } from '../migration-engine/detect-schema-diff';
 import { classifyMigrationFile, classifySqlStatement } from '../migration-engine/classify-operations';
 import { LifecycleSplitter } from '../migration-engine/lifecycle-split';
 import { generateLifecycleMigrations } from '../migration-engine/generate-migration';
@@ -195,9 +195,13 @@ async function runGenerate(opts: {
     const content = fs.readFileSync(tempFile, 'utf8');
     const sqlStatements = require('../migration-engine/detect-schema-diff').extractSqlStatements(content);
 
-    // Split into lifecycle phases
+    // Get type information for better column type detection
+    const typeMapResult = await detectSchemaDiffWithTypes(config);
+    const typeMap = typeMapResult.typeMap;
+
+    // Split into lifecycle phases with type information
     const splitter = new LifecycleSplitter();
-    const lifecycleSet = splitter.split(sqlStatements);
+    const lifecycleSet = splitter.split(sqlStatements, typeMap);
 
     // Generate companion migrations for complex operations
     const tableMatch = content.match(/ALTER\s+TABLE\s+"([^"]+)"/i);

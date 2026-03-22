@@ -27,7 +27,7 @@ export class Zone {
   @IsNotEmpty()
   name!: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', unique: true }) // 👈 ADDED: unique: true
   @IsString()
   @IsNotEmpty()
   code!: string; // e.g., "NORTH-BNG", "SOUTH-BNG"

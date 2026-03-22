@@ -16,11 +16,15 @@ import { SqlCategory, MigrationLifecycleSet, CompanionMigration } from './types'
  * - Contract: Drop old columns/constraints (BREAKING)
  */
 export class LifecycleSplitter {
-  
+  // Add a typeMap property to store column type information
+  private typeMap: Map<string, Map<string, string>> = new Map();
+
   /**
    * Main entry point to transform raw SQL into a lifecycle set
    */
-  public split(rawSql: string[]): MigrationLifecycleSet {
+  public split(rawSql: string[], typeMap?: Map<string, Map<string, string>>): MigrationLifecycleSet {
+    // Store typeMap for use in rewrite methods
+    if (typeMap) this.typeMap = typeMap;
     const result: MigrationLifecycleSet = {
       safe: [],
       data: [],
@@ -95,13 +99,14 @@ export class LifecycleSplitter {
    */
   private rewriteNotNullViolation(sql: string): MigrationLifecycleSet {
     const tableMatch = sql.match(/ALTER\s+TABLE\s+"([^"]+)"/i);
-    const columnMatch = sql.match(/ADD\s+"([^"]+)"\s+([^ ]+)/i);
+    // More robust regex that captures types with spaces and arguments
+    const columnMatch = sql.match(/ADD\s+"([^"]+)"\s+(.+?)(?:\s+NOT\s+NULL|$)/i);
 
     if (!tableMatch || !columnMatch) return { safe: [sql], data: [], breaking: [] };
 
     const table = tableMatch[1];
     const column = columnMatch[1];
-    const type = columnMatch[2];
+    const type = columnMatch[2].trim();
 
     return {
       safe: [`ALTER TABLE "${table}" ADD "${column}" ${type}`],
@@ -126,9 +131,12 @@ export class LifecycleSplitter {
     const table = tableMatch[1];
     const oldCol = renameMatch[1];
     const newCol = renameMatch[2];
+    
+    // Look up type from the database map we built
+    const detectedType = this.typeMap.get(table)?.get(oldCol) || 'VARCHAR'; // Fallback type
 
     return {
-      safe: [`ALTER TABLE "${table}" ADD COLUMN "${newCol}" /* TODO: Specify Type */`],
+      safe: [`ALTER TABLE "${table}" ADD COLUMN "${newCol}" ${detectedType}`],
       data: [`UPDATE "${table}" SET "${newCol}" = "${oldCol}"`],
       breaking: [`ALTER TABLE "${table}" DROP COLUMN "${oldCol}"`]
     };

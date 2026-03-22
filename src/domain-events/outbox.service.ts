@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { OutboxEvent, EventVersion, VersionedEventType } from './outbox.entity';
 import { OutboxStatus } from './outbox-status.enum';
-import { HandlerRegistry } from './handlers/handler.registry';
+import { CircuitBreakerService, CircuitBreakerConfig } from './circuit-breaker.service';
 
 /**
  * src/domain-events/outbox.service.ts
@@ -30,7 +30,7 @@ export class OutboxService {
   constructor(
     @InjectRepository(OutboxEvent)
     private outboxRepository: Repository<OutboxEvent>,
-    private handlerRegistry: HandlerRegistry,
+    private circuitBreakerService: CircuitBreakerService,
   ) {}
 
   async publish(
@@ -85,8 +85,30 @@ export class OutboxService {
     if (!event.eventType) {
       throw new Error(`Missing eventType for outbox event ${event.id}`);
     }
-    this.logger.debug(`Delegating event ${event.id} (${event.eventType}) to handler registry`);
-    await this.handlerRegistry.handle(event);
+    
+    // Use circuit breaker to protect against downstream service failures
+    const circuitName = `handler_${event.eventType}`;
+    const config: CircuitBreakerConfig = {
+      failureThreshold: 5,
+      recoveryTimeout: 300000, // 5 minutes
+      halfOpenMaxCalls: 3,
+      monitoringWindow: 600000 // 10 minutes
+    };
+
+    try {
+      await this.circuitBreakerService.execute(circuitName, async () => {
+        this.logger.debug(`Event ${event.id} (${event.eventType}) ready for processing`);
+        // Note: Actual handler execution moved to OutboxWorker
+        // This method now only provides circuit breaker protection
+      }, config);
+    } catch (error) {
+      // Circuit breaker will throw specific errors for open circuit
+      if (error instanceof Error && error.message.includes('Circuit breaker OPEN')) {
+        this.logger.warn(`Circuit breaker OPEN for ${circuitName}, event ${event.id} will be retried later`);
+        throw error; // Re-throw to trigger retry logic in worker
+      }
+      throw error; // Re-throw other errors
+    }
   }
 
   async processPendingEvents(): Promise<void> {

@@ -6,8 +6,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Module, forwardRef } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { OutboxEvent } from './outbox.entity';
 import { OutboxService } from './outbox.service';
 import { OutboxWorker } from './outbox.worker';
 import { HandlerRegistry } from './handlers/handler.registry';
@@ -19,41 +17,40 @@ import { DomainEventsStartupService } from './domain-events.startup.service';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { PushModule } from '../push/push.module';
+import { DomainEventsCoreModule } from './domain-events-core.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([OutboxEvent]),
+    DomainEventsCoreModule,
     forwardRef(() => WebSocketModule),
     WebhooksModule,
     PushModule,
   ],
   providers: [
-    OutboxService,
     OutboxWorker,
+    DomainEventsStartupService,
     HandlerRegistry,
     DeliveryAssignedHandler,
     DeliveryCancelledHandler,
     DeliveryStatusForwardingHandler, // NEW
-    DomainEventsStartupService,
   ],
-  exports: [OutboxService],
+  exports: [DomainEventsCoreModule],
 })
 export class DomainEventsModule {}
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([OutboxEvent]),
+    DomainEventsCoreModule,
     forwardRef(() => WebSocketModule),
     WebhooksModule,
     PushModule,
   ],
   providers: [
-    OutboxService,
     HandlerRegistry,
     DeliveryAssignedHandler,
     DeliveryCancelledHandler,
     DeliveryStatusForwardingHandler, // NEW
   ],
-  exports: [OutboxService],
+  exports: [DomainEventsCoreModule],
 })
 export class DomainEventsApiModule {}

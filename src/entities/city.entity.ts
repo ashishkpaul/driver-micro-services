@@ -27,7 +27,7 @@ export class City {
   @IsNotEmpty()
   name!: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', unique: true }) // 👈 ADDED: unique: true
   @IsString()
   @IsNotEmpty()
   code!: string; // e.g., "BNG", "DEL", "MUM"

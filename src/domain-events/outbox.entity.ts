@@ -99,6 +99,15 @@ export class OutboxEvent {
   })
   status!: OutboxStatus;
 
+  // Priority field for critical event processing
+  @Column({
+    type: 'enum',
+    enum: ['HIGH', 'MEDIUM', 'LOW'],
+    enumName: 'outbox_priority_enum', // 👈 ADDED: Required by Postgres
+    default: 'MEDIUM'
+  })
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+
   @Column({ default: 0 })
   retryCount: number;
 
@@ -127,10 +136,14 @@ export class OutboxEvent {
   @Column({ 
     name: 'idempotency_key', 
     type: 'varchar', 
-    nullable: true // Match the DB's current 'DROP NOT NULL' state
+    nullable: true,
+    unique: true // 👈 ADDED: Matches baseline.ts CONSTRAINT uq_outbox_idempotency_key
   })
   idempotencyKey?: string;
 
-  @Column({ default: 1 })
+  @Column({ 
+    type: 'smallint',
+    default: 1 
+  })
   version: EventVersion;
 }

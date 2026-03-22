@@ -51,4 +51,17 @@ export class OutboxArchiveEvent {
 
   @Column({ type: "timestamp" })
   archivedAt: Date;
+
+  // New fields for compression and optimization
+  @Column({ type: 'boolean', default: false })
+  isCompressed: boolean;
+
+  @Column({ type: 'jsonb', nullable: true })
+  compressedPayload?: any;
+
+  @Column({ type: 'integer', nullable: true })
+  originalPayloadSize?: number;
+
+  @Column({ type: 'integer', nullable: true })
+  compressedPayloadSize?: number;
 }

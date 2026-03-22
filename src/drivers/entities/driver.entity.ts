@@ -19,9 +19,9 @@ import {
 import { DriverStatus } from "../enums/driver-status.enum";
 
 @Entity("drivers")
-@Index("idx_drivers_status")
-@Index("idx_drivers_city_id")
-@Index("idx_drivers_zone_id")
+@Index("idx_drivers_status", ["status"])
+@Index("idx_drivers_city_id", ["cityId"])
+@Index("idx_drivers_zone_id", ["zoneId"])
 @Index("idx_drivers_status_city", ["status", "cityId"])
 @Index("idx_drivers_status_zone", ["status", "zoneId"])
 export class Driver {
