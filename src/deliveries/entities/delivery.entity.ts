@@ -27,7 +27,6 @@ export enum DeliveryStatus {
 }
 
 @Entity("deliveries")
-@Index(["sellerOrderId"], { unique: true })
 @Index("idx_deliveries_status", ["status"])
 @Index("idx_deliveries_driver_id", ["driverId"])
 @Index("idx_deliveries_status_driver", ["status", "driverId"])
