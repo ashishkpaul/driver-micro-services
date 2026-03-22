@@ -17,7 +17,12 @@ export class OutboxArchiveEvent {
   @Column("jsonb")
   payload: any;
 
-  @Column({ type: "varchar" })
+  @Column({
+    type: 'enum',
+    enum: OutboxStatus,
+    enumName: 'outbox_status_enum',
+    nullable: false
+  })
   status: OutboxStatus;
 
   @Column({ default: 0 })

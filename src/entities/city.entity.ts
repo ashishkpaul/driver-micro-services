@@ -38,7 +38,6 @@ export class City {
 
   @Column({
     type: "point",
-    spatialFeatureType: "Point",
     nullable: true,
   })
   @IsNotEmpty()
