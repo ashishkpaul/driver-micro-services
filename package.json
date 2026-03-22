@@ -21,6 +21,7 @@
     "typeorm": "typeorm-ts-node-commonjs",
     "project:check": "ts-node scripts/project-root.ts",
     "migrate": "ts-node scripts/cli/migrate.ts",
+    "migrate:generate": "ts-node scripts/cli/generate-migration.ts",
     "db:new": "npm run migrate -- --generate",
     "db:migrate": "npm run migrate -- --run",
     "db:rollback": "npm run migrate -- --revert",

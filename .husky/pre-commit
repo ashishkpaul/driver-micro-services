@@ -1,0 +1,28 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🔍 Running pre-commit checks..."
+
+# Run drift detection
+echo "  Checking for schema drift..."
+npm run db:zero-drift
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ Schema drift detected!"
+  echo ""
+  echo "  This means your entities have changed but no migration was generated."
+  echo "  Please run the following commands to fix this:"
+  echo ""
+  echo "    npm run migrate:generate <MigrationName>"
+  echo "    # Review the generated migration files"
+  echo "    # Fill in the INTENT field in each file's header"
+  echo "    git add src/migrations"
+  echo ""
+  echo "  Then try committing again."
+  echo ""
+  exit 1
+fi
+
+echo "✅ No schema drift detected"
+echo "✅ Pre-commit checks passed"
