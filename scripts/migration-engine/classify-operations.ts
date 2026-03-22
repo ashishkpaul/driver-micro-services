@@ -1,41 +1,113 @@
 /**
  * Operation Classification Engine
- * 
+ *
  * Intelligently classifies SQL operations as SAFE/DATA/BREAKING
  * based on TypeORM's SQL generation patterns and governance rules.
  */
 
-import { SqlCategory, ClassifiedStatement } from './types';
+import { SqlCategory, ClassifiedStatement } from "./types";
 
 /**
  * Classification rules for SQL operations
- * 
+ *
  * Rules are processed in order - BREAKING rules are checked first (most restrictive)
  */
-const SQL_RULES: Array<{ pattern: RegExp; category: SqlCategory; reason: string }> = [
+const SQL_RULES: Array<{
+  pattern: RegExp;
+  category: SqlCategory;
+  reason: string;
+}> = [
   // BREAKING — always check first (most restrictive)
-  { pattern: /\bDROP\s+TABLE\b/i,        category: 'BREAKING', reason: 'DROP TABLE removes data permanently' },
-  { pattern: /\bDROP\s+COLUMN\b/i,       category: 'BREAKING', reason: 'DROP COLUMN removes data permanently' },
-  { pattern: /\bDROP\s+TYPE\b/i,         category: 'BREAKING', reason: 'DROP TYPE is destructive' },
-  { pattern: /\bALTER\s+TYPE\b/i,        category: 'BREAKING', reason: 'ALTER TYPE can cause table rewrites' },
-  { pattern: /SET\s+NOT\s+NULL/i,        category: 'BREAKING', reason: 'SET NOT NULL enforces constraint (needs data prep first)' },
-  { pattern: /\bRENAME\s+COLUMN\b/i,     category: 'BREAKING', reason: 'RENAME COLUMN breaks existing queries' },
-  { pattern: /\bRENAME\s+TABLE\b/i,      category: 'BREAKING', reason: 'RENAME TABLE breaks existing queries' },
-  { pattern: /\bALTER\s+COLUMN\b.*TYPE\b/i, category: 'BREAKING', reason: 'Changing column type can corrupt data' },
-  
+  {
+    pattern: /\bDROP\s+TABLE\b/i,
+    category: "BREAKING",
+    reason: "DROP TABLE removes data permanently",
+  },
+  {
+    pattern: /\bDROP\s+COLUMN\b/i,
+    category: "BREAKING",
+    reason: "DROP COLUMN removes data permanently",
+  },
+  {
+    pattern: /\bDROP\s+TYPE\b/i,
+    category: "BREAKING",
+    reason: "DROP TYPE is destructive",
+  },
+  {
+    pattern: /\bALTER\s+TYPE\b/i,
+    category: "BREAKING",
+    reason: "ALTER TYPE can cause table rewrites",
+  },
+  {
+    pattern: /SET\s+NOT\s+NULL/i,
+    category: "BREAKING",
+    reason: "SET NOT NULL enforces constraint (needs data prep first)",
+  },
+  {
+    pattern: /\bRENAME\s+COLUMN\b/i,
+    category: "BREAKING",
+    reason: "RENAME COLUMN breaks existing queries",
+  },
+  {
+    pattern: /\bRENAME\s+TABLE\b/i,
+    category: "BREAKING",
+    reason: "RENAME TABLE breaks existing queries",
+  },
+  {
+    pattern: /\bALTER\s+COLUMN\b.*TYPE\b/i,
+    category: "BREAKING",
+    reason: "Changing column type can corrupt data",
+  },
+
   // DATA — mutations
-  { pattern: /^\s*UPDATE\s+\w/im,        category: 'DATA', reason: 'Data update / backfill' },
-  { pattern: /^\s*INSERT\s+INTO\b/im,    category: 'DATA', reason: 'Data insert / backfill' },
-  { pattern: /^\s*DELETE\s+FROM\b/im,    category: 'DATA', reason: 'Data deletion' },
-  { pattern: /^\s*COPY\s+\w/im,         category: 'DATA', reason: 'Bulk data copy' },
-  
+  {
+    pattern: /^\s*UPDATE\s+\w/im,
+    category: "DATA",
+    reason: "Data update / backfill",
+  },
+  {
+    pattern: /^\s*INSERT\s+INTO\b/im,
+    category: "DATA",
+    reason: "Data insert / backfill",
+  },
+  {
+    pattern: /^\s*DELETE\s+FROM\b/im,
+    category: "DATA",
+    reason: "Data deletion",
+  },
+  { pattern: /^\s*COPY\s+\w/im, category: "DATA", reason: "Bulk data copy" },
+
   // SAFE — expansions
-  { pattern: /\bCREATE\s+TABLE\b/i,      category: 'SAFE', reason: 'New table (additive)' },
-  { pattern: /\bCREATE\s+INDEX\b/i,      category: 'SAFE', reason: 'New index (additive)' },
-  { pattern: /\bCREATE\s+TYPE\b/i,       category: 'SAFE', reason: 'New enum/type (additive)' },
-  { pattern: /\bADD\s+COLUMN\b/i,        category: 'SAFE', reason: 'New column (must be nullable)' },
-  { pattern: /\bADD\s+CONSTRAINT\b/i,    category: 'SAFE', reason: 'New constraint (check data first)' },
-  { pattern: /\bCREATE\s+SEQUENCE\b/i,   category: 'SAFE', reason: 'New sequence (additive)' },
+  {
+    pattern: /\bCREATE\s+TABLE\b/i,
+    category: "SAFE",
+    reason: "New table (additive)",
+  },
+  {
+    pattern: /\bCREATE\s+INDEX\b/i,
+    category: "SAFE",
+    reason: "New index (additive)",
+  },
+  {
+    pattern: /\bCREATE\s+TYPE\b/i,
+    category: "SAFE",
+    reason: "New enum/type (additive)",
+  },
+  {
+    pattern: /\bADD\s+COLUMN\b/i,
+    category: "SAFE",
+    reason: "New column (must be nullable)",
+  },
+  {
+    pattern: /\bADD\s+CONSTRAINT\b/i,
+    category: "SAFE",
+    reason: "New constraint (check data first)",
+  },
+  {
+    pattern: /\bCREATE\s+SEQUENCE\b/i,
+    category: "SAFE",
+    reason: "New sequence (additive)",
+  },
 ];
 
 /**
@@ -47,7 +119,79 @@ export function classifySqlStatement(sql: string): ClassifiedStatement {
       return { sql, category: rule.category, reason: rule.reason };
     }
   }
-  return { sql, category: 'SAFE', reason: 'Unrecognised statement — defaulting to SAFE' };
+  return {
+    sql,
+    category: "SAFE",
+    reason: "Unrecognised statement — defaulting to SAFE",
+  };
+}
+
+/**
+ * Classify SQL operations with enhanced metadata
+ */
+export function classifyOperations(sqlStatements: string[]): any[] {
+  return sqlStatements.map((sql) => {
+    const classification = classifySqlStatement(sql);
+    const metadata = extractOperationMetadata(sql);
+
+    return {
+      sql,
+      category: classification.category,
+      reason: classification.reason,
+      metadata,
+      dependencies: [],
+      conflicts: [],
+    };
+  });
+}
+
+/**
+ * Extract operation metadata for risk analysis
+ */
+function extractOperationMetadata(sql: string): any {
+  const metadata: any = {};
+
+  // Detect table size indicators
+  const tableMatch = sql.match(/(?:FROM|INTO|UPDATE|TABLE)\s+["']?(\w+)/i);
+  if (tableMatch) {
+    const tableName = tableMatch[1].toLowerCase();
+    // Heuristic for table size based on naming patterns
+    if (
+      tableName.includes("log") ||
+      tableName.includes("audit") ||
+      tableName.includes("event")
+    ) {
+      metadata.tableSize = "LARGE";
+    } else if (
+      tableName.includes("user") ||
+      tableName.includes("order") ||
+      tableName.includes("product")
+    ) {
+      metadata.tableSize = "MEDIUM";
+    } else {
+      metadata.tableSize = "SMALL";
+    }
+  }
+
+  // Detect blocking operations
+  if (/ALTER\s+COLUMN.*NOT\s+NULL/i.test(sql) || /DROP\s+COLUMN/i.test(sql)) {
+    metadata.blocking = true;
+    metadata.requiresDowntime = true;
+  }
+
+  // Estimate impact
+  if (metadata.tableSize === "LARGE") {
+    metadata.estimatedTime = "5-30 minutes";
+    metadata.estimatedRows = "1M+";
+  } else if (metadata.tableSize === "MEDIUM") {
+    metadata.estimatedTime = "30 seconds - 5 minutes";
+    metadata.estimatedRows = "10K-1M";
+  } else {
+    metadata.estimatedTime = "< 30 seconds";
+    metadata.estimatedRows = "< 10K";
+  }
+
+  return metadata;
 }
 
 /**
@@ -60,8 +204,8 @@ export function classifyMigrationFile(filePath: string): {
   needsPhaseDecomposition: boolean;
   phases: SqlCategory[];
 } {
-  const fs = require('fs');
-  const content = fs.readFileSync(filePath, 'utf8');
+  const fs = require("fs");
+  const content = fs.readFileSync(filePath, "utf8");
 
   // Extract SQL strings from queryRunner.query(` ... `) calls
   const sqlBlocks: string[] = [];
@@ -69,7 +213,7 @@ export function classifyMigrationFile(filePath: string): {
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
     // Split on semicolons to get individual statements
-    m[1].split(';').forEach((s) => {
+    m[1].split(";").forEach((s) => {
       const trimmed = s.trim();
       if (trimmed.length > 5) sqlBlocks.push(trimmed);
     });
@@ -79,21 +223,28 @@ export function classifyMigrationFile(filePath: string): {
   const categories = new Set(statements.map((s) => s.category));
 
   // Priority: BREAKING > DATA > SAFE > FIX
-  let dominantPrefix = 'SAFE_';
-  if (categories.has('BREAKING')) dominantPrefix = 'BREAKING_';
-  else if (categories.has('DATA'))    dominantPrefix = 'DATA_';
-  else if (categories.has('SAFE'))    dominantPrefix = 'SAFE_';
+  let dominantPrefix = "SAFE_";
+  if (categories.has("BREAKING")) dominantPrefix = "BREAKING_";
+  else if (categories.has("DATA")) dominantPrefix = "DATA_";
+  else if (categories.has("SAFE")) dominantPrefix = "SAFE_";
 
   // If TypeORM generated a file mixing categories that should be separate phases,
   // the developer needs split files (e.g. ADD COLUMN nullable + SET NOT NULL)
   const needsPhaseDecomposition =
-    categories.has('BREAKING') && (categories.has('SAFE') || categories.has('DATA'));
+    categories.has("BREAKING") &&
+    (categories.has("SAFE") || categories.has("DATA"));
 
   // Build ordered phase list
   const phases: SqlCategory[] = [];
-  if (categories.has('SAFE'))     phases.push('SAFE');
-  if (categories.has('DATA'))     phases.push('DATA');
-  if (categories.has('BREAKING')) phases.push('BREAKING');
+  if (categories.has("SAFE")) phases.push("SAFE");
+  if (categories.has("DATA")) phases.push("DATA");
+  if (categories.has("BREAKING")) phases.push("BREAKING");
 
-  return { categories, statements, dominantPrefix, needsPhaseDecomposition, phases };
+  return {
+    categories,
+    statements,
+    dominantPrefix,
+    needsPhaseDecomposition,
+    phases,
+  };
 }
