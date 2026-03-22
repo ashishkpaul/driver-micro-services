@@ -97,6 +97,7 @@ await this.eventBus.publish(new DriverLocationUpdatedEvent(driver));
 
 **Current**: Service mixes domain + infrastructure
 **Target**: Clean separation:
+
 ```
 domain/
   driver/
