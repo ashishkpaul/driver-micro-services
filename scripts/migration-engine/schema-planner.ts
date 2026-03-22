@@ -18,10 +18,15 @@ import { buildEntitySnapshot } from "./entity-snapshot";
 import { buildDatabaseSnapshot } from "./database-snapshot";
 import { detectSchemaDiff } from "./detect-schema-diff";
 import { classifyOperations } from "./classify-operations";
-import { splitLifecycle } from "./lifecycle-split";
+import { LifecycleSplitter } from "./lifecycle-split";
 import { buildOperationGraph } from "./operation-graph";
 import { analyzeRisk } from "./risk-analyzer";
 import { checkCompatibility } from "./compatibility-check";
+import {
+  MigrationExecutionPlanBuilder,
+  ValidationResult,
+} from "./migration-execution-plan";
+import { MigrationReplayEngine } from "./migration-replay";
 
 /**
  * Main schema planning orchestration
@@ -54,32 +59,43 @@ export async function buildMigrationPlan(
 
   // Step 6: Split into lifecycle phases
   console.log("  6. Splitting into lifecycle phases...");
-  const lifecycle = splitLifecycle(classified);
+  const lifecycleSplitter = new LifecycleSplitter();
+  const lifecycle = lifecycleSplitter.split(classified);
 
   // Step 7: Build operation dependency graph
   console.log("  7. Building operation dependency graph...");
   const graph = buildOperationGraph(lifecycle);
 
-  // Step 8: Generate final migration plan
-  console.log("  8. Generating migration plan...");
-
-  const plan: MigrationPlan = {
-    operations: classified,
-    phases: lifecycle,
-    graph,
+  // Step 8: Build unified execution plan
+  console.log("  8. Building unified execution plan...");
+  const executionPlan = MigrationExecutionPlanBuilder.buildFromPhases(
+    lifecycle,
+    classified,
     risks,
     compatibility,
-    metadata: {
+    {
       entitySnapshot,
       databaseSnapshot,
       diff,
       createdAt: new Date().toISOString(),
       version: "1.0.0",
     },
+  );
+
+  // Step 9: Generate final migration plan
+  console.log("  9. Generating migration plan...");
+
+  const plan: MigrationPlan = {
+    operations: executionPlan.operations,
+    phases: executionPlan.phases,
+    graph,
+    risks,
+    compatibility,
+    metadata: executionPlan.metadata,
   };
 
   console.log(
-    `✅ Migration plan built: ${classified.length} operations, ${lifecycle.phases.length} phases`,
+    `✅ Migration plan built: ${classified.length} operations, ${lifecycle.length} phases`,
   );
 
   return plan;
@@ -128,6 +144,23 @@ export function validateMigrationPlan(plan: MigrationPlan): ValidationResult {
       `Mixed phase operations detected in phases: ${mixedPhaseOperations.map((p) => p.phase).join(", ")}`,
     );
   }
+
+  // Validate execution plan integrity
+  const executionPlanValidation = MigrationExecutionPlanBuilder.validatePlan({
+    operations: plan.operations,
+    phases: plan.phases,
+    executionOrder: plan.phases.flatMap((p) => p.order),
+    dependencies: new Map(),
+    risks: plan.risks,
+    compatibility: plan.compatibility,
+    metadata: {
+      ...plan.metadata,
+      planHash: "placeholder-hash", // Will be calculated by the builder
+    },
+  });
+
+  errors.push(...executionPlanValidation.errors);
+  warnings.push(...executionPlanValidation.warnings);
 
   return {
     isValid: errors.length === 0,

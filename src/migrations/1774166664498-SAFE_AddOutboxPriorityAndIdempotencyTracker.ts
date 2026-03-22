@@ -66,6 +66,27 @@ export class SAFE_AddOutboxPriorityAndIdempotencyTracker1774166664498 implements
     // ── 2. outbox_archive compression columns ─────────────────────────────────
     // Used by OutboxArchiveService when compressing large payloads.
     // All nullable — no backfill needed.
+    // Guard: in transaction-mode simulations, prior migrations may not be visible.
+
+    await queryRunner.query(`
+      CREATE TABLE IF NOT EXISTS outbox_archive (
+        id              SERIAL             NOT NULL,
+        event_type      VARCHAR            NOT NULL,
+        payload         JSONB              NOT NULL,
+        status          outbox_status_enum NOT NULL,
+        retry_count     INTEGER            NOT NULL DEFAULT 0,
+        last_error      VARCHAR,
+        next_retry_at   TIMESTAMP,
+        created_at      TIMESTAMP          NOT NULL DEFAULT now(),
+        processed_at    TIMESTAMP,
+        locked_at       TIMESTAMP,
+        locked_by       VARCHAR,
+        idempotency_key VARCHAR            NOT NULL,
+        archived_at     TIMESTAMP          NOT NULL DEFAULT now(),
+        CONSTRAINT pk_outbox_archive                 PRIMARY KEY (id),
+        CONSTRAINT uq_outbox_archive_idempotency_key UNIQUE (idempotency_key)
+      )
+    `);
 
     await queryRunner.query(`
       ALTER TABLE outbox_archive

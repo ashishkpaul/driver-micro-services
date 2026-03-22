@@ -3,6 +3,9 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 export class DATA_RealignSchemaBackfill1774093828155 implements MigrationInterface {
   name = "DATA_RealignSchemaBackfill1774093828155";
 
+  // CREATE EXTENSION cannot run inside a transaction block on many PG installs
+  public transaction = false;
+
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
 CREATE EXTENSION IF NOT EXISTS pgcrypto
@@ -61,7 +64,7 @@ UPDATE assignments
 SET driver_id_uuid =
 CASE
 
-WHEN driver_id ~ '^[0-9a-fA-F-]{36}$'
+WHEN driver_id::text ~ '^[0-9a-fA-F-]{36}$'
 THEN driver_id::uuid
 
 ELSE gen_random_uuid()
