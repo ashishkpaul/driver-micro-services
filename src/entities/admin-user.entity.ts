@@ -61,36 +61,36 @@ export class AdminUser {
   /* Admin Control Flags                                                 */
   /* ------------------------------------------------------------------ */
 
-@Index("idx_admin_users_is_active")
-@Column({
-  name: "is_active",
-  type:"boolean",
-  default: true
-})
-isActive!: boolean;
+  @Index("idx_admin_users_is_active")
+  @Column({
+    name: "is_active",
+    type: "boolean",
+    default: true,
+  })
+  isActive!: boolean;
 
   /* ------------------------------------------------------------------ */
   /* Geographic Scoping                                                  */
   /* ------------------------------------------------------------------ */
 
-@Index("idx_admin_users_city_id")
-@Column({
-  name: "city_id",
-  type: "uuid",
-  nullable: true,
-})
-cityId?: string;
+  @Index("idx_admin_users_city_id")
+  @Column({
+    name: "city_id",
+    type: "uuid",
+    nullable: true,
+  })
+  cityId?: string;
 
-@ManyToOne(() => City, {
-  nullable: true,
-  onDelete: "SET NULL",
-  onUpdate: "NO ACTION"
-})
-@JoinColumn({
-  name: "city_id",
-  foreignKeyConstraintName: "fk_admin_users_city"
-})
-city?: City;
+  @ManyToOne(() => City, {
+    nullable: true,
+    onDelete: "SET NULL",
+    onUpdate: "NO ACTION",
+  })
+  @JoinColumn({
+    name: "city_id",
+    foreignKeyConstraintName: "fk_admin_users_city",
+  })
+  city?: City;
 
   /* ------------------------------------------------------------------ */
   /* Audit & Tracking                                                   */

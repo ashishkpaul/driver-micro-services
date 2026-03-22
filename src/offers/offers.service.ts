@@ -12,7 +12,10 @@ import { RedisService } from "../redis/redis.service";
 
 import { DriverOffer, DriverOfferStatus } from "./entities/driver-offer.entity";
 import { Driver } from "../drivers/entities/driver.entity";
-import { Delivery, DeliveryStatus } from "../deliveries/entities/delivery.entity";
+import {
+  Delivery,
+  DeliveryStatus,
+} from "../deliveries/entities/delivery.entity";
 import { Assignment } from "../assignment/entities/assignment.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { DriverCapabilityService } from "../drivers/driver-capability.service";
@@ -204,8 +207,8 @@ export class OffersService {
       // Replaces manager.update() — we need assignedAt and deliveryOtp set,
       // which requires loading the entity first (update() doesn't call setters).
       const delivery = await manager.findOne(Delivery, {
-        where:  { id: offer.deliveryId },
-        lock:   { mode: 'pessimistic_write' },
+        where: { id: offer.deliveryId },
+        lock: { mode: "pessimistic_write" },
       });
 
       if (!delivery) {
@@ -215,13 +218,15 @@ export class OffersService {
       }
 
       // Set all assignment fields atomically in the same transaction
-      delivery.driverId       = driverId;
-      delivery.status         = DeliveryStatus.ASSIGNED;
-      delivery.assignedAt     = new Date();
-      delivery.otpAttempts    = 0;
+      delivery.driverId = driverId;
+      delivery.status = DeliveryStatus.ASSIGNED;
+      delivery.assignedAt = new Date();
+      delivery.otpAttempts = 0;
       delivery.otpLockedUntil = undefined;
       // generateOtpCode() is private on DeliversService — inline equivalent here
-      delivery.deliveryOtp    = Math.floor(100000 + Math.random() * 900000).toString();
+      delivery.deliveryOtp = Math.floor(
+        100000 + Math.random() * 900000,
+      ).toString();
 
       await manager.save(delivery);
 

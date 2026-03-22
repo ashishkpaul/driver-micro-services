@@ -3,7 +3,6 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { RedisModule } from "../redis/redis.module";
 import { DriversModule } from "../drivers/drivers.module";
 import { DomainEventsModule } from "../domain-events/domain-events.module"; // ADDED
-import { WebSocketModule } from "../websocket/websocket.module"; // ADDED
 
 // Controllers
 import { OffersController } from "./offers.controller";
@@ -24,7 +23,6 @@ import { Assignment } from "../assignment/entities/assignment.entity";
     RedisModule,
     DriversModule,
     forwardRef(() => DomainEventsModule), // ADDED - wrapped in forwardRef to break circular dependency
-    forwardRef(() => WebSocketModule), // ADDED - wrapped in forwardRef to break circular dependency
   ],
   controllers: [OffersController, V2OffersController],
   providers: [OffersService],

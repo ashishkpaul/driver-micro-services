@@ -72,7 +72,9 @@ export class WebSocketGatewayHandler
     }
 
     try {
-      const payload = this.jwtService.verify(token);
+      const payload = this.jwtService.verify(token, {
+        ignoreExpiration: false,
+      });
       const driverId = payload.driverId || payload.sub;
 
       if (!driverId) {

@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { OutboxEvent } from './outbox.entity';
-import { OutboxArchiveEvent } from './outbox-archive.entity';
-import { OutboxStatus } from './outbox-status.enum';
-import { MetricsService } from './metrics.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, DataSource } from "typeorm";
+import { OutboxEvent } from "./outbox.entity";
+import { OutboxArchiveEvent } from "./outbox-archive.entity";
+import { OutboxStatus } from "./outbox-status.enum";
+import { MetricsService } from "./metrics.service";
 
 @Injectable()
 export class OutboxJanitorService {
@@ -27,30 +27,29 @@ export class OutboxJanitorService {
    */
   async cleanup(): Promise<void> {
     const startTime = Date.now();
-    this.logger.log('Starting janitor cleanup process');
+    this.logger.log("Starting janitor cleanup process");
 
     try {
       // Step 1: Archive completed events
       const archivedCount = await this.archiveCompletedEvents();
-      
+
       // Step 2: Compress old archived events
       const compressedCount = await this.compressOldArchives();
-      
+
       // Step 3: Hard delete very old archives (GDPR compliance)
       const deletedCount = await this.hardDeleteOldArchives();
 
       const duration = Date.now() - startTime;
       this.logger.log(
-        `Janitor cleanup completed: ${archivedCount} archived, ${compressedCount} compressed, ${deletedCount} deleted in ${duration}ms`
+        `Janitor cleanup completed: ${archivedCount} archived, ${compressedCount} compressed, ${deletedCount} deleted in ${duration}ms`,
       );
 
       // Record metrics
       if (archivedCount > 0) {
         this.metricsService.incrementRetries(); // Count as batch operation
       }
-
     } catch (error) {
-      this.logger.error('Janitor cleanup failed:', error);
+      this.logger.error("Janitor cleanup failed:", error);
       throw error;
     }
   }
@@ -59,24 +58,30 @@ export class OutboxJanitorService {
    * Archive completed events older than 1 hour
    */
   private async archiveCompletedEvents(): Promise<number> {
-    const cutoffDate = new Date(Date.now() - this.ARCHIVE_AGE_HOURS * 60 * 60 * 1000);
-    
-    this.logger.debug(`Archiving completed events older than ${this.ARCHIVE_AGE_HOURS} hour(s)`);
+    const cutoffDate = new Date(
+      Date.now() - this.ARCHIVE_AGE_HOURS * 60 * 60 * 1000,
+    );
+
+    this.logger.debug(
+      `Archiving completed events older than ${this.ARCHIVE_AGE_HOURS} hour(s)`,
+    );
 
     // Find events to archive
     const eventsToArchive = await this.outboxRepository
-      .createQueryBuilder('event')
-      .where('event.status = :status', { status: OutboxStatus.COMPLETED })
-      .andWhere('event.createdAt < :cutoffDate', { cutoffDate })
-      .orderBy('event.createdAt', 'ASC')
+      .createQueryBuilder("event")
+      .where("event.status = :status", { status: OutboxStatus.COMPLETED })
+      .andWhere("event.createdAt < :cutoffDate", { cutoffDate })
+      .orderBy("event.createdAt", "ASC")
       .getMany();
 
     if (eventsToArchive.length === 0) {
-      this.logger.debug('No completed events to archive');
+      this.logger.debug("No completed events to archive");
       return 0;
     }
 
-    this.logger.log(`Found ${eventsToArchive.length} completed events to archive`);
+    this.logger.log(
+      `Found ${eventsToArchive.length} completed events to archive`,
+    );
 
     // Archive in batches
     let archivedCount = 0;
@@ -104,9 +109,14 @@ export class OutboxJanitorService {
       try {
         await this.archiveRepository.save(archiveBatch);
         archivedCount += archiveBatch.length;
-        this.logger.debug(`Archived batch ${Math.floor(i / this.BATCH_SIZE) + 1}: ${archiveBatch.length} events`);
+        this.logger.debug(
+          `Archived batch ${Math.floor(i / this.BATCH_SIZE) + 1}: ${archiveBatch.length} events`,
+        );
       } catch (error) {
-        this.logger.error(`Failed to archive batch ${Math.floor(i / this.BATCH_SIZE) + 1}:`, error);
+        this.logger.error(
+          `Failed to archive batch ${Math.floor(i / this.BATCH_SIZE) + 1}:`,
+          error,
+        );
         throw error;
       }
     }
@@ -115,9 +125,14 @@ export class OutboxJanitorService {
     const archivedIds = eventsToArchive.map((event) => event.id);
     try {
       await this.outboxRepository.delete(archivedIds);
-      this.logger.log(`Deleted ${archivedIds.length} archived events from hot table`);
+      this.logger.log(
+        `Deleted ${archivedIds.length} archived events from hot table`,
+      );
     } catch (error) {
-      this.logger.error('Failed to delete archived events from hot table:', error);
+      this.logger.error(
+        "Failed to delete archived events from hot table:",
+        error,
+      );
       throw error;
     }
 
@@ -128,23 +143,29 @@ export class OutboxJanitorService {
    * Compress old archived events to save storage space
    */
   private async compressOldArchives(): Promise<number> {
-    const cutoffDate = new Date(Date.now() - this.COMPRESSION_AGE_DAYS * 24 * 60 * 60 * 1000);
-    
-    this.logger.debug(`Compressing archived events older than ${this.COMPRESSION_AGE_DAYS} day(s)`);
+    const cutoffDate = new Date(
+      Date.now() - this.COMPRESSION_AGE_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    this.logger.debug(
+      `Compressing archived events older than ${this.COMPRESSION_AGE_DAYS} day(s)`,
+    );
 
     // Find uncompressed events to compress
     const eventsToCompress = await this.archiveRepository
-      .createQueryBuilder('archive')
-      .where('archive.archivedAt < :cutoffDate', { cutoffDate })
-      .andWhere('archive.isCompressed = :isCompressed', { isCompressed: false })
+      .createQueryBuilder("archive")
+      .where("archive.archivedAt < :cutoffDate", { cutoffDate })
+      .andWhere("archive.isCompressed = :isCompressed", { isCompressed: false })
       .getMany();
 
     if (eventsToCompress.length === 0) {
-      this.logger.debug('No archived events to compress');
+      this.logger.debug("No archived events to compress");
       return 0;
     }
 
-    this.logger.log(`Found ${eventsToCompress.length} archived events to compress`);
+    this.logger.log(
+      `Found ${eventsToCompress.length} archived events to compress`,
+    );
 
     let compressedCount = 0;
     for (const event of eventsToCompress) {
@@ -152,7 +173,7 @@ export class OutboxJanitorService {
         // Compress the payload
         const compressedPayload = this.compressPayload(event.payload);
         const compressedSize = JSON.stringify(compressedPayload).length;
-        
+
         // Update the archive record
         await this.archiveRepository.update(event.id, {
           compressedPayload,
@@ -161,9 +182,14 @@ export class OutboxJanitorService {
         });
 
         compressedCount++;
-        
-        const savings = ((event.originalPayloadSize! - compressedSize) / event.originalPayloadSize!) * 100;
-        this.logger.debug(`Compressed event ${event.id}: ${savings.toFixed(1)}% space savings`);
+
+        const savings =
+          ((event.originalPayloadSize! - compressedSize) /
+            event.originalPayloadSize!) *
+          100;
+        this.logger.debug(
+          `Compressed event ${event.id}: ${savings.toFixed(1)}% space savings`,
+        );
       } catch (error) {
         this.logger.error(`Failed to compress event ${event.id}:`, error);
       }
@@ -176,15 +202,22 @@ export class OutboxJanitorService {
    * Hard delete very old archived events (GDPR compliance)
    */
   private async hardDeleteOldArchives(): Promise<number> {
-    const retentionDays = parseInt(process.env.ARCHIVE_RETENTION_DAYS || '365', 10);
-    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-    
-    this.logger.debug(`Hard deleting archived events older than ${retentionDays} day(s)`);
+    const retentionDays = parseInt(
+      process.env.ARCHIVE_RETENTION_DAYS || "365",
+      10,
+    );
+    const cutoffDate = new Date(
+      Date.now() - retentionDays * 24 * 60 * 60 * 1000,
+    );
+
+    this.logger.debug(
+      `Hard deleting archived events older than ${retentionDays} day(s)`,
+    );
 
     const result = await this.archiveRepository
       .createQueryBuilder()
       .delete()
-      .where('archivedAt < :cutoffDate', { cutoffDate })
+      .where("archivedAt < :cutoffDate", { cutoffDate })
       .execute();
 
     const deletedCount = result.affected || 0;
@@ -202,16 +235,19 @@ export class OutboxJanitorService {
     try {
       // Strategy 1: Remove null/undefined values and empty objects
       const cleanedPayload = this.cleanPayload(payload);
-      
+
       // Strategy 2: Compress large string fields
       const compressedPayload = this.compressLargeStrings(cleanedPayload);
-      
+
       // Strategy 3: Normalize field names for better compression
       const normalizedPayload = this.normalizeFieldNames(compressedPayload);
-      
+
       return normalizedPayload;
     } catch (error) {
-      this.logger.warn('Payload compression failed, returning original:', error);
+      this.logger.warn(
+        "Payload compression failed, returning original:",
+        error,
+      );
       return payload;
     }
   }
@@ -221,14 +257,14 @@ export class OutboxJanitorService {
    */
   private cleanPayload(payload: any): any {
     if (payload === null || payload === undefined) return undefined;
-    
+
     if (Array.isArray(payload)) {
       return payload
-        .map(item => this.cleanPayload(item))
-        .filter(item => item !== undefined);
+        .map((item) => this.cleanPayload(item))
+        .filter((item) => item !== undefined);
     }
-    
-    if (typeof payload === 'object') {
+
+    if (typeof payload === "object") {
       const cleaned: any = {};
       for (const [key, value] of Object.entries(payload)) {
         const cleanedValue = this.cleanPayload(value);
@@ -238,7 +274,7 @@ export class OutboxJanitorService {
       }
       return Object.keys(cleaned).length > 0 ? cleaned : undefined;
     }
-    
+
     return payload;
   }
 
@@ -246,24 +282,24 @@ export class OutboxJanitorService {
    * Compress large string fields using base64 encoding for very large strings
    */
   private compressLargeStrings(payload: any): any {
-    if (typeof payload === 'string' && payload.length > 1000) {
+    if (typeof payload === "string" && payload.length > 1000) {
       // For very large strings, consider base64 encoding
       // This is a placeholder - in production you'd use proper compression
       return payload; // Keeping original for now
     }
-    
+
     if (Array.isArray(payload)) {
-      return payload.map(item => this.compressLargeStrings(item));
+      return payload.map((item) => this.compressLargeStrings(item));
     }
-    
-    if (typeof payload === 'object' && payload !== null) {
+
+    if (typeof payload === "object" && payload !== null) {
       const compressed: any = {};
       for (const [key, value] of Object.entries(payload)) {
         compressed[key] = this.compressLargeStrings(value);
       }
       return compressed;
     }
-    
+
     return payload;
   }
 
@@ -272,33 +308,33 @@ export class OutboxJanitorService {
    */
   private normalizeFieldNames(payload: any): any {
     const fieldMapping: Record<string, string> = {
-      'created_at': 'ca',
-      'updated_at': 'ua',
-      'event_type': 'et',
-      'event_id': 'eid',
-      'user_id': 'uid',
-      'driver_id': 'did',
-      'delivery_id': 'dlid',
-      'location': 'loc',
-      'timestamp': 'ts',
-      'status': 'st',
-      'payload': 'pl',
-      'metadata': 'md',
-      'description': 'desc',
-      'message': 'msg',
-      'error': 'err',
-      'success': 'suc',
-      'failed': 'fail',
-      'completed': 'comp',
-      'processing': 'proc',
-      'pending': 'pend'
+      created_at: "ca",
+      updated_at: "ua",
+      event_type: "et",
+      event_id: "eid",
+      user_id: "uid",
+      driver_id: "did",
+      delivery_id: "dlid",
+      location: "loc",
+      timestamp: "ts",
+      status: "st",
+      payload: "pl",
+      metadata: "md",
+      description: "desc",
+      message: "msg",
+      error: "err",
+      success: "suc",
+      failed: "fail",
+      completed: "comp",
+      processing: "proc",
+      pending: "pend",
     };
 
     if (Array.isArray(payload)) {
-      return payload.map(item => this.normalizeFieldNames(item));
+      return payload.map((item) => this.normalizeFieldNames(item));
     }
-    
-    if (typeof payload === 'object' && payload !== null) {
+
+    if (typeof payload === "object" && payload !== null) {
       const normalized: any = {};
       for (const [key, value] of Object.entries(payload)) {
         const normalizedKey = fieldMapping[key] || key;
@@ -306,7 +342,7 @@ export class OutboxJanitorService {
       }
       return normalized;
     }
-    
+
     return payload;
   }
 
@@ -326,7 +362,9 @@ export class OutboxJanitorService {
     };
   }> {
     const totalArchived = await this.archiveRepository.count();
-    const totalCompressed = await this.archiveRepository.count({ where: { isCompressed: true } });
+    const totalCompressed = await this.archiveRepository.count({
+      where: { isCompressed: true },
+    });
 
     const oldestEventResult = await this.archiveRepository
       .createQueryBuilder("archive")
@@ -358,17 +396,28 @@ export class OutboxJanitorService {
       .where("archive.isCompressed = true")
       .getRawOne();
 
-    const totalOriginalSize = parseInt(compressionStats.totalOriginalSize || '0', 10);
-    const totalCompressedSize = parseInt(compressionStats.totalCompressedSize || '0', 10);
-    const totalSavingsPercent = totalOriginalSize > 0 
-      ? ((totalOriginalSize - totalCompressedSize) / totalOriginalSize) * 100 
-      : 0;
+    const totalOriginalSize = parseInt(
+      compressionStats.totalOriginalSize || "0",
+      10,
+    );
+    const totalCompressedSize = parseInt(
+      compressionStats.totalCompressedSize || "0",
+      10,
+    );
+    const totalSavingsPercent =
+      totalOriginalSize > 0
+        ? ((totalOriginalSize - totalCompressedSize) / totalOriginalSize) * 100
+        : 0;
 
     return {
       totalArchived,
       totalCompressed,
-      oldestEvent: oldestEventResult?.oldest ? new Date(oldestEventResult.oldest) : null,
-      newestEvent: newestEventResult?.newest ? new Date(newestEventResult.newest) : null,
+      oldestEvent: oldestEventResult?.oldest
+        ? new Date(oldestEventResult.oldest)
+        : null,
+      newestEvent: newestEventResult?.newest
+        ? new Date(newestEventResult.newest)
+        : null,
       eventsByStatus,
       compressionSavings: {
         totalOriginalSize,
@@ -386,7 +435,7 @@ export class OutboxJanitorService {
 
     const eventsToArchive = await this.outboxRepository.findByIds(eventIds);
     if (eventsToArchive.length === 0) {
-      this.logger.warn('No events found to archive');
+      this.logger.warn("No events found to archive");
       return 0;
     }
 
@@ -415,7 +464,7 @@ export class OutboxJanitorService {
       this.logger.log(`Successfully archived ${archiveBatch.length} events`);
       return archiveBatch.length;
     } catch (error) {
-      this.logger.error('Failed to manually archive events:', error);
+      this.logger.error("Failed to manually archive events:", error);
       throw error;
     }
   }

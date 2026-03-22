@@ -22,12 +22,12 @@ export class City {
   /* Basic Information                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column({ type: 'varchar' })
+  @Column({ type: "varchar" })
   @IsString()
   @IsNotEmpty()
   name!: string;
 
-  @Column({ type: 'varchar', unique: true }) // 👈 ADDED: unique: true
+  @Column({ type: "varchar", unique: true }) // 👈 ADDED: unique: true
   @IsString()
   @IsNotEmpty()
   code!: string; // e.g., "BNG", "DEL", "MUM"

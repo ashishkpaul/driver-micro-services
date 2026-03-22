@@ -5,7 +5,10 @@ import {
 } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, Not } from "typeorm";
-import { DriverOffer, DriverOfferStatus } from "../offers/entities/driver-offer.entity";
+import {
+  DriverOffer,
+  DriverOfferStatus,
+} from "../offers/entities/driver-offer.entity";
 import { Delivery, DeliveryStatus } from "./entities/delivery.entity";
 import { Assignment } from "../assignment/entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";

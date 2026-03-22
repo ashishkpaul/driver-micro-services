@@ -8,7 +8,10 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource, EntityManager } from "typeorm";
 import { Delivery, DeliveryStatus } from "./entities/delivery.entity";
-import { DeliveryEvent, DeliveryEventType } from "./entities/delivery-event.entity";
+import {
+  DeliveryEvent,
+  DeliveryEventType,
+} from "./entities/delivery-event.entity";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
 import { UpdateDeliveryStatusDto } from "./dto/update-delivery-status.dto";
 import { WebhooksService } from "../webhooks/webhooks.service";
@@ -45,9 +48,16 @@ export class DeliveriesService {
   private readonly MAX_DROPOFF_RADIUS_KM = 0.25; // 250 meters
 
   // Task 1: Enforce Strict Delivery State Transitions
-  private readonly allowedTransitions: Record<DeliveryStatus, DeliveryStatus[]> = {
+  private readonly allowedTransitions: Record<
+    DeliveryStatus,
+    DeliveryStatus[]
+  > = {
     PENDING: [DeliveryStatus.ASSIGNED, DeliveryStatus.CANCELLED],
-    ASSIGNED: [DeliveryStatus.PICKED_UP, DeliveryStatus.FAILED, DeliveryStatus.CANCELLED],
+    ASSIGNED: [
+      DeliveryStatus.PICKED_UP,
+      DeliveryStatus.FAILED,
+      DeliveryStatus.CANCELLED,
+    ],
     PICKED_UP: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.FAILED],
     IN_TRANSIT: [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED],
     DELIVERED: [],
@@ -206,14 +216,15 @@ export class DeliveriesService {
       // outbox.service idempotency check will deduplicate on sellerOrderId
       // and this publish will be a no-op. Both paths are intentional owners.
       await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
-        deliveryId:    delivery.id,               // added — needed for idempotency fallback
+        deliveryId: delivery.id, // added — needed for idempotency fallback
         sellerOrderId: delivery.sellerOrderId,
-        channelId:     delivery.channelId,
+        channelId: delivery.channelId,
         driverId,
         assignmentId,
-        assignedAt:    delivery.assignedAt?.toISOString() ?? new Date().toISOString(),
+        assignedAt:
+          delivery.assignedAt?.toISOString() ?? new Date().toISOString(),
         pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
-        dropLocation:   { lat: delivery.dropLat,   lon: delivery.dropLon },
+        dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
       });
 
       return delivery;
@@ -285,13 +296,15 @@ export class DeliveriesService {
 
       if (!delivery)
         throw new NotFoundException(`Delivery ${deliveryId} not found`);
-      
+
       // Task 3: Add Idempotency Protection on OTP Verification
       if (delivery.status === DeliveryStatus.DELIVERED) {
-        this.logger.log(`Delivery ${deliveryId} is already DELIVERED. Returning idempotently.`);
+        this.logger.log(
+          `Delivery ${deliveryId} is already DELIVERED. Returning idempotently.`,
+        );
         return delivery; // Return success instead of throwing
       }
-      
+
       if (!delivery.deliveryOtp)
         throw new BadRequestException("No OTP active for this delivery");
 
@@ -384,12 +397,14 @@ export class DeliveriesService {
 
       // Convert string status to enum
       const statusEnum = this.mapStringToDeliveryStatus(updateDto.status);
-      
+
       // Task 1: Enforce Strict Delivery State Transitions
       if (!this.allowedTransitions[delivery.status].includes(statusEnum)) {
-        throw new ConflictException(`Invalid state transition from ${delivery.status} to ${statusEnum}`);
+        throw new ConflictException(
+          `Invalid state transition from ${delivery.status} to ${statusEnum}`,
+        );
       }
-      
+
       delivery.status = statusEnum;
 
       switch (statusEnum) {
@@ -479,7 +494,10 @@ export class DeliveriesService {
 
   async cancelDelivery(deliveryId: string, reason?: string): Promise<void> {
     const delivery = await this.findOne(deliveryId);
-    if (delivery.status === DeliveryStatus.CANCELLED || delivery.status === DeliveryStatus.DELIVERED) {
+    if (
+      delivery.status === DeliveryStatus.CANCELLED ||
+      delivery.status === DeliveryStatus.DELIVERED
+    ) {
       return;
     }
 
@@ -567,7 +585,9 @@ export class DeliveriesService {
     }
   }
 
-  private mapDeliveryStatusToEventType(status: DeliveryStatus): DeliveryEventType {
+  private mapDeliveryStatusToEventType(
+    status: DeliveryStatus,
+  ): DeliveryEventType {
     switch (status) {
       case DeliveryStatus.ASSIGNED:
         return DeliveryEventType.ASSIGNED;

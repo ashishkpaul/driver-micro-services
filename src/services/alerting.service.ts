@@ -8,28 +8,35 @@ export class AlertingService {
   private readonly opsAlertWebhookUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.opsAlertWebhookUrl = this.configService.get<string>('OPS_ALERT_WEBHOOK_URL', '');
+    this.opsAlertWebhookUrl = this.configService.get<string>(
+      "OPS_ALERT_WEBHOOK_URL",
+      "",
+    );
   }
 
   /**
    * Send an alert to external monitoring systems (Slack, Discord, etc.)
    */
-  async sendAlert(title: string, message: string, severity: 'info' | 'warning' | 'error' = 'warning'): Promise<void> {
+  async sendAlert(
+    title: string,
+    message: string,
+    severity: "info" | "warning" | "error" = "warning",
+  ): Promise<void> {
     if (!this.opsAlertWebhookUrl) {
-      this.logger.warn('OPS_ALERT_WEBHOOK_URL not configured, skipping alert');
+      this.logger.warn("OPS_ALERT_WEBHOOK_URL not configured, skipping alert");
       return;
     }
 
     try {
       const payload = {
         text: `🚨 **${severity.toUpperCase()}**: ${title}\n\n${message}`,
-        username: 'Driver Microservices Monitor',
-        icon_emoji: severity === 'error' ? ':red_circle:' : ':warning:'
+        username: "Driver Microservices Monitor",
+        icon_emoji: severity === "error" ? ":red_circle:" : ":warning:",
       };
 
       await axios.post(this.opsAlertWebhookUrl, payload, {
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         timeout: 5000,
       });
@@ -46,11 +53,14 @@ export class AlertingService {
   /**
    * Send dead letter queue threshold breach alert
    */
-  async sendDeadLetterThresholdAlert(failedCount: number, timeWindow: string): Promise<void> {
+  async sendDeadLetterThresholdAlert(
+    failedCount: number,
+    timeWindow: string,
+  ): Promise<void> {
     await this.sendAlert(
-      'Dead Letter Queue Threshold Exceeded',
+      "Dead Letter Queue Threshold Exceeded",
       `High failure rate detected in dead letter queue. ${failedCount} failed events in the last ${timeWindow}.`,
-      'error'
+      "error",
     );
   }
 
@@ -59,9 +69,9 @@ export class AlertingService {
    */
   async sendSlaBreachAlert(breachCount: number): Promise<void> {
     await this.sendAlert(
-      'SLA Breach Detected',
+      "SLA Breach Detected",
       `${breachCount} delivery SLA breaches detected. Please investigate delivery performance.`,
-      'warning'
+      "warning",
     );
   }
 
@@ -70,9 +80,9 @@ export class AlertingService {
    */
   async sendSystemHealthAlert(component: string, issue: string): Promise<void> {
     await this.sendAlert(
-      'System Health Alert',
+      "System Health Alert",
       `Component: ${component}\nIssue: ${issue}`,
-      'error'
+      "error",
     );
   }
 }

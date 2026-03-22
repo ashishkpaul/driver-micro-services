@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from "typeorm";
 
 /**
  * INTENT:   Create full driver microservice schema from zero
@@ -15,7 +15,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 // MIGRATION_GUARD:ALLOW_DESTRUCTIVE
 
 export class BASELINE_Initial1000000000000 implements MigrationInterface {
-  name = 'BASELINE_Initial1000000000000';
+  name = "BASELINE_Initial1000000000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // ── 1. Enums ──────────────────────────────────────────────────────────────
@@ -91,7 +91,9 @@ export class BASELINE_Initial1000000000000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_zones_city_id ON zones (city_id)`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_zones_city_id ON zones (city_id)`,
+    );
 
     // ── 4. admin_users ────────────────────────────────────────────────────────
 
@@ -114,8 +116,12 @@ export class BASELINE_Initial1000000000000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_admin_users_is_active ON admin_users (is_active)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_admin_users_city_id   ON admin_users (city_id)`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_admin_users_is_active ON admin_users (is_active)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_admin_users_city_id   ON admin_users (city_id)`,
+    );
 
     // ── 5. drivers ────────────────────────────────────────────────────────────
 
@@ -143,10 +149,18 @@ export class BASELINE_Initial1000000000000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_drivers_is_active ON drivers (is_active)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_drivers_status    ON drivers (status)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_drivers_city_id   ON drivers (city_id)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_drivers_zone_id   ON drivers (zone_id)`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_drivers_is_active ON drivers (is_active)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_drivers_status    ON drivers (status)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_drivers_city_id   ON drivers (city_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_drivers_zone_id   ON drivers (zone_id)`,
+    );
 
     // ── 6. deliveries ─────────────────────────────────────────────────────────
 
@@ -182,13 +196,25 @@ export class BASELINE_Initial1000000000000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_deliveries_status               ON deliveries (status)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_deliveries_driver_id            ON deliveries (driver_id)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_deliveries_expected_pickup_at   ON deliveries (expected_pickup_at)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_deliveries_expected_delivery_at ON deliveries (expected_delivery_at)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_deliveries_sla_breach_at        ON deliveries (sla_breach_at)`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_deliveries_status               ON deliveries (status)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_deliveries_driver_id            ON deliveries (driver_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_deliveries_expected_pickup_at   ON deliveries (expected_pickup_at)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_deliveries_expected_delivery_at ON deliveries (expected_delivery_at)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_deliveries_sla_breach_at        ON deliveries (sla_breach_at)`,
+    );
     // Required by db-verify.ts
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_delivery_active_driver          ON deliveries (driver_id, status)`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_delivery_active_driver          ON deliveries (driver_id, status)`,
+    );
 
     // ── 7. delivery_events ────────────────────────────────────────────────────
 
@@ -261,9 +287,15 @@ export class BASELINE_Initial1000000000000 implements MigrationInterface {
     `);
 
     // Required by db-verify.ts
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_delivery_pending ON driver_offers (delivery_id)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_driver_pending   ON driver_offers (driver_id)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_expires_at       ON driver_offers (expires_at)`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_delivery_pending ON driver_offers (delivery_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_driver_pending   ON driver_offers (driver_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_expires_at       ON driver_offers (expires_at)`,
+    );
 
     // ── 10. outbox ────────────────────────────────────────────────────────────
 
@@ -342,10 +374,18 @@ export class BASELINE_Initial1000000000000 implements MigrationInterface {
       )
     `);
 
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id    ON audit_logs (user_id)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_action     ON audit_logs (action)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_resource   ON audit_logs (resource_type, resource_id)`);
-    await queryRunner.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC)`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id    ON audit_logs (user_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_audit_logs_action     ON audit_logs (action)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_audit_logs_resource   ON audit_logs (resource_type, resource_id)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC)`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

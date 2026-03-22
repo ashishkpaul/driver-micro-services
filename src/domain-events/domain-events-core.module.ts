@@ -1,43 +1,43 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
 
-import { OutboxEvent } from './outbox.entity';
-import { OutboxArchiveEvent } from './outbox-archive.entity';
-import { IdempotencyTracker } from './idempotency-tracker.entity';
+import { OutboxEvent } from "./outbox.entity";
+import { OutboxArchiveEvent } from "./outbox-archive.entity";
+import { IdempotencyTracker } from "./idempotency-tracker.entity";
 
-import { OutboxService } from './outbox.service';
-import { OutboxJanitorService } from './outbox-janitor.service';
-import { MetricsService } from './metrics.service';
-import { CircuitBreakerService } from './circuit-breaker.service';
-import { WorkerLifecycleService } from './worker-lifecycle.service';
-import { AdaptiveBatchService } from './adaptive-batch.service';
+import { OutboxService } from "./outbox.service";
+import { OutboxJanitorService } from "./outbox-janitor.service";
+import { MetricsService } from "./metrics.service";
+import { CircuitBreakerService } from "./circuit-breaker.service";
+import { WorkerLifecycleService } from "./worker-lifecycle.service";
+import { AdaptiveBatchService } from "./adaptive-batch.service";
 
 @Module({
-  imports:[
+  imports: [
     TypeOrmModule.forFeature([
       OutboxEvent,
       OutboxArchiveEvent,
-      IdempotencyTracker
-    ])
+      IdempotencyTracker,
+    ]),
   ],
 
-  providers:[
+  providers: [
     OutboxService,
     OutboxJanitorService,
     MetricsService,
     CircuitBreakerService,
     WorkerLifecycleService,
-    AdaptiveBatchService
+    AdaptiveBatchService,
   ],
 
-  exports:[
+  exports: [
     TypeOrmModule,
     OutboxService,
     OutboxJanitorService,
     MetricsService,
     CircuitBreakerService,
     WorkerLifecycleService,
-    AdaptiveBatchService
-  ]
+    AdaptiveBatchService,
+  ],
 })
 export class DomainEventsCoreModule {}

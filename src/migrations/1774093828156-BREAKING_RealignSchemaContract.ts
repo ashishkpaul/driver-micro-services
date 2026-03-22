@@ -1,13 +1,10 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class BREAKING_RealignSchemaContract1774093828156
-implements MigrationInterface {
+export class BREAKING_RealignSchemaContract1774093828156 implements MigrationInterface {
+  name = "BREAKING_RealignSchemaContract1774093828156";
 
-name="BREAKING_RealignSchemaContract1774093828156"
-
-public async up(queryRunner: QueryRunner):Promise<void>{
-
-await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
 DO $$
 
 BEGIN
@@ -32,15 +29,12 @@ END IF;
 
 END $$;
 `);
+  }
 
-}
-
-public async down(queryRunner:QueryRunner):Promise<void>{
-
-await queryRunner.query(`
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
 ALTER TABLE deliveries
 ADD COLUMN IF NOT EXISTS seller_order_id_uuid UUID
 `);
-
-}
+  }
 }

@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from "typeorm";
 
 /**
  * INTENT:   Rename duplicate index idx_delivery_pending on driver_offers to
@@ -32,7 +32,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  */
 
 export class SAFE_FixDuplicateDeliveryPendingIndex1753920000000 implements MigrationInterface {
-  name = 'SAFE_FixDuplicateDeliveryPendingIndex1753920000000';
+  name = "SAFE_FixDuplicateDeliveryPendingIndex1753920000000";
 
   // CONCURRENTLY cannot run inside a transaction — required.
   public transaction = false;

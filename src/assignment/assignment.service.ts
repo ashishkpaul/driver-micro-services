@@ -3,6 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 
 import { DriversService } from "../drivers/drivers.service";
+import { calculateDistance } from "../common/utils/geo.utils";
 import { DeliveriesService } from "../deliveries/deliveries.service";
 import { Assignment } from "./entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
@@ -158,7 +159,7 @@ export class AssignmentService {
       )
       .map((driver) => ({
         driver,
-        distance: this.driversService.calculateDistance(
+        distance: calculateDistance(
           driver.currentLat,
           driver.currentLon,
           pickupLat,

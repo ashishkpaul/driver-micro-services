@@ -1,17 +1,14 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class DATA_RealignSchemaBackfill1774093828155
-implements MigrationInterface {
+export class DATA_RealignSchemaBackfill1774093828155 implements MigrationInterface {
+  name = "DATA_RealignSchemaBackfill1774093828155";
 
-name="DATA_RealignSchemaBackfill1774093828155"
-
-public async up(queryRunner: QueryRunner): Promise<void>{
-
-await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
 CREATE EXTENSION IF NOT EXISTS pgcrypto
 `);
 
-await queryRunner.query(`
+    await queryRunner.query(`
 
 DO $$
 
@@ -45,7 +42,7 @@ END $$;
 
 `);
 
-await queryRunner.query(`
+    await queryRunner.query(`
 
 DO $$
 
@@ -78,25 +75,21 @@ END IF;
 END $$;
 
 `);
+  }
 
-}
-
-public async down(queryRunner: QueryRunner): Promise<void>{
-
-await queryRunner.query(`
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
 
 UPDATE deliveries
 SET seller_order_id_uuid=NULL
 
 `);
 
-await queryRunner.query(`
+    await queryRunner.query(`
 
 UPDATE assignments
 SET driver_id_uuid=NULL
 
 `);
-
-}
-
+  }
 }

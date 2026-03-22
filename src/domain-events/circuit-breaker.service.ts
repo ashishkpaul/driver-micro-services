@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from "@nestjs/common";
 
 export interface CircuitBreakerConfig {
   failureThreshold: number;
@@ -8,9 +8,9 @@ export interface CircuitBreakerConfig {
 }
 
 export enum CircuitState {
-  CLOSED = 'CLOSED',
-  OPEN = 'OPEN',
-  HALF_OPEN = 'HALF_OPEN'
+  CLOSED = "CLOSED",
+  OPEN = "OPEN",
+  HALF_OPEN = "HALF_OPEN",
 }
 
 export interface CircuitBreakerMetrics {
@@ -36,22 +36,32 @@ export class CircuitBreakerService {
   async execute<T>(
     circuitName: string,
     fn: () => Promise<T>,
-    config: CircuitBreakerConfig = this.getDefaultConfig()
+    config: CircuitBreakerConfig = this.getDefaultConfig(),
   ): Promise<T> {
     const state = this.getCircuitState(circuitName, config);
-    
+
     if (state.state === CircuitState.OPEN) {
-      if (Date.now() - state.lastFailureTime.getTime() > config.recoveryTimeout) {
+      if (
+        Date.now() - state.lastFailureTime.getTime() >
+        config.recoveryTimeout
+      ) {
         this.logger.log(`Circuit ${circuitName} transitioning to HALF_OPEN`);
         state.state = CircuitState.HALF_OPEN;
         state.halfOpenCallCount = 0;
       } else {
-        throw new Error(`Circuit breaker OPEN for ${circuitName} - service degraded`);
+        throw new Error(
+          `Circuit breaker OPEN for ${circuitName} - service degraded`,
+        );
       }
     }
 
-    if (state.state === CircuitState.HALF_OPEN && state.halfOpenCallCount >= config.halfOpenMaxCalls) {
-      throw new Error(`Circuit breaker HALF_OPEN limit reached for ${circuitName}`);
+    if (
+      state.state === CircuitState.HALF_OPEN &&
+      state.halfOpenCallCount >= config.halfOpenMaxCalls
+    ) {
+      throw new Error(
+        `Circuit breaker HALF_OPEN limit reached for ${circuitName}`,
+      );
     }
 
     try {
@@ -78,7 +88,7 @@ export class CircuitBreakerService {
       totalCalls: state.totalCalls,
       lastFailureTime: state.lastFailureTime,
       lastSuccessTime: state.lastSuccessTime,
-      lastStateChange: state.lastStateChange
+      lastStateChange: state.lastStateChange,
     };
   }
 
@@ -111,9 +121,15 @@ export class CircuitBreakerService {
     this.logger.log(`Circuit ${circuitName} forced to ${state} state`);
   }
 
-  private getCircuitState(circuitName: string, config?: CircuitBreakerConfig): CircuitBreakerState {
+  private getCircuitState(
+    circuitName: string,
+    config?: CircuitBreakerConfig,
+  ): CircuitBreakerState {
     if (!this.circuits.has(circuitName)) {
-      this.circuits.set(circuitName, new CircuitBreakerState(circuitName, config));
+      this.circuits.set(
+        circuitName,
+        new CircuitBreakerState(circuitName, config),
+      );
     }
     return this.circuits.get(circuitName)!;
   }
@@ -133,11 +149,15 @@ export class CircuitBreakerService {
     }
   }
 
-  private onFailure(circuitName: string, state: CircuitBreakerState, error: Error): void {
+  private onFailure(
+    circuitName: string,
+    state: CircuitBreakerState,
+    error: Error,
+  ): void {
     state.failures++;
     state.totalCalls++;
     state.lastFailureTime = new Date();
-    
+
     if (state.state === CircuitState.HALF_OPEN) {
       state.halfOpenCallCount++;
     }
@@ -147,7 +167,9 @@ export class CircuitBreakerService {
       if (state.state !== CircuitState.OPEN) {
         state.state = CircuitState.OPEN;
         state.lastStateChange = new Date();
-        this.logger.warn(`Circuit ${circuitName} opened due to ${state.failures} failures`);
+        this.logger.warn(
+          `Circuit ${circuitName} opened due to ${state.failures} failures`,
+        );
       }
     }
   }
@@ -157,7 +179,7 @@ export class CircuitBreakerService {
       failureThreshold: 5,
       recoveryTimeout: 300000, // 5 minutes
       halfOpenMaxCalls: 3,
-      monitoringWindow: 600000 // 10 minutes
+      monitoringWindow: 600000, // 10 minutes
     };
   }
 }
@@ -173,12 +195,15 @@ class CircuitBreakerState {
   halfOpenCallCount: number = 0;
   config: CircuitBreakerConfig;
 
-  constructor(public name: string, config?: CircuitBreakerConfig) {
+  constructor(
+    public name: string,
+    config?: CircuitBreakerConfig,
+  ) {
     this.config = config || {
       failureThreshold: 5,
       recoveryTimeout: 300000,
       halfOpenMaxCalls: 3,
-      monitoringWindow: 600000
+      monitoringWindow: 600000,
     };
   }
 }

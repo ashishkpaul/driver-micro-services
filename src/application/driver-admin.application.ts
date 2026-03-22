@@ -157,7 +157,7 @@ export class DriverAdminApplicationService {
       driver?: Driver;
       message?: string;
     }> = [];
-    
+
     const errors: Array<{
       driverId: string;
       status: "error";
@@ -205,8 +205,10 @@ export class DriverAdminApplicationService {
           status: "success" as const,
           driver: updatedDriver,
         });
-      } catch (error: any) { // FIX: Use 'any' or check type for the catch variable
-        const errorMessage = error instanceof Error ? error.message : String(error);
+      } catch (error: any) {
+        // FIX: Use 'any' or check type for the catch variable
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         errors.push({
           driverId,
           status: "error" as const,

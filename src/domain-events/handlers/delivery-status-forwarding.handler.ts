@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { WebhooksService } from '../../webhooks/webhooks.service';
-import { EventHandler } from './base.handler';
-import { OutboxEvent } from '../outbox.entity';
+import { Injectable, Logger } from "@nestjs/common";
+import { WebhooksService } from "../../webhooks/webhooks.service";
+import { EventHandler } from "./base.handler";
+import { OutboxEvent } from "../outbox.entity";
 
 @Injectable()
 export class DeliveryStatusForwardingHandler implements EventHandler {
@@ -16,16 +16,16 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
     this.logger.debug(`Handling event ${event.id} (${eventType})`);
 
     switch (eventType) {
-      case 'DELIVERY_ASSIGNED_V1':
+      case "DELIVERY_ASSIGNED_V1":
         await this.handleDeliveryAssigned(event);
         break;
-      case 'DELIVERY_PICKED_UP_V1':
+      case "DELIVERY_PICKED_UP_V1":
         await this.handleDeliveryPickedUp(event);
         break;
-      case 'DELIVERY_DROPPED_OFF_V1':
+      case "DELIVERY_DROPPED_OFF_V1":
         await this.handleDeliveryDroppedOff(event);
         break;
-      case 'PROOF_ACCEPTED_V1':
+      case "PROOF_ACCEPTED_V1":
         await this.handleProofAccepted(event);
         break;
       default:
@@ -36,9 +36,12 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
 
   private async handleDeliveryAssigned(event: OutboxEvent): Promise<void> {
     const payload = event.payload;
-    const { sellerOrderId, channelId, driverId, assignmentId, assignedAt } = payload;
+    const { sellerOrderId, channelId, driverId, assignmentId, assignedAt } =
+      payload;
 
-    this.logger.log(`Processing DELIVERY_ASSIGNED_V1 for seller order ${sellerOrderId}`);
+    this.logger.log(
+      `Processing DELIVERY_ASSIGNED_V1 for seller order ${sellerOrderId}`,
+    );
 
     // Notify Vendure via webhook
     await this.webhookService.emitDeliveryAssigned({
@@ -54,7 +57,9 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
     const payload = event.payload;
     const { sellerOrderId, channelId, pickupProofUrl, pickedUpAt } = payload;
 
-    this.logger.log(`Processing DELIVERY_PICKED_UP_V1 for seller order ${sellerOrderId}`);
+    this.logger.log(
+      `Processing DELIVERY_PICKED_UP_V1 for seller order ${sellerOrderId}`,
+    );
 
     // Notify Vendure via webhook
     await this.webhookService.emitDeliveryPickedUp({
@@ -69,7 +74,9 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
     const payload = event.payload;
     const { sellerOrderId, channelId, deliveryProofUrl, deliveredAt } = payload;
 
-    this.logger.log(`Processing DELIVERY_DROPPED_OFF_V1 for seller order ${sellerOrderId}`);
+    this.logger.log(
+      `Processing DELIVERY_DROPPED_OFF_V1 for seller order ${sellerOrderId}`,
+    );
 
     // Notify Vendure via webhook
     await this.webhookService.emitDeliveryDelivered({
@@ -84,7 +91,9 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
     const payload = event.payload;
     const { sellerOrderId, channelId, proofType, deliveryProofUrl } = payload;
 
-    this.logger.log(`Processing PROOF_ACCEPTED_V1 for seller order ${sellerOrderId}, proofType: ${proofType}`);
+    this.logger.log(
+      `Processing PROOF_ACCEPTED_V1 for seller order ${sellerOrderId}, proofType: ${proofType}`,
+    );
 
     // Notify Vendure via webhook - simplified for now
     await this.webhookService.emitDeliveryDelivered({

@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { OutboxEvent } from './outbox.entity';
-import { OutboxStatus } from './outbox-status.enum';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { OutboxEvent } from "./outbox.entity";
+import { OutboxStatus } from "./outbox-status.enum";
 
 // If prom-client is not installed, we'll create a simple metrics implementation
 // that can be easily replaced with Prometheus when needed
@@ -29,7 +29,7 @@ interface HistogramMetric {
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
-  
+
   // Simple in-memory metrics storage
   private gauges = new Map<string, GaugeMetric>();
   private histograms = new Map<string, HistogramMetric>();
@@ -48,65 +48,65 @@ export class MetricsService {
    */
   private initMetrics(): void {
     // Gauge metrics
-    this.gauges.set('outbox_pending_total', {
-      name: 'outbox_pending_total',
-      help: 'Number of pending outbox events',
-      value: 0
+    this.gauges.set("outbox_pending_total", {
+      name: "outbox_pending_total",
+      help: "Number of pending outbox events",
+      value: 0,
     });
 
-    this.gauges.set('outbox_processing_total', {
-      name: 'outbox_processing_total',
-      help: 'Number of processing outbox events',
-      value: 0
+    this.gauges.set("outbox_processing_total", {
+      name: "outbox_processing_total",
+      help: "Number of processing outbox events",
+      value: 0,
     });
 
-    this.gauges.set('outbox_failed_total', {
-      name: 'outbox_failed_total',
-      help: 'Number of failed outbox events',
-      value: 0
+    this.gauges.set("outbox_failed_total", {
+      name: "outbox_failed_total",
+      help: "Number of failed outbox events",
+      value: 0,
     });
 
-    this.gauges.set('outbox_completed_total', {
-      name: 'outbox_completed_total',
-      help: 'Number of completed outbox events',
-      value: 0
+    this.gauges.set("outbox_completed_total", {
+      name: "outbox_completed_total",
+      help: "Number of completed outbox events",
+      value: 0,
     });
 
     // Histogram metrics
-    this.histograms.set('outbox_lag_seconds', {
-      name: 'outbox_lag_seconds',
-      help: 'Lag between event creation and processing in seconds',
+    this.histograms.set("outbox_lag_seconds", {
+      name: "outbox_lag_seconds",
+      help: "Lag between event creation and processing in seconds",
       buckets: [1, 5, 10, 30, 60, 300, 600, 1800, 3600],
       observations: [],
       sum: 0,
-      count: 0
+      count: 0,
     });
 
-    this.histograms.set('outbox_processing_duration_seconds', {
-      name: 'outbox_processing_duration_seconds',
-      help: 'Time taken to process an outbox event in seconds',
+    this.histograms.set("outbox_processing_duration_seconds", {
+      name: "outbox_processing_duration_seconds",
+      help: "Time taken to process an outbox event in seconds",
       buckets: [0.1, 0.5, 1, 2, 5, 10, 30],
       observations: [],
       sum: 0,
-      count: 0
+      count: 0,
     });
 
-    this.histograms.set('outbox_retry_delay_seconds', {
-      name: 'outbox_retry_delay_seconds',
-      help: 'Delay between retries in seconds',
+    this.histograms.set("outbox_retry_delay_seconds", {
+      name: "outbox_retry_delay_seconds",
+      help: "Delay between retries in seconds",
       buckets: [1, 5, 10, 30, 60, 300, 600],
       observations: [],
       sum: 0,
-      count: 0
+      count: 0,
     });
 
     // Counter metrics
-    this.counters.set('outbox_events_processed_total', 0);
-    this.counters.set('outbox_events_failed_total', 0);
-    this.counters.set('outbox_events_retried_total', 0);
-    this.counters.set('outbox_circuit_breaker_open_total', 0);
-    this.counters.set('outbox_circuit_breaker_half_open_total', 0);
-    this.counters.set('outbox_circuit_breaker_closed_total', 0);
+    this.counters.set("outbox_events_processed_total", 0);
+    this.counters.set("outbox_events_failed_total", 0);
+    this.counters.set("outbox_events_retried_total", 0);
+    this.counters.set("outbox_circuit_breaker_open_total", 0);
+    this.counters.set("outbox_circuit_breaker_half_open_total", 0);
+    this.counters.set("outbox_circuit_breaker_closed_total", 0);
   }
 
   /**
@@ -115,29 +115,33 @@ export class MetricsService {
   async updateMetrics(): Promise<void> {
     try {
       // Update gauge metrics
-      const [
-        pendingCount,
-        processingCount,
-        failedCount,
-        completedCount
-      ] = await Promise.all([
-        this.outboxRepository.count({ where: { status: OutboxStatus.PENDING } }),
-        this.outboxRepository.count({ where: { status: OutboxStatus.PROCESSING } }),
-        this.outboxRepository.count({ where: { status: OutboxStatus.FAILED } }),
-        this.outboxRepository.count({ where: { status: OutboxStatus.COMPLETED } })
-      ]);
+      const [pendingCount, processingCount, failedCount, completedCount] =
+        await Promise.all([
+          this.outboxRepository.count({
+            where: { status: OutboxStatus.PENDING },
+          }),
+          this.outboxRepository.count({
+            where: { status: OutboxStatus.PROCESSING },
+          }),
+          this.outboxRepository.count({
+            where: { status: OutboxStatus.FAILED },
+          }),
+          this.outboxRepository.count({
+            where: { status: OutboxStatus.COMPLETED },
+          }),
+        ]);
 
-      this.setGauge('outbox_pending_total', pendingCount);
-      this.setGauge('outbox_processing_total', processingCount);
-      this.setGauge('outbox_failed_total', failedCount);
-      this.setGauge('outbox_completed_total', completedCount);
+      this.setGauge("outbox_pending_total", pendingCount);
+      this.setGauge("outbox_processing_total", processingCount);
+      this.setGauge("outbox_failed_total", failedCount);
+      this.setGauge("outbox_completed_total", completedCount);
 
       // Update lag histogram
       await this.updateLagHistogram();
 
-      this.logger.debug('Metrics updated successfully');
+      this.logger.debug("Metrics updated successfully");
     } catch (error) {
-      this.logger.error('Failed to update metrics:', error);
+      this.logger.error("Failed to update metrics:", error);
     }
   }
 
@@ -145,35 +149,35 @@ export class MetricsService {
    * Record processing duration for an event
    */
   recordProcessingDuration(durationSeconds: number): void {
-    this.recordHistogram('outbox_processing_duration_seconds', durationSeconds);
+    this.recordHistogram("outbox_processing_duration_seconds", durationSeconds);
   }
 
   /**
    * Record retry delay
    */
   recordRetryDelay(delaySeconds: number): void {
-    this.recordHistogram('outbox_retry_delay_seconds', delaySeconds);
+    this.recordHistogram("outbox_retry_delay_seconds", delaySeconds);
   }
 
   /**
    * Increment event processed counter
    */
   incrementEventsProcessed(): void {
-    this.incrementCounter('outbox_events_processed_total');
+    this.incrementCounter("outbox_events_processed_total");
   }
 
   /**
    * Increment event failed counter
    */
   incrementEventsFailed(): void {
-    this.incrementCounter('outbox_events_failed_total');
+    this.incrementCounter("outbox_events_failed_total");
   }
 
   /**
    * Increment retry counter
    */
   incrementRetries(): void {
-    this.incrementCounter('outbox_events_retried_total');
+    this.incrementCounter("outbox_events_retried_total");
   }
 
   /**
@@ -188,7 +192,7 @@ export class MetricsService {
    * Get all metrics in Prometheus format
    */
   getMetrics(): string {
-    let output = '';
+    let output = "";
 
     // Add gauge metrics
     for (const [name, gauge] of this.gauges.entries()) {
@@ -207,14 +211,16 @@ export class MetricsService {
       let cumulativeCount = 0;
 
       for (const bucket of sortedBuckets) {
-        const bucketCount = histogram.observations.filter(obs => obs <= bucket).length;
+        const bucketCount = histogram.observations.filter(
+          (obs) => obs <= bucket,
+        ).length;
         cumulativeCount += bucketCount;
         output += `${histogram.name}_bucket{le="${bucket}"} ${cumulativeCount}\n`;
       }
 
       // Add +Inf bucket
       output += `${histogram.name}_bucket{le="+Inf"} ${histogram.count}\n`;
-      
+
       // Add sum and count
       output += `${histogram.name}_sum ${histogram.sum}\n`;
       output += `${histogram.name}_count ${histogram.count}\n\n`;
@@ -247,20 +253,25 @@ export class MetricsService {
   }> {
     await this.updateMetrics();
 
-    const lagHistogram = this.histograms.get('outbox_lag_seconds')!;
-    const processingHistogram = this.histograms.get('outbox_processing_duration_seconds')!;
+    const lagHistogram = this.histograms.get("outbox_lag_seconds")!;
+    const processingHistogram = this.histograms.get(
+      "outbox_processing_duration_seconds",
+    )!;
 
     return {
-      pending: this.getGaugeValue('outbox_pending_total'),
-      processing: this.getGaugeValue('outbox_processing_total'),
-      failed: this.getGaugeValue('outbox_failed_total'),
-      completed: this.getGaugeValue('outbox_completed_total'),
+      pending: this.getGaugeValue("outbox_pending_total"),
+      processing: this.getGaugeValue("outbox_processing_total"),
+      failed: this.getGaugeValue("outbox_failed_total"),
+      completed: this.getGaugeValue("outbox_completed_total"),
       lagP95: this.calculatePercentile(lagHistogram, 95),
       lagP99: this.calculatePercentile(lagHistogram, 99),
-      avgProcessingTime: processingHistogram.count > 0 ? processingHistogram.sum / processingHistogram.count : 0,
-      totalProcessed: this.getCounterValue('outbox_events_processed_total'),
-      totalFailed: this.getCounterValue('outbox_events_failed_total'),
-      totalRetries: this.getCounterValue('outbox_events_retried_total')
+      avgProcessingTime:
+        processingHistogram.count > 0
+          ? processingHistogram.sum / processingHistogram.count
+          : 0,
+      totalProcessed: this.getCounterValue("outbox_events_processed_total"),
+      totalFailed: this.getCounterValue("outbox_events_failed_total"),
+      totalRetries: this.getCounterValue("outbox_events_retried_total"),
     };
   }
 
@@ -276,7 +287,8 @@ export class MetricsService {
     const issues: string[] = [];
 
     // Check for high lag
-    if (summary.lagP95 > 300) { // 5 minutes
+    if (summary.lagP95 > 300) {
+      // 5 minutes
       issues.push(`High lag detected: P95=${summary.lagP95}s`);
     }
 
@@ -293,14 +305,15 @@ export class MetricsService {
     // Check for high failure rate
     const totalEvents = summary.totalProcessed + summary.totalFailed;
     const failureRate = totalEvents > 0 ? summary.totalFailed / totalEvents : 0;
-    if (failureRate > 0.1) { // 10% failure rate
+    if (failureRate > 0.1) {
+      // 10% failure rate
       issues.push(`High failure rate: ${(failureRate * 100).toFixed(2)}%`);
     }
 
     return {
       isHealthy: issues.length === 0,
       issues,
-      summary
+      summary,
     };
   }
 
@@ -338,12 +351,12 @@ export class MetricsService {
   private async updateLagHistogram(): Promise<void> {
     try {
       const pendingEvents = await this.outboxRepository
-        .createQueryBuilder('e')
-        .select('EXTRACT(EPOCH FROM (NOW() - e.createdAt))', 'lag')
-        .where('e.status = :status', { status: OutboxStatus.PENDING })
+        .createQueryBuilder("e")
+        .select("EXTRACT(EPOCH FROM (NOW() - e.createdAt))", "lag")
+        .where("e.status = :status", { status: OutboxStatus.PENDING })
         .getRawMany();
 
-      const histogram = this.histograms.get('outbox_lag_seconds')!;
+      const histogram = this.histograms.get("outbox_lag_seconds")!;
       histogram.observations = []; // Reset for current snapshot
       histogram.sum = 0;
       histogram.count = 0;
@@ -357,11 +370,14 @@ export class MetricsService {
         }
       }
     } catch (error) {
-      this.logger.error('Failed to update lag histogram:', error);
+      this.logger.error("Failed to update lag histogram:", error);
     }
   }
 
-  private calculatePercentile(histogram: HistogramMetric, percentile: number): number {
+  private calculatePercentile(
+    histogram: HistogramMetric,
+    percentile: number,
+  ): number {
     if (histogram.observations.length === 0) return 0;
 
     const sorted = [...histogram.observations].sort((a, b) => a - b);

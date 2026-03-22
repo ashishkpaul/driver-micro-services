@@ -20,10 +20,10 @@ export class AuditLog {
   /* User Information                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Index('idx_audit_logs_user_id')
-  @Column({ 
-    name: 'user_id', 
-    type: 'varchar' // If DB is VARCHAR, change this to 'varchar'.
+  @Index("idx_audit_logs_user_id")
+  @Column({
+    name: "user_id",
+    type: "varchar", // If DB is VARCHAR, change this to 'varchar'.
   })
   userId!: string;
 
@@ -57,8 +57,8 @@ export class AuditLog {
   })
   resourceType!: string; // e.g., "DRIVER", "ADMIN", "DELIVERY"
 
-  @Index('idx_audit_logs_resource')
-  @Column({ name: 'resource_id', type: 'varchar' })
+  @Index("idx_audit_logs_resource")
+  @Column({ name: "resource_id", type: "varchar" })
   resourceId!: string; // ID of the resource being acted upon
 
   /* ------------------------------------------------------------------ */

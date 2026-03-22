@@ -8,14 +8,11 @@ import { MigrationInterface, QueryRunner } from "typeorm";
  * RISK: LOW
  */
 
-export class SAFE_RealignSchemaExpand1774093828154
-implements MigrationInterface {
+export class SAFE_RealignSchemaExpand1774093828154 implements MigrationInterface {
+  name = "SAFE_RealignSchemaExpand1774093828154";
 
-name='SAFE_RealignSchemaExpand1774093828154'
-
-public async up(queryRunner: QueryRunner): Promise<void>{
-
-await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
 
 DO $$
 
@@ -37,7 +34,7 @@ END $$;
 
 `);
 
-await queryRunner.query(`
+    await queryRunner.query(`
 
 DO $$
 
@@ -59,29 +56,25 @@ END $$;
 
 `);
 
-await queryRunner.query(`
+    await queryRunner.query(`
 
 CREATE INDEX IF NOT EXISTS idx_deliveries_seller_uuid
 ON deliveries(seller_order_id_uuid)
 
 `);
 
-await queryRunner.query(`
+    await queryRunner.query(`
 
 CREATE INDEX IF NOT EXISTS idx_assignments_driver_uuid
 ON assignments(driver_id_uuid)
 
 `);
+  }
 
-}
-
-public async down(): Promise<void>{
-
-/*
+  public async down(): Promise<void> {
+    /*
 SAFE rollback intentionally empty.
 Required by migration guard.
 */
-
-}
-
+  }
 }

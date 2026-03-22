@@ -6,6 +6,7 @@ import { Driver } from "./entities/driver.entity";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { RedisService } from "../redis/redis.service";
 import { DriverStatus } from "./enums/driver-status.enum";
+import { calculateDistance } from "../common/utils/geo.utils";
 
 @Injectable()
 export class DriversService {
@@ -13,28 +14,9 @@ export class DriversService {
   /* Utilities                                                           */
   /* ------------------------------------------------------------------ */
 
-  calculateDistance(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number,
-  ): number {
-    const R = 6371; // km
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
+  // Distance calculation moved to geo.utils.ts
+  // calculateDistance() and toRad() removed from here
 
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) ** 2;
-
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-  }
-
-  private toRad(value: number): number {
-    return (value * Math.PI) / 180;
-  }
   private readonly logger = new Logger(DriversService.name);
 
   constructor(
@@ -123,6 +105,8 @@ export class DriversService {
     driver.isActive = isActive;
     driver.lastActiveAt = new Date();
 
+    const savedDriver = await this.driverRepository.save(driver);
+
     if (!isActive) {
       try {
         await this.redisService.markDriverOffline(id);
@@ -131,19 +115,19 @@ export class DriversService {
       }
     }
 
-    return this.driverRepository.save(driver);
+    return savedDriver;
   }
 
   async remove(id: string): Promise<void> {
+    const res = await this.driverRepository.delete(id);
+    if (!res.affected) {
+      throw new NotFoundException(`Driver ${id} not found`);
+    }
+
     try {
       await this.redisService.markDriverOffline(id);
     } catch (e) {
       this.logger.error(`Redis cleanup failed for ${id}`, e);
-    }
-
-    const res = await this.driverRepository.delete(id);
-    if (!res.affected) {
-      throw new NotFoundException(`Driver ${id} not found`);
     }
   }
 
@@ -243,16 +227,23 @@ export class DriversService {
 
     driver.currentLat = lat;
     driver.currentLon = lon;
-    driver.status = DriverStatus.AVAILABLE;
     driver.lastActiveAt = new Date();
 
+    // DO NOT change driver status here
+    // Location updates should not modify availability state
+
+    const savedDriver = await this.driverRepository.save(driver);
+
     try {
-      await this.redisService.updateDriverLocation(id, lat, lon, 60);
+      // Only update Redis location if driver is AVAILABLE
+      if (driver.status === DriverStatus.AVAILABLE) {
+        await this.redisService.updateDriverLocation(id, lat, lon, 60);
+      }
     } catch (e) {
       this.logger.error(`Redis location update failed ${id}`, e);
     }
 
-    return this.driverRepository.save(driver);
+    return savedDriver;
   }
 
   async updateStatus(id: string, status: DriverStatus): Promise<Driver> {
@@ -261,6 +252,8 @@ export class DriversService {
     driver.status = status;
     driver.lastActiveAt = new Date();
 
+    const savedDriver = await this.driverRepository.save(driver);
+
     try {
       if (status === DriverStatus.BUSY) {
         await this.redisService.markDriverBusy(id);
@@ -268,13 +261,13 @@ export class DriversService {
         await this.redisService.markDriverOffline(id);
       } else if (
         status === DriverStatus.AVAILABLE &&
-        driver.currentLat &&
-        driver.currentLon
+        savedDriver.currentLat &&
+        savedDriver.currentLon
       ) {
         await this.redisService.updateDriverLocation(
           id,
-          driver.currentLat,
-          driver.currentLon,
+          savedDriver.currentLat,
+          savedDriver.currentLon,
           60,
         );
       }
@@ -282,6 +275,6 @@ export class DriversService {
       this.logger.error(`Redis status update failed ${id}`, e);
     }
 
-    return this.driverRepository.save(driver);
+    return savedDriver;
   }
 }

@@ -14,6 +14,8 @@ import { Role } from "./roles.enum";
 import { GoogleAuthService } from "./google-auth.service";
 import { RolePermissions } from "./permissions";
 import { RedisService } from "../redis/redis.service";
+import { JwtPayload } from "./jwt-payload.types";
+import { randomInt } from "crypto";
 
 @Injectable()
 export class AuthService {
@@ -71,7 +73,9 @@ export class AuthService {
     };
 
     return {
-      accessToken: this.jwtService.sign(payload),
+      accessToken: this.jwtService.sign(payload, {
+        expiresIn: "12h",
+      }),
       driver: {
         id: driver.id,
         name: driver.name,
@@ -98,7 +102,9 @@ export class AuthService {
     };
 
     return {
-      accessToken: this.jwtService.sign(payload),
+      accessToken: this.jwtService.sign(payload, {
+        expiresIn: "8h",
+      }),
       admin: {
         id: admin.id,
         email: admin.email,
@@ -119,11 +125,11 @@ export class AuthService {
   /**
    * Validate any user (driver or admin) based on JWT payload
    */
-  async validateUser(payload: any): Promise<Driver | AdminUser> {
-    if (payload.driverId) {
+  async validateUser(payload: JwtPayload): Promise<Driver | AdminUser> {
+    if (payload.type === "driver" && "driverId" in payload) {
       // Driver authentication
       return this.validateDriver(payload.driverId);
-    } else if (payload.userId && payload.role) {
+    } else if (payload.type === "admin" && "userId" in payload) {
       // Admin authentication
       return this.adminService.findById(payload.userId);
     }
@@ -198,7 +204,9 @@ export class AuthService {
     };
 
     return {
-      accessToken: this.jwtService.sign(payload),
+      accessToken: this.jwtService.sign(payload, {
+        expiresIn: "12h",
+      }),
       driver,
     };
   }
@@ -207,7 +215,7 @@ export class AuthService {
    * Request Email OTP
    */
   async requestEmailOtp(email: string): Promise<void> {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digit OTP
+    const otp = randomInt(100000, 1000000).toString(); // 6 digit OTP - cryptographically secure
 
     // Store in Redis with a 5-minute TTL
     await this.redisService
@@ -215,7 +223,8 @@ export class AuthService {
       .setex(`auth:otp:${email.toLowerCase()}`, 300, otp);
 
     // TODO: Integrate actual email provider (SendGrid/AWS SES) here.
-    console.log(`[DEV MODE] OTP for ${email} is ${otp}`);
+    // Never log OTP in production
+    // console.log(`[DEV MODE] OTP for ${email} is ${otp}`);
   }
 
   /**

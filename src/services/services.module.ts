@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { AlertingService } from './alerting.service';
+import { Module } from "@nestjs/common";
+import { AlertingService } from "./alerting.service";
 
 @Module({
   providers: [AlertingService],

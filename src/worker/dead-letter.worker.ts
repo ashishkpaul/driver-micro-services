@@ -51,7 +51,7 @@ export class DeadLetterWorker {
           "FAILURE THRESHOLD EXCEEDED: High failure rate detected in the last hour",
         );
         // Task 5: Hook Dead-Letter & SLA Breaches to External Alerts
-        await this.alertingService.sendDeadLetterThresholdAlert(10, '1 hour');
+        await this.alertingService.sendDeadLetterThresholdAlert(10, "1 hour");
       }
 
       this.logger.log(

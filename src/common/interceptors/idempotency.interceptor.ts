@@ -5,23 +5,26 @@ import {
   CallHandler,
   ConflictException,
   BadRequestException,
-} from '@nestjs/common';
-import { RedisService } from '../../redis/redis.service';
-import { Observable } from 'rxjs';
+} from "@nestjs/common";
+import { RedisService } from "../../redis/redis.service";
+import { Observable } from "rxjs";
 
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
   constructor(private readonly redis: RedisService) {}
 
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<any>> {
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<any>> {
     const request = context.switchToHttp().getRequest();
-    
+
     // Only apply to POST requests
-    if (request.method !== 'POST') {
+    if (request.method !== "POST") {
       return next.handle();
     }
 
-    const idempotencyKey = request.headers['x-idempotency-key'];
+    const idempotencyKey = request.headers["x-idempotency-key"];
 
     // If no key is provided, we allow the request to proceed (optional enforcement)
     // If you want to FORCE all POSTs to have a key, throw a BadRequestException here.
@@ -34,7 +37,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     // Attempt to set the key with a 24-hour TTL (86400 seconds)
     // 'NX' ensures it only sets if the key does not already exist
-    const result = await client.set(redisKey, 'LOCKED', 'EX', 86400, 'NX');
+    const result = await client.set(redisKey, "LOCKED", "EX", 86400, "NX");
 
     if (!result) {
       throw new ConflictException(

@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from "typeorm";
 
 /**
  * INTENT:   Change drivers.city_id and drivers.zone_id from VARCHAR to UUID
@@ -53,7 +53,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 // @allow-mixed-ops: ALTER TABLE ALTER COLUMN TYPE is a single atomic statement, not mixed lifecycle phases
 
 export class BREAKING_FixDriversCityZoneUUID1753920001000 implements MigrationInterface {
-  name = 'BREAKING_FixDriversCityZoneUUID1753920001000';
+  name = "BREAKING_FixDriversCityZoneUUID1753920001000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // city_id: VARCHAR NOT NULL → UUID NOT NULL

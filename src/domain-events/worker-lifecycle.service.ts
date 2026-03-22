@@ -1,9 +1,14 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from "@nestjs/common";
 
 @Injectable()
 export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkerLifecycleService.name);
-  
+
   private shutdownRequested = false;
   private shutdownTimeout = 30000; // 30 seconds
   private processingEvents = new Set<number>();
@@ -11,7 +16,7 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
   private shutdownPromises = new Map<string, Promise<void>>();
 
   onModuleInit(): void {
-    this.logger.log('Worker lifecycle service initialized');
+    this.logger.log("Worker lifecycle service initialized");
   }
 
   onModuleDestroy(): Promise<void> {
@@ -23,12 +28,14 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
    */
   async shutdown(): Promise<void> {
     if (this.shutdownRequested) {
-      this.logger.warn('Shutdown already in progress');
+      this.logger.warn("Shutdown already in progress");
       return;
     }
 
     this.shutdownRequested = true;
-    this.logger.log(`Shutdown requested. Waiting for ${this.processingEvents.size} events to complete...`);
+    this.logger.log(
+      `Shutdown requested. Waiting for ${this.processingEvents.size} events to complete...`,
+    );
 
     // Notify all active workers to stop accepting new work
     for (const workerId of this.activeWorkers) {
@@ -44,15 +51,16 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
-      await Promise.race([
-        this.waitForEventsToComplete(),
-        timeoutPromise
-      ]);
+      await Promise.race([this.waitForEventsToComplete(), timeoutPromise]);
 
       const duration = Date.now() - startTime;
-      this.logger.log(`Shutdown completed in ${duration}ms. Processed ${this.processingEvents.size} events.`);
+      this.logger.log(
+        `Shutdown completed in ${duration}ms. Processed ${this.processingEvents.size} events.`,
+      );
     } catch (error) {
-      this.logger.error(`Shutdown failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Shutdown failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -63,7 +71,9 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
   addProcessingEvent(eventId: number, workerId: string): void {
     this.processingEvents.add(eventId);
     this.activeWorkers.add(workerId);
-    this.logger.debug(`Event ${eventId} started by worker ${workerId}. Total processing: ${this.processingEvents.size}`);
+    this.logger.debug(
+      `Event ${eventId} started by worker ${workerId}. Total processing: ${this.processingEvents.size}`,
+    );
   }
 
   /**
@@ -71,8 +81,10 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
    */
   removeProcessingEvent(eventId: number, workerId: string): void {
     this.processingEvents.delete(eventId);
-    this.logger.debug(`Event ${eventId} completed by worker ${workerId}. Remaining: ${this.processingEvents.size}`);
-    
+    this.logger.debug(
+      `Event ${eventId} completed by worker ${workerId}. Remaining: ${this.processingEvents.size}`,
+    );
+
     // Clean up worker if no longer active
     if (this.processingEvents.size === 0) {
       this.activeWorkers.delete(workerId);
@@ -102,7 +114,7 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
       processingEvents: this.processingEvents.size,
       activeWorkers: this.activeWorkers.size,
       eventIds: Array.from(this.processingEvents),
-      workerIds: Array.from(this.activeWorkers)
+      workerIds: Array.from(this.activeWorkers),
     };
   }
 
@@ -110,14 +122,16 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
    * Force shutdown (emergency stop)
    */
   async forceShutdown(): Promise<void> {
-    this.logger.warn('Force shutdown requested - events may be left incomplete');
+    this.logger.warn(
+      "Force shutdown requested - events may be left incomplete",
+    );
     this.shutdownRequested = true;
-    
+
     // Clear all processing events immediately
     this.processingEvents.clear();
     this.activeWorkers.clear();
-    
-    this.logger.log('Force shutdown completed');
+
+    this.logger.log("Force shutdown completed");
   }
 
   /**
@@ -152,7 +166,7 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
     return {
       isShuttingDown: this.shutdownRequested,
       remainingEvents: this.processingEvents.size,
-      shutdownTimeRemaining: Math.max(0, this.shutdownTimeout - elapsed)
+      shutdownTimeRemaining: Math.max(0, this.shutdownTimeout - elapsed),
     };
   }
 }

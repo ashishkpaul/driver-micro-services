@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { DataSource } from "typeorm";
 import { randomUUID } from "crypto";
@@ -58,7 +63,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
   async process(): Promise<void> {
     // Check if shutdown is requested
     if (this.workerLifecycleService.isShutdownRequested()) {
-      this.logger.debug('Shutdown requested, skipping batch processing');
+      this.logger.debug("Shutdown requested, skipping batch processing");
       return;
     }
 
@@ -70,7 +75,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
       // Get adaptive batch size
       const batchSize = await this.adaptiveBatchService.getOptimalBatchSize();
       const rawRows = await this.claimBatch(batchSize);
-      
+
       if (rawRows.length === 0) {
         return;
       }
@@ -85,7 +90,9 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
           `Sample event_type: ${rawRows[0].event_type}`,
       );
 
-      this.logger.log(`Processing ${rawRows.length} outbox event(s) with adaptive batch size: ${batchSize}`);
+      this.logger.log(
+        `Processing ${rawRows.length} outbox event(s) with adaptive batch size: ${batchSize}`,
+      );
 
       // Concurrency limiting: Max 10 concurrent event processing
       const limit = pLimit(10);
@@ -107,24 +114,30 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
           }
 
           // Track processing start
-          this.workerLifecycleService.addProcessingEvent(event.id, this.workerId);
+          this.workerLifecycleService.addProcessingEvent(
+            event.id,
+            this.workerId,
+          );
 
           try {
             const eventStartTime = Date.now();
             await this.processSingle(rawRow, event, batchSize);
             const eventDuration = Date.now() - eventStartTime;
-            
+
             // Record metrics
             this.metricsService.recordProcessingDuration(eventDuration / 1000);
             this.metricsService.incrementEventsProcessed();
-            
+
             return { success: true, id: event.id };
           } catch (error) {
             // Error handling happens in processSingle
             return { success: false, id: event.id };
           } finally {
             // Always remove from processing set
-            this.workerLifecycleService.removeProcessingEvent(event.id, this.workerId);
+            this.workerLifecycleService.removeProcessingEvent(
+              event.id,
+              this.workerId,
+            );
           }
         }),
       );
@@ -228,11 +241,11 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     batchSize: number,
   ): Promise<void> {
     const processingStartTime = Date.now();
-    
+
     try {
       await this.outboxService.handle(event);
       await this.markCompleted(event.id);
-      
+
       // Track successful processing
       await this.trackEventProcessing(
         event.idempotencyKey || `EVENT_${event.id}`,
@@ -242,10 +255,16 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
         this.workerId,
         batchSize,
         Date.now() - processingStartTime,
-        'COMPLETED'
+        "COMPLETED",
       );
     } catch (error) {
-      await this.handleFailure(rawRow, event, error, batchSize, processingStartTime);
+      await this.handleFailure(
+        rawRow,
+        event,
+        error,
+        batchSize,
+        processingStartTime,
+      );
     }
   }
 
@@ -272,9 +291,9 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
 
     // Quarantine logic: force fail on structural errors (Task 6 & 7)
     const isStructuralError =
-      errorMessage.includes("Unknown outbox event type")  ||
-      errorMessage.includes("Missing eventType")          ||
-      errorMessage.includes("No handler registered for")  || // NEW: immediately quarantine unhandled types
+      errorMessage.includes("Unknown outbox event type") ||
+      errorMessage.includes("Missing eventType") ||
+      errorMessage.includes("No handler registered for") || // NEW: immediately quarantine unhandled types
       !rawRow.event_type;
 
     let retryCount = (rawRow.retry_count || 0) + 1;
@@ -298,7 +317,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
         [event.id, retryCount, errorMessage.substring(0, 500)],
       );
       this.logger.error(`Event ${event.id} moved to FAILED state`);
-      
+
       // Track failed processing
       await this.trackEventProcessing(
         event.idempotencyKey || `EVENT_${event.id}`,
@@ -308,8 +327,8 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
         this.workerId,
         batchSize,
         Date.now() - processingStartTime,
-        'FAILED',
-        errorMessage
+        "FAILED",
+        errorMessage,
       );
       return;
     }
@@ -375,7 +394,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
       eventType: eventType || "", // Empty string triggers validation failure
       payload: row.payload || {},
       status: (row.status as OutboxStatus) || OutboxStatus.PENDING,
-      priority: 'MEDIUM', // Default priority for backward compatibility
+      priority: "MEDIUM", // Default priority for backward compatibility
       retryCount: row.retry_count || 0,
       lastError: row.last_error || undefined,
       nextRetryAt: row.next_retry_at ? new Date(row.next_retry_at) : undefined,
@@ -399,38 +418,38 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     workerId: string,
     batchSize: number,
     processingDuration: number,
-    status: 'COMPLETED' | 'FAILED',
-    error?: string
+    status: "COMPLETED" | "FAILED",
+    error?: string,
   ): Promise<void> {
     try {
       // This would integrate with the IdempotencyTracker service
       // For now, we'll just log the information
       this.logger.debug(
         `Event tracking: key=${idempotencyKey}, type=${eventType}, ` +
-        `batchSize=${batchSize}, duration=${processingDuration}ms, status=${status}`
+          `batchSize=${batchSize}, duration=${processingDuration}ms, status=${status}`,
       );
     } catch (trackingError) {
-      this.logger.warn('Failed to track event processing:', trackingError);
+      this.logger.warn("Failed to track event processing:", trackingError);
     }
   }
 
   // Lifecycle methods
   onModuleInit(): void {
-    this.logger.log('Outbox worker module initialized');
-    
+    this.logger.log("Outbox worker module initialized");
+
     // Start metrics collection
     this.metricsInterval = setInterval(async () => {
       try {
         await this.metricsService.updateMetrics();
       } catch (error) {
-        this.logger.error('Failed to update metrics:', error);
+        this.logger.error("Failed to update metrics:", error);
       }
     }, this.METRICS_UPDATE_INTERVAL);
   }
 
   async onModuleDestroy(): Promise<void> {
-    this.logger.log('Outbox worker module destroying');
-    
+    this.logger.log("Outbox worker module destroying");
+
     // Stop metrics collection
     if (this.metricsInterval) {
       clearInterval(this.metricsInterval);
@@ -440,7 +459,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     try {
       await this.workerLifecycleService.shutdown();
     } catch (error) {
-      this.logger.error('Graceful shutdown failed:', error);
+      this.logger.error("Graceful shutdown failed:", error);
       // Force shutdown as fallback
       await this.workerLifecycleService.forceShutdown();
     }
@@ -449,11 +468,11 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
   @Cron("0 */5 * * * *") // Every 5 minutes
   async runJanitor(): Promise<void> {
     try {
-      this.logger.log('Starting janitor cleanup process');
+      this.logger.log("Starting janitor cleanup process");
       await this.janitorService.cleanup();
-      this.logger.log('Janitor cleanup completed successfully');
+      this.logger.log("Janitor cleanup completed successfully");
     } catch (error) {
-      this.logger.error('Janitor cleanup failed:', error);
+      this.logger.error("Janitor cleanup failed:", error);
     }
   }
 }

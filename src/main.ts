@@ -14,6 +14,7 @@ import { CorrelationInterceptor } from "./interceptors/correlation.interceptor";
 import { TracingInterceptor } from "./interceptors/tracing.interceptor";
 import { TimeoutInterceptor } from "./interceptors/timeout.interceptor";
 import { ApiResponseInterceptor } from "./interceptors/api-response.interceptor";
+import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
 
 async function bootstrap() {
   // Logger setup
@@ -79,6 +80,9 @@ async function bootstrap() {
     new TimeoutInterceptor(),
     new ApiResponseInterceptor(),
   );
+
+  // Global exception filter
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   const port = configService.get("PORT", 3001);
   await app.listen(port);

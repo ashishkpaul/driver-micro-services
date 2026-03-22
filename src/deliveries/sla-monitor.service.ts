@@ -62,7 +62,7 @@ export class SlaMonitorService {
 
       await this.deliveryRepository.save([...uniqueBreaches.values()]);
       this.logger.warn(`Marked ${uniqueBreaches.size} delivery SLA breaches`);
-      
+
       // Task 5: Hook Dead-Letter & SLA Breaches to External Alerts
       if (uniqueBreaches.size > 0) {
         await this.alertingService.sendSlaBreachAlert(uniqueBreaches.size);

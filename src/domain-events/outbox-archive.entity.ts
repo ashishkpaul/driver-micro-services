@@ -11,17 +11,17 @@ export class OutboxArchiveEvent {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: "varchar" })
   eventType: string;
 
   @Column("jsonb")
   payload: any;
 
   @Column({
-    type: 'enum',
+    type: "enum",
     enum: OutboxStatus,
-    enumName: 'outbox_status_enum',
-    nullable: false
+    enumName: "outbox_status_enum",
+    nullable: false,
   })
   status: OutboxStatus;
 
@@ -53,15 +53,15 @@ export class OutboxArchiveEvent {
   archivedAt: Date;
 
   // New fields for compression and optimization
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: "boolean", default: false })
   isCompressed: boolean;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: "jsonb", nullable: true })
   compressedPayload?: any;
 
-  @Column({ type: 'integer', nullable: true })
+  @Column({ type: "integer", nullable: true })
   originalPayloadSize?: number;
 
-  @Column({ type: 'integer', nullable: true })
+  @Column({ type: "integer", nullable: true })
   compressedPayloadSize?: number;
 }

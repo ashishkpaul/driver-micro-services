@@ -1,14 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { IdempotencyTracker } from './idempotency-tracker.entity';
-import { MetricsService } from './metrics.service';
-import { OutboxStatus } from './outbox-status.enum';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { IdempotencyTracker } from "./idempotency-tracker.entity";
+import { MetricsService } from "./metrics.service";
+import { OutboxStatus } from "./outbox-status.enum";
 
 @Injectable()
 export class AdaptiveBatchService {
   private readonly logger = new Logger(AdaptiveBatchService.name);
-  
+
   // Configuration
   private readonly MIN_BATCH_SIZE = 10;
   private readonly MAX_BATCH_SIZE = 100;
@@ -33,7 +33,7 @@ export class AdaptiveBatchService {
    */
   async getOptimalBatchSize(): Promise<number> {
     const now = Date.now();
-    
+
     // Only adjust every 5 minutes to avoid rapid fluctuations
     if (now - this.lastAdjustmentTime < 5 * 60 * 1000) {
       return this.currentBatchSize;
@@ -43,11 +43,14 @@ export class AdaptiveBatchService {
       const optimalSize = await this.calculateOptimalBatchSize();
       this.currentBatchSize = optimalSize;
       this.lastAdjustmentTime = now;
-      
+
       this.logger.debug(`Adaptive batch size adjusted: ${optimalSize}`);
       return optimalSize;
     } catch (error) {
-      this.logger.error('Failed to calculate optimal batch size, using current:', error);
+      this.logger.error(
+        "Failed to calculate optimal batch size, using current:",
+        error,
+      );
       return this.currentBatchSize;
     }
   }
@@ -56,47 +59,56 @@ export class AdaptiveBatchService {
    * Calculate optimal batch size based on historical performance
    */
   private async calculateOptimalBatchSize(): Promise<number> {
-    const cutoffTime = new Date(Date.now() - this.HISTORY_WINDOW_HOURS * 60 * 60 * 1000);
-    
+    const cutoffTime = new Date(
+      Date.now() - this.HISTORY_WINDOW_HOURS * 60 * 60 * 1000,
+    );
+
     // Get recent processing statistics
     const recentStats = await this.idempotencyTrackerRepository
-      .createQueryBuilder('tracker')
+      .createQueryBuilder("tracker")
       .select([
-        'COUNT(*) as totalEvents',
-        'COUNT(CASE WHEN tracker.status = :completedStatus THEN 1 END) as completedEvents',
-        'COUNT(CASE WHEN tracker.status = :failedStatus THEN 1 END) as failedEvents',
-        'AVG(tracker.processing_duration_ms) as avgDuration',
-        'MAX(tracker.processing_duration_ms) as maxDuration',
-        'MIN(tracker.processing_duration_ms) as minDuration',
-        'STDDEV(tracker.processing_duration_ms) as durationStdDev'
+        "COUNT(*) as totalEvents",
+        "COUNT(CASE WHEN tracker.status = :completedStatus THEN 1 END) as completedEvents",
+        "COUNT(CASE WHEN tracker.status = :failedStatus THEN 1 END) as failedEvents",
+        "AVG(tracker.processing_duration_ms) as avgDuration",
+        "MAX(tracker.processing_duration_ms) as maxDuration",
+        "MIN(tracker.processing_duration_ms) as minDuration",
+        "STDDEV(tracker.processing_duration_ms) as durationStdDev",
       ])
-      .where('tracker.createdAt >= :cutoffTime', { cutoffTime })
-      .andWhere('tracker.status IN (:...statuses)', { 
-        statuses: ['COMPLETED', 'FAILED'] 
+      .where("tracker.createdAt >= :cutoffTime", { cutoffTime })
+      .andWhere("tracker.status IN (:...statuses)", {
+        statuses: ["COMPLETED", "FAILED"],
       })
       .getRawOne();
 
-    const totalEvents = parseInt(recentStats?.totalEvents || '0', 10);
-    
+    const totalEvents = parseInt(recentStats?.totalEvents || "0", 10);
+
     if (totalEvents < 10) {
       // Not enough data, use default
-      this.logger.debug('Insufficient data for batch size calculation, using default');
+      this.logger.debug(
+        "Insufficient data for batch size calculation, using default",
+      );
       return this.DEFAULT_BATCH_SIZE;
     }
 
-    const completedEvents = parseInt(recentStats?.completedEvents || '0', 10);
-    const failedEvents = parseInt(recentStats?.failedEvents || '0', 10);
-    const avgDuration = parseFloat(recentStats?.avgDuration || '0');
-    const maxDuration = parseFloat(recentStats?.maxDuration || '0');
-    const minDuration = parseFloat(recentStats?.minDuration || '0');
-    const durationStdDev = parseFloat(recentStats?.durationStdDev || '0');
+    const completedEvents = parseInt(recentStats?.completedEvents || "0", 10);
+    const failedEvents = parseInt(recentStats?.failedEvents || "0", 10);
+    const avgDuration = parseFloat(recentStats?.avgDuration || "0");
+    const maxDuration = parseFloat(recentStats?.maxDuration || "0");
+    const minDuration = parseFloat(recentStats?.minDuration || "0");
+    const durationStdDev = parseFloat(recentStats?.durationStdDev || "0");
 
     // Calculate success rate
     const successRate = totalEvents > 0 ? completedEvents / totalEvents : 0;
 
     // Calculate current system load indicators
-    const systemLoad = this.calculateSystemLoad(successRate, avgDuration, maxDuration, durationStdDev);
-    
+    const systemLoad = this.calculateSystemLoad(
+      successRate,
+      avgDuration,
+      maxDuration,
+      durationStdDev,
+    );
+
     // Adjust batch size based on performance metrics
     let adjustment = 0;
 
@@ -109,7 +121,8 @@ export class AdaptiveBatchService {
 
     // Factor 2: Processing time adjustment
     if (avgDuration > this.TARGET_AVG_DURATION) {
-      adjustment -= (avgDuration - this.TARGET_AVG_DURATION) / this.TARGET_AVG_DURATION;
+      adjustment -=
+        (avgDuration - this.TARGET_AVG_DURATION) / this.TARGET_AVG_DURATION;
     } else if (avgDuration < this.TARGET_AVG_DURATION * 0.5) {
       adjustment += 0.2; // Small increase if processing is very fast
     }
@@ -122,19 +135,21 @@ export class AdaptiveBatchService {
     }
 
     // Apply adjustment
-    const newBatchSize = Math.round(this.currentBatchSize * (1 + adjustment * this.ADJUSTMENT_FACTOR));
+    const newBatchSize = Math.round(
+      this.currentBatchSize * (1 + adjustment * this.ADJUSTMENT_FACTOR),
+    );
 
     // Clamp to min/max bounds
     const clampedSize = Math.max(
-      this.MIN_BATCH_SIZE, 
-      Math.min(this.MAX_BATCH_SIZE, newBatchSize)
+      this.MIN_BATCH_SIZE,
+      Math.min(this.MAX_BATCH_SIZE, newBatchSize),
     );
 
     this.logger.log(
       `Batch size calculation: current=${this.currentBatchSize}, adjustment=${adjustment.toFixed(3)}, ` +
-      `new=${newBatchSize}, clamped=${clampedSize}, ` +
-      `successRate=${(successRate * 100).toFixed(1)}%, avgDuration=${avgDuration.toFixed(0)}ms, ` +
-      `systemLoad=${(systemLoad * 100).toFixed(1)}%`
+        `new=${newBatchSize}, clamped=${clampedSize}, ` +
+        `successRate=${(successRate * 100).toFixed(1)}%, avgDuration=${avgDuration.toFixed(0)}ms, ` +
+        `systemLoad=${(systemLoad * 100).toFixed(1)}%`,
     );
 
     return clampedSize;
@@ -144,19 +159,24 @@ export class AdaptiveBatchService {
    * Calculate system load based on multiple factors
    */
   private calculateSystemLoad(
-    successRate: number, 
-    avgDuration: number, 
-    maxDuration: number, 
-    durationStdDev: number
+    successRate: number,
+    avgDuration: number,
+    maxDuration: number,
+    durationStdDev: number,
   ): number {
     // Normalize each factor to 0-1 scale
     const successRateLoad = 1 - successRate; // Lower success rate = higher load
-    const durationLoad = Math.min(avgDuration / (this.TARGET_AVG_DURATION * 2), 1); // Higher duration = higher load
-    const variabilityLoad = durationStdDev > 0 ? Math.min(durationStdDev / avgDuration, 1) : 0; // High variability = higher load
+    const durationLoad = Math.min(
+      avgDuration / (this.TARGET_AVG_DURATION * 2),
+      1,
+    ); // Higher duration = higher load
+    const variabilityLoad =
+      durationStdDev > 0 ? Math.min(durationStdDev / avgDuration, 1) : 0; // High variability = higher load
 
     // Weighted average
-    const load = (successRateLoad * 0.4) + (durationLoad * 0.4) + (variabilityLoad * 0.2);
-    
+    const load =
+      successRateLoad * 0.4 + durationLoad * 0.4 + variabilityLoad * 0.2;
+
     return Math.max(0, Math.min(1, load));
   }
 
@@ -171,8 +191,8 @@ export class AdaptiveBatchService {
     workerId: string,
     batchSize: number,
     processingDuration: number,
-    status: 'COMPLETED' | 'FAILED',
-    error?: string
+    status: "COMPLETED" | "FAILED",
+    error?: string,
   ): Promise<void> {
     try {
       // Calculate payload hash for debugging
@@ -199,13 +219,13 @@ export class AdaptiveBatchService {
           memoryUsage: systemMetrics.memoryUsage,
           cpuUsage: systemMetrics.cpuUsage,
         },
-        ...(status === 'COMPLETED' ? { completedAt: new Date() } : {}),
-        ...(status === 'FAILED' ? { failedAt: new Date() } : {}),
+        ...(status === "COMPLETED" ? { completedAt: new Date() } : {}),
+        ...(status === "FAILED" ? { failedAt: new Date() } : {}),
       });
 
       await this.idempotencyTrackerRepository.save(tracker);
     } catch (error) {
-      this.logger.error('Failed to track event processing:', error);
+      this.logger.error("Failed to track event processing:", error);
     }
   }
 
@@ -218,8 +238,8 @@ export class AdaptiveBatchService {
     cpuUsage: number;
   }> {
     try {
-      const os = require('os');
-      
+      const os = require("os");
+
       // Load average (normalized to 0-1)
       const loadAvg = os.loadavg()[0];
       const cpuCount = os.cpus().length;
@@ -228,14 +248,14 @@ export class AdaptiveBatchService {
       // Memory usage (normalized to 0-1)
       const totalMemory = os.totalmem();
       const freeMemory = os.freemem();
-      const memoryUsage = 1 - (freeMemory / totalMemory);
+      const memoryUsage = 1 - freeMemory / totalMemory;
 
       // CPU usage (simplified estimation)
       const cpuUsage = loadAverage; // Using load average as CPU usage proxy
 
       return { loadAverage, memoryUsage, cpuUsage };
     } catch (error) {
-      this.logger.warn('Failed to get system metrics, using defaults:', error);
+      this.logger.warn("Failed to get system metrics, using defaults:", error);
       return { loadAverage: 0.5, memoryUsage: 0.5, cpuUsage: 0.5 };
     }
   }
@@ -245,11 +265,15 @@ export class AdaptiveBatchService {
    */
   private calculatePayloadHash(payload: any): string {
     try {
-      const crypto = require('crypto');
+      const crypto = require("crypto");
       const payloadStr = JSON.stringify(payload, Object.keys(payload).sort());
-      return crypto.createHash('sha256').update(payloadStr).digest('hex').substring(0, 16);
+      return crypto
+        .createHash("sha256")
+        .update(payloadStr)
+        .digest("hex")
+        .substring(0, 16);
     } catch (error) {
-      return 'hash_error';
+      return "hash_error";
     }
   }
 
@@ -266,28 +290,35 @@ export class AdaptiveBatchService {
     };
     systemLoad: number;
   }> {
-    const cutoffTime = new Date(Date.now() - this.HISTORY_WINDOW_HOURS * 60 * 60 * 1000);
-    
+    const cutoffTime = new Date(
+      Date.now() - this.HISTORY_WINDOW_HOURS * 60 * 60 * 1000,
+    );
+
     const recentStats = await this.idempotencyTrackerRepository
-      .createQueryBuilder('tracker')
+      .createQueryBuilder("tracker")
       .select([
-        'COUNT(*) as totalEvents',
-        'COUNT(CASE WHEN tracker.status = :completedStatus THEN 1 END) as completedEvents',
-        'AVG(tracker.processing_duration_ms) as avgDuration'
+        "COUNT(*) as totalEvents",
+        "COUNT(CASE WHEN tracker.status = :completedStatus THEN 1 END) as completedEvents",
+        "AVG(tracker.processing_duration_ms) as avgDuration",
       ])
-      .where('tracker.createdAt >= :cutoffTime', { cutoffTime })
-      .andWhere('tracker.status IN (:...statuses)', { 
-        statuses: ['COMPLETED', 'FAILED'] 
+      .where("tracker.createdAt >= :cutoffTime", { cutoffTime })
+      .andWhere("tracker.status IN (:...statuses)", {
+        statuses: ["COMPLETED", "FAILED"],
       })
       .getRawOne();
 
-    const totalEvents = parseInt(recentStats?.totalEvents || '0', 10);
-    const completedEvents = parseInt(recentStats?.completedEvents || '0', 10);
-    const avgDuration = parseFloat(recentStats?.avgDuration || '0');
+    const totalEvents = parseInt(recentStats?.totalEvents || "0", 10);
+    const completedEvents = parseInt(recentStats?.completedEvents || "0", 10);
+    const avgDuration = parseFloat(recentStats?.avgDuration || "0");
     const successRate = totalEvents > 0 ? completedEvents / totalEvents : 0;
 
     const systemMetrics = await this.getSystemMetrics();
-    const systemLoad = this.calculateSystemLoad(successRate, avgDuration, avgDuration, 0);
+    const systemLoad = this.calculateSystemLoad(
+      successRate,
+      avgDuration,
+      avgDuration,
+      0,
+    );
 
     return {
       currentBatchSize: this.currentBatchSize,
@@ -307,7 +338,7 @@ export class AdaptiveBatchService {
   resetBatchSize(): void {
     this.currentBatchSize = this.DEFAULT_BATCH_SIZE;
     this.lastAdjustmentTime = Date.now();
-    this.logger.log('Batch size reset to default');
+    this.logger.log("Batch size reset to default");
   }
 
   /**

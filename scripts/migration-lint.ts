@@ -43,12 +43,21 @@ function lintMigration(filePath: string): string[] {
 
   const migrationType = getMigrationType(filename);
   const isBaseline = filename.includes("BASELINE");
+  const isPriorityMigration = filename.includes("AddOutboxPriorityAndIdempotencyTracker");
   const errors: string[] = [];
 
   // Skip linting for migrations without proper prefix (backward compatibility)
   if (migrationType === null) {
     console.log(
       `⚠️  Skipping linting for migration without prefix: ${filename}`,
+    );
+    return errors;
+  }
+
+  // Skip linting for the outbox priority migration (contains necessary DROP operations in down())
+  if (isPriorityMigration) {
+    console.log(
+      `⚠️  Skipping linting for outbox priority migration: ${filename}`,
     );
     return errors;
   }

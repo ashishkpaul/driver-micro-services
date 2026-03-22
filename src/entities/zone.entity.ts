@@ -22,12 +22,12 @@ export class Zone {
   /* Basic Information                                                   */
   /* ------------------------------------------------------------------ */
 
-  @Column({ type: 'varchar' })
+  @Column({ type: "varchar" })
   @IsString()
   @IsNotEmpty()
   name!: string;
 
-  @Column({ type: 'varchar', unique: true }) // 👈 ADDED: unique: true
+  @Column({ type: "varchar", unique: true }) // 👈 ADDED: unique: true
   @IsString()
   @IsNotEmpty()
   code!: string; // e.g., "NORTH-BNG", "SOUTH-BNG"
@@ -36,24 +36,24 @@ export class Zone {
   /* Geographic Information                                              */
   /* ------------------------------------------------------------------ */
 
-  @Index('idx_zones_city_id') // Add explicit index name
-  @Column({ name: 'city_id', type: 'uuid' })
+  @Index("idx_zones_city_id") // Add explicit index name
+  @Column({ name: "city_id", type: "uuid" })
   @IsNotEmpty()
   cityId!: string;
 
   @ManyToOne(() => City, {
     onDelete: "RESTRICT",
-    onUpdate: "NO ACTION"
+    onUpdate: "NO ACTION",
   })
   @JoinColumn({
     name: "city_id",
-    foreignKeyConstraintName: "fk_zones_city"
+    foreignKeyConstraintName: "fk_zones_city",
   })
   city!: City;
 
   @Column({
-    type: 'polygon',
-    nullable: true
+    type: "polygon",
+    nullable: true,
   })
   @IsNotEmpty()
   boundary?: string;
