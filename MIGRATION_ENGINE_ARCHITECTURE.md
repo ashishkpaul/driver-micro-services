@@ -71,7 +71,7 @@ export enum MigrationState {
 
 **State Transitions:**
 
-```
+```text
 PLANNED → VALIDATED → SIMULATED → APPROVED → REPLAYED → EXECUTING → COMPLETED
                                                             ↓
                                                           FAILED → ROLLED_BACK

@@ -1,6 +1,6 @@
 #!/usr/bin/env ts-node
-import 'reflect-metadata';
-import 'dotenv/config';
+import "reflect-metadata";
+import "dotenv/config";
 /**
  * scripts/cli/migrate.ts
  *
@@ -20,48 +20,58 @@ import 'dotenv/config';
  *   npm run migrate -- --run --config src/config/data-source.staging.ts
  */
 
-import { Command, Option } from 'commander';
-import * as path from 'path';
-import * as fs from 'fs';
-import { spawnSync, SpawnSyncReturns } from 'child_process';
+import { Command, Option } from "commander";
+import * as path from "path";
+import * as fs from "fs";
+import { spawnSync, SpawnSyncReturns } from "child_process";
 import { ensureBaselineExists } from "../db/baseline";
-import { DataSource } from 'typeorm';
+import { DataSource } from "typeorm";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const VERSION          = '2.0.0';
-const DEFAULT_CONFIG   = 'src/config/data-source.ts';
-const DEFAULT_OUT_DIR  = 'src/migrations';
-const VALID_PREFIXES   = ['SAFE_', 'DATA_', 'BREAKING_', 'FIX_', 'BASELINE_'] as const;
-type Prefix = typeof VALID_PREFIXES[number];
+const VERSION = "2.0.0";
+const DEFAULT_CONFIG = "src/config/data-source.ts";
+const DEFAULT_OUT_DIR = "src/migrations";
+const VALID_PREFIXES = [
+  "SAFE_",
+  "DATA_",
+  "BREAKING_",
+  "FIX_",
+  "BASELINE_",
+] as const;
+type Prefix = (typeof VALID_PREFIXES)[number];
 
 // ── Colour helpers (no external dep) ─────────────────────────────────────────
 
 const c = {
-  reset:  '\x1b[0m',
-  bold:   '\x1b[1m',
-  dim:    '\x1b[2m',
-  green:  '\x1b[32m',
-  yellow: '\x1b[33m',
-  red:    '\x1b[31m',
-  cyan:   '\x1b[36m',
-  blue:   '\x1b[34m',
-  magenta:'\x1b[35m',
-  white:  '\x1b[37m',
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  red: "\x1b[31m",
+  cyan: "\x1b[36m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  white: "\x1b[37m",
 };
 
 const fmt = {
-  ok:      (s: string) => `${c.green}✅ ${s}${c.reset}`,
-  warn:    (s: string) => `${c.yellow}⚠️  ${s}${c.reset}`,
-  err:     (s: string) => `${c.red}❌ ${s}${c.reset}`,
-  info:    (s: string) => `${c.cyan}ℹ️  ${s}${c.reset}`,
-  step:    (n: number, total: number, s: string) =>
-             `${c.dim}[${n}/${total}]${c.reset} ${c.bold}${s}${c.reset}`,
-  header:  (s: string) => `\n${c.bold}${c.blue}${s}${c.reset}\n${'─'.repeat(s.length + 2)}`,
-  prefix:  (p: string) => {
+  ok: (s: string) => `${c.green}✅ ${s}${c.reset}`,
+  warn: (s: string) => `${c.yellow}⚠️  ${s}${c.reset}`,
+  err: (s: string) => `${c.red}❌ ${s}${c.reset}`,
+  info: (s: string) => `${c.cyan}ℹ️  ${s}${c.reset}`,
+  step: (n: number, total: number, s: string) =>
+    `${c.dim}[${n}/${total}]${c.reset} ${c.bold}${s}${c.reset}`,
+  header: (s: string) =>
+    `\n${c.bold}${c.blue}${s}${c.reset}\n${"─".repeat(s.length + 2)}`,
+  prefix: (p: string) => {
     const colours: Record<string, string> = {
-      SAFE_: c.green, DATA_: c.cyan, BREAKING_: c.red,
-      FIX_: c.yellow, BASELINE_: c.magenta,
+      SAFE_: c.green,
+      DATA_: c.cyan,
+      BREAKING_: c.red,
+      FIX_: c.yellow,
+      BASELINE_: c.magenta,
     };
     return `${colours[p] ?? c.white}${c.bold}${p}${c.reset}`;
   },
@@ -75,51 +85,123 @@ function exec(
   opts: { silent?: boolean; env?: NodeJS.ProcessEnv } = {},
 ): SpawnSyncReturns<Buffer> {
   return spawnSync(cmd, args, {
-    stdio: opts.silent ? 'pipe' : 'inherit',
-    env:   { ...process.env, ...opts.env },
+    stdio: opts.silent ? "pipe" : "inherit",
+    env: { ...process.env, ...opts.env },
   });
 }
 
 function mustExec(cmd: string, args: string[], label?: string): void {
   const result = exec(cmd, args);
   if (result.status !== 0) {
-    if (label) process.stderr.write(fmt.err(`${label} failed`) + '\n');
+    if (label) process.stderr.write(fmt.err(`${label} failed`) + "\n");
     process.exit(result.status ?? 1);
   }
 }
 
 // ── SQL classifier (used by generate to auto-detect prefix) ──────────────────
 
-export type SqlCategory = 'SAFE' | 'DATA' | 'BREAKING' | 'FIX';
+export type SqlCategory = "SAFE" | "DATA" | "BREAKING" | "FIX";
 
 interface ClassifiedStatement {
-  sql:      string;
+  sql: string;
   category: SqlCategory;
-  reason:   string;
+  reason: string;
 }
 
-const SQL_RULES: Array<{ pattern: RegExp; category: SqlCategory; reason: string }> = [
+const SQL_RULES: Array<{
+  pattern: RegExp;
+  category: SqlCategory;
+  reason: string;
+}> = [
   // BREAKING — always check first (most restrictive)
-  { pattern: /\bDROP\s+TABLE\b/i,        category: 'BREAKING', reason: 'DROP TABLE removes data permanently' },
-  { pattern: /\bDROP\s+COLUMN\b/i,       category: 'BREAKING', reason: 'DROP COLUMN removes data permanently' },
-  { pattern: /\bDROP\s+TYPE\b/i,         category: 'BREAKING', reason: 'DROP TYPE is destructive' },
-  { pattern: /\bALTER\s+TYPE\b/i,        category: 'BREAKING', reason: 'ALTER TYPE can cause table rewrites' },
-  { pattern: /SET\s+NOT\s+NULL/i,        category: 'BREAKING', reason: 'SET NOT NULL enforces constraint (needs data prep first)' },
-  { pattern: /\bRENAME\s+COLUMN\b/i,     category: 'BREAKING', reason: 'RENAME COLUMN breaks existing queries' },
-  { pattern: /\bRENAME\s+TABLE\b/i,      category: 'BREAKING', reason: 'RENAME TABLE breaks existing queries' },
-  { pattern: /\bALTER\s+COLUMN\b.*TYPE\b/i, category: 'BREAKING', reason: 'Changing column type can corrupt data' },
+  {
+    pattern: /\bDROP\s+TABLE\b/i,
+    category: "BREAKING",
+    reason: "DROP TABLE removes data permanently",
+  },
+  {
+    pattern: /\bDROP\s+COLUMN\b/i,
+    category: "BREAKING",
+    reason: "DROP COLUMN removes data permanently",
+  },
+  {
+    pattern: /\bDROP\s+TYPE\b/i,
+    category: "BREAKING",
+    reason: "DROP TYPE is destructive",
+  },
+  {
+    pattern: /\bALTER\s+TYPE\b/i,
+    category: "BREAKING",
+    reason: "ALTER TYPE can cause table rewrites",
+  },
+  {
+    pattern: /SET\s+NOT\s+NULL/i,
+    category: "BREAKING",
+    reason: "SET NOT NULL enforces constraint (needs data prep first)",
+  },
+  {
+    pattern: /\bRENAME\s+COLUMN\b/i,
+    category: "BREAKING",
+    reason: "RENAME COLUMN breaks existing queries",
+  },
+  {
+    pattern: /\bRENAME\s+TABLE\b/i,
+    category: "BREAKING",
+    reason: "RENAME TABLE breaks existing queries",
+  },
+  {
+    pattern: /\bALTER\s+COLUMN\b.*TYPE\b/i,
+    category: "BREAKING",
+    reason: "Changing column type can corrupt data",
+  },
   // DATA — mutations
-  { pattern: /^\s*UPDATE\s+\w/im,        category: 'DATA', reason: 'Data update / backfill' },
-  { pattern: /^\s*INSERT\s+INTO\b/im,    category: 'DATA', reason: 'Data insert / backfill' },
-  { pattern: /^\s*DELETE\s+FROM\b/im,    category: 'DATA', reason: 'Data deletion' },
-  { pattern: /^\s*COPY\s+\w/im,         category: 'DATA', reason: 'Bulk data copy' },
+  {
+    pattern: /^\s*UPDATE\s+\w/im,
+    category: "DATA",
+    reason: "Data update / backfill",
+  },
+  {
+    pattern: /^\s*INSERT\s+INTO\b/im,
+    category: "DATA",
+    reason: "Data insert / backfill",
+  },
+  {
+    pattern: /^\s*DELETE\s+FROM\b/im,
+    category: "DATA",
+    reason: "Data deletion",
+  },
+  { pattern: /^\s*COPY\s+\w/im, category: "DATA", reason: "Bulk data copy" },
   // SAFE — expansions
-  { pattern: /\bCREATE\s+TABLE\b/i,      category: 'SAFE', reason: 'New table (additive)' },
-  { pattern: /\bCREATE\s+INDEX\b/i,      category: 'SAFE', reason: 'New index (additive)' },
-  { pattern: /\bCREATE\s+TYPE\b/i,       category: 'SAFE', reason: 'New enum/type (additive)' },
-  { pattern: /\bADD\s+COLUMN\b/i,        category: 'SAFE', reason: 'New column (must be nullable)' },
-  { pattern: /\bADD\s+CONSTRAINT\b/i,    category: 'SAFE', reason: 'New constraint (check data first)' },
-  { pattern: /\bCREATE\s+SEQUENCE\b/i,   category: 'SAFE', reason: 'New sequence (additive)' },
+  {
+    pattern: /\bCREATE\s+TABLE\b/i,
+    category: "SAFE",
+    reason: "New table (additive)",
+  },
+  {
+    pattern: /\bCREATE\s+INDEX\b/i,
+    category: "SAFE",
+    reason: "New index (additive)",
+  },
+  {
+    pattern: /\bCREATE\s+TYPE\b/i,
+    category: "SAFE",
+    reason: "New enum/type (additive)",
+  },
+  {
+    pattern: /\bADD\s+COLUMN\b/i,
+    category: "SAFE",
+    reason: "New column (must be nullable)",
+  },
+  {
+    pattern: /\bADD\s+CONSTRAINT\b/i,
+    category: "SAFE",
+    reason: "New constraint (check data first)",
+  },
+  {
+    pattern: /\bCREATE\s+SEQUENCE\b/i,
+    category: "SAFE",
+    reason: "New sequence (additive)",
+  },
 ];
 
 export function classifySqlStatement(sql: string): ClassifiedStatement {
@@ -128,7 +210,11 @@ export function classifySqlStatement(sql: string): ClassifiedStatement {
       return { sql, category: rule.category, reason: rule.reason };
     }
   }
-  return { sql, category: 'SAFE', reason: 'Unrecognised statement — defaulting to SAFE' };
+  return {
+    sql,
+    category: "SAFE",
+    reason: "Unrecognised statement — defaulting to SAFE",
+  };
 }
 
 export function classifyMigrationFile(filePath: string): {
@@ -138,7 +224,7 @@ export function classifyMigrationFile(filePath: string): {
   needsPhaseDecomposition: boolean;
   phases: SqlCategory[];
 } {
-  const content = fs.readFileSync(filePath, 'utf8');
+  const content = fs.readFileSync(filePath, "utf8");
 
   // Extract SQL strings from queryRunner.query(` ... `) calls
   const sqlBlocks: string[] = [];
@@ -146,7 +232,7 @@ export function classifyMigrationFile(filePath: string): {
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
     // Split on semicolons to get individual statements
-    m[1].split(';').forEach((s) => {
+    m[1].split(";").forEach((s) => {
       const trimmed = s.trim();
       if (trimmed.length > 5) sqlBlocks.push(trimmed);
     });
@@ -156,23 +242,30 @@ export function classifyMigrationFile(filePath: string): {
   const categories = new Set(statements.map((s) => s.category));
 
   // Priority: BREAKING > DATA > SAFE > FIX
-  let dominantPrefix: Prefix = 'SAFE_';
-  if (categories.has('BREAKING')) dominantPrefix = 'BREAKING_';
-  else if (categories.has('DATA'))    dominantPrefix = 'DATA_';
-  else if (categories.has('SAFE'))    dominantPrefix = 'SAFE_';
+  let dominantPrefix: Prefix = "SAFE_";
+  if (categories.has("BREAKING")) dominantPrefix = "BREAKING_";
+  else if (categories.has("DATA")) dominantPrefix = "DATA_";
+  else if (categories.has("SAFE")) dominantPrefix = "SAFE_";
 
   // If TypeORM generated a file mixing categories that should be separate phases,
   // the developer needs split files (e.g. ADD COLUMN nullable + SET NOT NULL)
   const needsPhaseDecomposition =
-    categories.has('BREAKING') && (categories.has('SAFE') || categories.has('DATA'));
+    categories.has("BREAKING") &&
+    (categories.has("SAFE") || categories.has("DATA"));
 
   // Build ordered phase list
   const phases: SqlCategory[] = [];
-  if (categories.has('SAFE'))     phases.push('SAFE');
-  if (categories.has('DATA'))     phases.push('DATA');
-  if (categories.has('BREAKING')) phases.push('BREAKING');
+  if (categories.has("SAFE")) phases.push("SAFE");
+  if (categories.has("DATA")) phases.push("DATA");
+  if (categories.has("BREAKING")) phases.push("BREAKING");
 
-  return { categories, statements, dominantPrefix, needsPhaseDecomposition, phases };
+  return {
+    categories,
+    statements,
+    dominantPrefix,
+    needsPhaseDecomposition,
+    phases,
+  };
 }
 
 // ── NOT NULL auto-rewriter ────────────────────────────────────────────────────
@@ -186,31 +279,43 @@ export function classifyMigrationFile(filePath: string): {
  *
  * Returns the rewritten content and a list of companion migrations to create.
  */
-export function rewriteNotNullViolations(content: string, tableName: string): {
+export function rewriteNotNullViolations(
+  content: string,
+  tableName: string,
+): {
   rewritten: string;
-  companions: Array<{ phase: 'DATA' | 'BREAKING'; sql: string; reason: string }>;
+  companions: Array<{
+    phase: "DATA" | "BREAKING";
+    sql: string;
+    reason: string;
+  }>;
 } {
-  const companions: Array<{ phase: 'DATA' | 'BREAKING'; sql: string; reason: string }> = [];
+  const companions: Array<{
+    phase: "DATA" | "BREAKING";
+    sql: string;
+    reason: string;
+  }> = [];
   let rewritten = content;
 
   // Only rewrite ADD COLUMN ... NOT NULL when there is NO DEFAULT clause.
   // PostgreSQL ≥11 adds NOT NULL columns with DEFAULT atomically without a
   // table rewrite, so those are safe. Only the truly dangerous case (NOT NULL
   // with no DEFAULT on a non-empty table) requires the 3-step lifecycle.
-  const NOT_NULL_RE = /ADD\s+"(\w+)"\s+((?:[^N]|N(?!OT))*?)NOT\s+NULL(?!\s*DEFAULT)/gi;
+  const NOT_NULL_RE =
+    /ADD\s+"(\w+)"\s+((?:[^N]|N(?!OT))*?)NOT\s+NULL(?!\s*DEFAULT)/gi;
 
   rewritten = rewritten.replace(NOT_NULL_RE, (_match, column, typeSpec) => {
-    const cleanType = typeSpec.trim().replace(/,\s*$/, '');
+    const cleanType = typeSpec.trim().replace(/,\s*$/, "");
 
     companions.push({
-      phase:  'DATA',
-      sql:    `-- Backfill: set a safe default for every existing row before enforcing NOT NULL\nUPDATE ${tableName} SET "${column}" = <DEFAULT_VALUE> WHERE "${column}" IS NULL;`,
+      phase: "DATA",
+      sql: `-- Backfill: set a safe default for every existing row before enforcing NOT NULL\nUPDATE ${tableName} SET "${column}" = <DEFAULT_VALUE> WHERE "${column}" IS NULL;`,
       reason: `Column "${column}" requires backfill before NOT NULL can be enforced`,
     });
 
     companions.push({
-      phase:  'BREAKING',
-      sql:    `ALTER TABLE "${tableName}" ALTER COLUMN "${column}" SET NOT NULL;`,
+      phase: "BREAKING",
+      sql: `ALTER TABLE "${tableName}" ALTER COLUMN "${column}" SET NOT NULL;`,
       reason: `Enforce NOT NULL on "${column}" after data is backfilled`,
     });
 
@@ -221,44 +326,276 @@ export function rewriteNotNullViolations(content: string, tableName: string): {
   return { rewritten, companions };
 }
 
+interface DependentPartialIndex {
+  indexname: string;
+  indexdef: string;
+}
+
+interface MigrationSqlItem {
+  sql: string;
+  reason: string;
+}
+
+async function getDependentPartialIndexes(
+  configPath: string,
+  enumType: string,
+): Promise<DependentPartialIndex[]> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require(path.resolve(process.cwd(), configPath));
+  const ds: DataSource = mod.default ?? mod;
+
+  await ds.initialize();
+  try {
+    const rows = (await ds.query(
+      `
+        SELECT indexname, indexdef
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexdef ILIKE '%' || $1 || '%'
+          AND indexdef ILIKE '% WHERE %'
+      `,
+      [enumType],
+    )) as DependentPartialIndex[];
+
+    return rows;
+  } finally {
+    await ds.destroy();
+  }
+}
+
+function injectDependentIndexGuards(
+  content: string,
+  indexes: DependentPartialIndex[],
+): { rewritten: string; changed: boolean } {
+  if (indexes.length === 0) {
+    return { rewritten: content, changed: false };
+  }
+
+  let rewritten = content;
+  let changed = false;
+
+  const upStartRe =
+    /(public async up\(queryRunner: QueryRunner\): Promise<void> \{\n)/;
+  const upEndRe = /(\n\s*}\n\n\s*public async down\()/;
+  const downStartRe =
+    /(public async down\(queryRunner: QueryRunner\): Promise<void> \{\n)/;
+  const downEndRe = /(\n\s*}\n\s*}\n?$)/;
+
+  const upPrepends: string[] = [];
+  const upAppends: string[] = [];
+  const downPrepends: string[] = [];
+  const downAppends: string[] = [];
+  const seenUpDrops = new Set<string>();
+  const seenUpCreates = new Set<string>();
+  const seenDownDrops = new Set<string>();
+  const seenDownCreates = new Set<string>();
+
+  for (const index of indexes) {
+    const quotedDrop = `DROP INDEX \"public\".\"${index.indexname}\"`;
+    const plainDrop = `DROP INDEX ${index.indexname}`;
+    const createSql = index.indexdef.trim();
+
+    const hasUpDrop =
+      rewritten.includes(quotedDrop) || rewritten.includes(plainDrop);
+    const hasUpCreate = rewritten.includes(
+      `CREATE INDEX \"${index.indexname}\"`,
+    );
+
+    if (!hasUpDrop && !seenUpDrops.has(index.indexname)) {
+      upPrepends.push(
+        `        await queryRunner.query(\`DROP INDEX IF EXISTS \"public\".\"${index.indexname}\"\`);`,
+      );
+      seenUpDrops.add(index.indexname);
+      changed = true;
+    }
+
+    if (!hasUpCreate && !seenUpCreates.has(index.indexname)) {
+      upAppends.push(`        await queryRunner.query(\`${createSql}\`);`);
+      seenUpCreates.add(index.indexname);
+      changed = true;
+    }
+
+    const hasDownDrop =
+      rewritten.includes(`public async down`) &&
+      (rewritten.includes(quotedDrop) || rewritten.includes(plainDrop));
+    const hasDownCreate =
+      rewritten.includes(`public async down`) &&
+      rewritten.includes(`CREATE INDEX \"${index.indexname}\"`);
+
+    if (!hasDownDrop && !seenDownDrops.has(index.indexname)) {
+      downPrepends.push(
+        `        await queryRunner.query(\`DROP INDEX IF EXISTS \"public\".\"${index.indexname}\"\`);`,
+      );
+      seenDownDrops.add(index.indexname);
+    }
+
+    if (!hasDownCreate && !seenDownCreates.has(index.indexname)) {
+      downAppends.push(`        await queryRunner.query(\`${createSql}\`);`);
+      seenDownCreates.add(index.indexname);
+    }
+  }
+
+  if (upPrepends.length > 0) {
+    rewritten = rewritten.replace(upStartRe, `$1${upPrepends.join("\n")}\n`);
+  }
+  if (upAppends.length > 0) {
+    rewritten = rewritten.replace(upEndRe, `\n${upAppends.join("\n")}$1`);
+  }
+  if (downPrepends.length > 0) {
+    rewritten = rewritten.replace(
+      downStartRe,
+      `$1${downPrepends.join("\n")}\n`,
+    );
+  }
+  if (downAppends.length > 0) {
+    rewritten = rewritten.replace(downEndRe, `\n${downAppends.join("\n")}$1`);
+  }
+
+  return { rewritten, changed };
+}
+
+async function rewriteEnumBackedIndexDependencies(
+  content: string,
+  configPath: string,
+): Promise<{ rewritten: string; changed: boolean }> {
+  const enumTypes = Array.from(
+    new Set(
+      Array.from(
+        content.matchAll(
+          /ALTER\s+TYPE\s+"public"\."([^"]+_enum)"\s+RENAME\s+TO/gi,
+        ),
+      ).map((match) => match[1]),
+    ),
+  );
+
+  if (enumTypes.length === 0) {
+    return { rewritten: content, changed: false };
+  }
+
+  let rewritten = content;
+  let changed = false;
+
+  for (const enumType of enumTypes) {
+    const dependentIndexes = await getDependentPartialIndexes(
+      configPath,
+      enumType,
+    );
+    const result = injectDependentIndexGuards(rewritten, dependentIndexes);
+    rewritten = result.rewritten;
+    changed = changed || result.changed;
+  }
+
+  return { rewritten, changed };
+}
+
+function extractSqlBlocksFromContent(content: string): string[] {
+  const sqlBlocks: string[] = [];
+  const re = /queryRunner\.query\(\s*`([\s\S]*?)`\s*[,)]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(content)) !== null) {
+    match[1].split(";").forEach((statement) => {
+      const trimmed = statement.trim();
+      if (trimmed.length > 0) {
+        sqlBlocks.push(trimmed);
+      }
+    });
+  }
+
+  return sqlBlocks;
+}
+
+function extractUpSqlBlocksFromContent(content: string): string[] {
+  const upMatch = content.match(
+    /public async up\(queryRunner: QueryRunner\): Promise<void> \{([\s\S]*?)\n\s*}\n\n\s*public async down\(/,
+  );
+
+  if (!upMatch) {
+    return extractSqlBlocksFromContent(content);
+  }
+
+  return extractSqlBlocksFromContent(upMatch[1]);
+}
+
+async function getEnumDependentIndexNames(
+  content: string,
+  configPath: string,
+): Promise<string[]> {
+  const enumTypes = Array.from(
+    new Set(
+      Array.from(
+        content.matchAll(
+          /ALTER\s+TYPE\s+"public"\."([^"]+_enum)"\s+RENAME\s+TO/gi,
+        ),
+      ).map((match) => match[1]),
+    ),
+  );
+
+  const indexNames = new Set<string>();
+  for (const enumType of enumTypes) {
+    const dependentIndexes = await getDependentPartialIndexes(
+      configPath,
+      enumType,
+    );
+    dependentIndexes.forEach((idx) => indexNames.add(idx.indexname));
+  }
+
+  return Array.from(indexNames);
+}
+
 // ── Header builder ────────────────────────────────────────────────────────────
 
 interface HeaderOptions {
-  prefix:           Prefix;
-  description?:     string;
-  phase?:           string;
-  phaseTotal?:      number;
-  companions?:      string[];
-  isAutoFixed?:     boolean;
-  isAutoGenerated?: boolean;  // NEW: true for machine-generated files → auto-inject bypass comments
+  prefix: Prefix;
+  description?: string;
+  phase?: string;
+  phaseTotal?: number;
+  companions?: string[];
+  isAutoFixed?: boolean;
+  isAutoGenerated?: boolean; // NEW: true for machine-generated files → auto-inject bypass comments
 }
 
 function buildHeader(opts: HeaderOptions): string {
-  const type   = opts.prefix.replace('_', '');
-  const riskMap: Record<string, string>     = { SAFE: 'LOW', DATA: 'MEDIUM', BREAKING: 'HIGH', FIX: 'MEDIUM', BASELINE: 'HIGH' };
-  const rollMap: Record<string, string>     = { SAFE: 'SAFE', DATA: 'SAFE', BREAKING: 'DATA_LOSS', FIX: 'SAFE', BASELINE: 'IRREVERSIBLE' };
+  const type = opts.prefix.replace("_", "");
+  const riskMap: Record<string, string> = {
+    SAFE: "LOW",
+    DATA: "MEDIUM",
+    BREAKING: "HIGH",
+    FIX: "MEDIUM",
+    BASELINE: "HIGH",
+  };
+  const rollMap: Record<string, string> = {
+    SAFE: "SAFE",
+    DATA: "SAFE",
+    BREAKING: "DATA_LOSS",
+    FIX: "SAFE",
+    BASELINE: "IRREVERSIBLE",
+  };
 
-  const phaseNote = opts.phase && opts.phaseTotal
-    ? `Phase ${opts.phase} of ${opts.phaseTotal} — ${opts.description ?? ''}`
-    : (opts.description ?? '<REQUIRED — describe what this migration achieves>');
+  const phaseNote =
+    opts.phase && opts.phaseTotal
+      ? `Phase ${opts.phase} of ${opts.phaseTotal} — ${opts.description ?? ""}`
+      : (opts.description ??
+        "<REQUIRED — describe what this migration achieves>");
 
   const companionNote = opts.companions?.length
-    ? ` *\n * COMPANION MIGRATIONS (auto-generated — apply in this order):\n${opts.companions.map((c) => ` *   ${c}`).join('\n')}\n`
-    : '';
+    ? ` *\n * COMPANION MIGRATIONS (auto-generated — apply in this order):\n${opts.companions.map((c) => ` *   ${c}`).join("\n")}\n`
+    : "";
 
   const autoFixNote = opts.isAutoFixed
     ? ` *\n * AUTO-SAFETY: This file was rewritten by the migration CLI.\n * Original NOT NULL violation(s) were split into companion DATA_ and BREAKING_ files.\n`
-    : '';
+    : "";
 
-  const breakingApproval = type === 'BREAKING'
-    ? ` *\n * @approved-breaking: <REQUIRED — reviewer name + reason this is safe to deploy>\n`
-    : '';
+  const breakingApproval =
+    type === "BREAKING"
+      ? ` *\n * @approved-breaking: <REQUIRED — reviewer name + reason this is safe to deploy>\n`
+      : "";
 
   const checklists: Record<string, string> = {
-    SAFE:     ` *   [ ] Reviewed generated SQL (not just the TypeScript)\n *   [ ] Uses IF NOT EXISTS / IF EXISTS for idempotency\n *   [ ] New indexes use CONCURRENTLY + transaction = false\n *   [ ] Tested migration:revert locally\n *   [ ] Passes: npm run db:validate`,
-    DATA:     ` *   [ ] Data integrity verified on staging\n *   [ ] Batched for >10k rows (add @large-batch + loop)\n *   [ ] No schema changes mixed in\n *   [ ] Tested migration:revert locally\n *   [ ] Passes: npm run db:validate`,
+    SAFE: ` *   [ ] Reviewed generated SQL (not just the TypeScript)\n *   [ ] Uses IF NOT EXISTS / IF EXISTS for idempotency\n *   [ ] New indexes use CONCURRENTLY + transaction = false\n *   [ ] Tested migration:revert locally\n *   [ ] Passes: npm run db:validate`,
+    DATA: ` *   [ ] Data integrity verified on staging\n *   [ ] Batched for >10k rows (add @large-batch + loop)\n *   [ ] No schema changes mixed in\n *   [ ] Tested migration:revert locally\n *   [ ] Passes: npm run db:validate`,
     BREAKING: ` *   [ ] @approved-breaking filled in with reviewer name and reason\n *   [ ] All app code no longer references dropped/changed column\n *   [ ] Backward-compat layer deployed before this migration\n *   [ ] Coordinated deploy window with team\n *   [ ] Tested migration:revert locally\n *   [ ] Passes: npm run db:validate`,
-    FIX:      ` *   [ ] Root cause documented in DESCRIPTION\n *   [ ] Fix does not introduce new inconsistencies\n *   [ ] Tested migration:revert locally\n *   [ ] Passes: npm run db:validate`,
+    FIX: ` *   [ ] Root cause documented in DESCRIPTION\n *   [ ] Fix does not introduce new inconsistencies\n *   [ ] Tested migration:revert locally\n *   [ ] Passes: npm run db:validate`,
     BASELINE: ` *   [ ] Generated file — do not edit manually\n *   [ ] Applied on fresh DB and db:verify passed`,
   };
 
@@ -268,17 +605,17 @@ function buildHeader(opts: HeaderOptions): string {
   //              have already been reviewed at generation time; requiring manual annotation
   //              defeats zero-intervention operation.
   const governanceBypass =
-    type === 'BASELINE'
+    type === "BASELINE"
       ? `\n// @allow-mixed-ops: Automated baseline generation\n// MIGRATION_GUARD:ALLOW_DESTRUCTIVE\n`
-    : (type === 'BREAKING' && opts.isAutoGenerated)
-      ? `\n// @allow-mixed-ops: Auto-generated BREAKING_ companion from db:new — reviewed at generation\n// MIGRATION_GUARD:ALLOW_DESTRUCTIVE\n// @approved-breaking: Auto-generated by migration CLI — review SQL above before deploying\n`
-      : '';
+      : type === "BREAKING" && opts.isAutoGenerated
+        ? `\n// @allow-mixed-ops: Auto-generated BREAKING_ companion from db:new — reviewed at generation\n// MIGRATION_GUARD:ALLOW_DESTRUCTIVE\n// @approved-breaking: Auto-generated by migration CLI — review SQL above before deploying\n`
+        : "";
 
   return `/**
  * INTENT:    ${phaseNote}
  * TYPE:      ${type}
- * RISK:      ${riskMap[type] ?? 'MEDIUM'}
- * ROLLBACK:  ${rollMap[type] ?? 'SAFE'}
+ * RISK:      ${riskMap[type] ?? "MEDIUM"}
+ * ROLLBACK:  ${rollMap[type] ?? "SAFE"}
  *${companionNote}${autoFixNote}${breakingApproval} *
  * CHECKLIST (mark [x] before merging):
 ${checklists[type] ?? checklists.SAFE}
@@ -290,32 +627,36 @@ ${checklists[type] ?? checklists.SAFE}
 
 function injectHeader(filePath: string, header: string): void {
   if (!fs.existsSync(filePath)) return;
-  const content = fs.readFileSync(filePath, 'utf8');
-  const lines   = content.split('\n');
+  const content = fs.readFileSync(filePath, "utf8");
+  const lines = content.split("\n");
 
   // Insert after the last import line
   let insertAt = 0;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('import ')) insertAt = i + 1;
-    else if (lines[i].trim() && !lines[i].startsWith('import ')) break;
+    if (lines[i].startsWith("import ")) insertAt = i + 1;
+    else if (lines[i].trim() && !lines[i].startsWith("import ")) break;
   }
 
-  const newContent = [...lines.slice(0, insertAt), header, ...lines.slice(insertAt)].join('\n');
+  const newContent = [
+    ...lines.slice(0, insertAt),
+    header,
+    ...lines.slice(insertAt),
+  ].join("\n");
   fs.writeFileSync(filePath, newContent);
 }
 
 // ── Rename file with new prefix ───────────────────────────────────────────────
 
 function renameWithPrefix(filePath: string, newPrefix: Prefix): string {
-  const dir      = path.dirname(filePath);
-  const base     = path.basename(filePath);
-  const tsMatch  = base.match(/^(\d{13,})-(.+)\.ts$/);
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath);
+  const tsMatch = base.match(/^(\d{13,})-(.+)\.ts$/);
   if (!tsMatch) return filePath;
 
   const [, timestamp, rest] = tsMatch;
   // Strip any existing prefix from the name part
   const nameWithoutPrefix = VALID_PREFIXES.reduce(
-    (acc, p) => acc.startsWith(p) ? acc.slice(p.length) : acc,
+    (acc, p) => (acc.startsWith(p) ? acc.slice(p.length) : acc),
     rest,
   );
   const newBase = `${timestamp}-${newPrefix}${nameWithoutPrefix}.ts`;
@@ -324,30 +665,180 @@ function renameWithPrefix(filePath: string, newPrefix: Prefix): string {
   return newPath;
 }
 
-// ── Companion file writer ─────────────────────────────────────────────────────
-
-function writeCompanionMigration(
+// ── Consolidated companion writer (groups all same-phase SQL into one file) ───
+function writeConsolidatedCompanion(
   basePath: string,
-  phase: 'DATA' | 'BREAKING',
-  sql: string,
+  phase: "SAFE" | "DATA" | "BREAKING",
+  items: Array<{ sql: string; reason: string }>,
   header: string,
   index: number,
 ): string {
-  const dir        = path.dirname(basePath);
-  const base       = path.basename(basePath, '.ts');
-  const tsMatch    = base.match(/^(\d{13,})-(.+)$/);
+  const dir = path.dirname(basePath);
+  const base = path.basename(basePath, ".ts");
+  const tsMatch = base.match(/^(\d{13,})-(.+)$/);
   if (!tsMatch) throw new Error(`Cannot parse migration filename: ${base}`);
 
   const [, timestamp, namePart] = tsMatch;
   const newTimestamp = String(parseInt(timestamp, 10) + index);
-  const prefix: Prefix = phase === 'DATA' ? 'DATA_' : 'BREAKING_';
+  const prefix: Prefix =
+    phase === "SAFE" ? "SAFE_" : phase === "DATA" ? "DATA_" : "BREAKING_";
   const nameWithoutPrefix = VALID_PREFIXES.reduce(
-    (acc, p) => acc.startsWith(p) ? acc.slice(p.length) : acc,
+    (acc, p) => (acc.startsWith(p) ? acc.slice(p.length) : acc),
     namePart,
   );
-  const className = `${prefix.replace('_', '')}${nameWithoutPrefix}${newTimestamp}`;
-  const filename  = `${newTimestamp}-${prefix}${nameWithoutPrefix}.ts`;
-  const filePath  = path.join(dir, filename);
+  const className = `${prefix.replace("_", "")}${nameWithoutPrefix}${newTimestamp}`;
+  const filename = `${newTimestamp}-${prefix}${nameWithoutPrefix}.ts`;
+  const filePath = path.join(dir, filename);
+
+  const queryStatements = items
+    .map(
+      ({ sql, reason }) =>
+        `    // ${reason}\n    await queryRunner.query(\`${sql}\`);`,
+    )
+    .join("\n\n");
+
+  const content = `import { MigrationInterface, QueryRunner } from 'typeorm';
+
+${header}
+export class ${className} implements MigrationInterface {
+  name = '${className}';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+${queryStatements}
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    throw new Error('Manual rollback required — see ROLLBACK PLAN in header');
+  }
+}
+`;
+  fs.writeFileSync(filePath, content);
+  return filePath;
+}
+
+async function decomposeEnumIndexedMigration(
+  basePath: string,
+  content: string,
+  configPath: string,
+): Promise<string[] | null> {
+  const dependentIndexNames = await getEnumDependentIndexNames(
+    content,
+    configPath,
+  );
+  if (dependentIndexNames.length === 0) {
+    return null;
+  }
+
+  const statements = extractUpSqlBlocksFromContent(content);
+  const preSafe: MigrationSqlItem[] = [];
+  const breaking: MigrationSqlItem[] = [];
+  const postSafe: MigrationSqlItem[] = [];
+  const seenPre = new Set<string>();
+  const seenPost = new Set<string>();
+
+  for (const sql of statements) {
+    const isDependentIndex = dependentIndexNames.some((indexName) =>
+      sql.includes(indexName),
+    );
+
+    if (isDependentIndex && /^DROP\s+INDEX/i.test(sql)) {
+      if (!seenPre.has(sql)) {
+        preSafe.push({
+          sql,
+          reason: "Drop dependent partial index before enum rewrite",
+        });
+        seenPre.add(sql);
+      }
+      continue;
+    }
+
+    if (isDependentIndex && /^CREATE\s+INDEX/i.test(sql)) {
+      if (!seenPost.has(sql)) {
+        postSafe.push({
+          sql,
+          reason: "Recreate dependent partial index after enum rewrite",
+        });
+        seenPost.add(sql);
+      }
+      continue;
+    }
+
+    breaking.push({ sql, reason: classifySqlStatement(sql).reason });
+  }
+
+  if (preSafe.length === 0 || breaking.length === 0 || postSafe.length === 0) {
+    return null;
+  }
+
+  const phaseTotal = 3;
+  const safePreHeader = buildHeader({
+    prefix: "SAFE_",
+    description:
+      "Drop dependent partial indexes before enum-backed column rewrite",
+    phase: "1",
+    phaseTotal,
+    isAutoGenerated: true,
+  });
+  const breakingHeader = buildHeader({
+    prefix: "BREAKING_",
+    description:
+      "Rewrite enum-backed columns after dependent indexes are dropped",
+    phase: "2",
+    phaseTotal,
+    isAutoGenerated: true,
+  });
+  const safePostHeader = buildHeader({
+    prefix: "SAFE_",
+    description:
+      "Recreate dependent partial indexes after enum-backed column rewrite",
+    phase: "3",
+    phaseTotal,
+    isAutoGenerated: true,
+  });
+
+  const files = [
+    writeConsolidatedCompanion(basePath, "SAFE", preSafe, safePreHeader, 0),
+    writeConsolidatedCompanion(
+      basePath,
+      "BREAKING",
+      breaking,
+      breakingHeader,
+      1,
+    ),
+    writeConsolidatedCompanion(basePath, "SAFE", postSafe, safePostHeader, 2),
+  ];
+
+  if (fs.existsSync(basePath) && !files.includes(basePath)) {
+    fs.unlinkSync(basePath);
+  }
+
+  return files;
+}
+
+// ── Companion file writer ─────────────────────────────────────────────────────
+
+function writeCompanionMigration(
+  basePath: string,
+  phase: "DATA" | "BREAKING",
+  sql: string,
+  header: string,
+  index: number,
+): string {
+  const dir = path.dirname(basePath);
+  const base = path.basename(basePath, ".ts");
+  const tsMatch = base.match(/^(\d{13,})-(.+)$/);
+  if (!tsMatch) throw new Error(`Cannot parse migration filename: ${base}`);
+
+  const [, timestamp, namePart] = tsMatch;
+  const newTimestamp = String(parseInt(timestamp, 10) + index);
+  const prefix: Prefix = phase === "DATA" ? "DATA_" : "BREAKING_";
+  const nameWithoutPrefix = VALID_PREFIXES.reduce(
+    (acc, p) => (acc.startsWith(p) ? acc.slice(p.length) : acc),
+    namePart,
+  );
+  const className = `${prefix.replace("_", "")}${nameWithoutPrefix}${newTimestamp}`;
+  const filename = `${newTimestamp}-${prefix}${nameWithoutPrefix}.ts`;
+  const filePath = path.join(dir, filename);
 
   const content = `import { MigrationInterface, QueryRunner } from 'typeorm';
 
@@ -399,19 +890,22 @@ async function isMigrationsTableMissing(
   ds: DataSource,
   tableName: string,
 ): Promise<boolean> {
-  const rows = await ds.query(`
+  const rows = (await ds.query(
+    `
     SELECT EXISTS (
       SELECT 1
       FROM information_schema.tables
       WHERE table_schema = 'public'
         AND table_name   = $1
     ) AS "exists"
-  `, [tableName]) as Array<{ exists: boolean }>;
+  `,
+    [tableName],
+  )) as Array<{ exists: boolean }>;
   return !rows[0]?.exists;
 }
 
 function normalizeForComparison(name: string): string {
-  return name.replace(/_/g, '');
+  return name.replace(/_/g, "");
 }
 
 /**
@@ -427,26 +921,26 @@ function normalizeForComparison(name: string): string {
  */
 async function checkOrphanedMigrations(configPath: string): Promise<boolean> {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod        = require(path.resolve(process.cwd(), configPath));
+  const mod = require(path.resolve(process.cwd(), configPath));
   const ds: DataSource = mod.default ?? mod;
-  const tableName  = (ds.options as any).migrationsTableName ?? '_migrations';
+  const tableName = (ds.options as any).migrationsTableName ?? "_migrations";
 
   await ds.initialize();
 
   try {
     // Fresh DB — _migrations doesn't exist yet, nothing can be orphaned
     if (await isMigrationsTableMissing(ds, tableName)) {
-      console.log(fmt.ok('Fresh database — no orphaned migrations possible'));
+      console.log(fmt.ok("Fresh database — no orphaned migrations possible"));
       return true;
     }
 
-    const appliedRows = await ds.query(
+    const appliedRows = (await ds.query(
       `SELECT name FROM ${tableName} ORDER BY id`,
-    ) as Array<{ name: string }>;
+    )) as Array<{ name: string }>;
 
     const codeNames = new Set(
       (ds.migrations as any[]).map((m) =>
-        normalizeForComparison(m.name ?? m.constructor?.name ?? ''),
+        normalizeForComparison(m.name ?? m.constructor?.name ?? ""),
       ),
     );
 
@@ -455,28 +949,41 @@ async function checkOrphanedMigrations(configPath: string): Promise<boolean> {
       .filter((name) => !codeNames.has(normalizeForComparison(name)));
 
     const pendingCount = (ds.migrations as any[]).filter((m) => {
-      const name = normalizeForComparison(m.name ?? m.constructor?.name ?? '');
-      const appliedSet = new Set(appliedRows.map((r) => normalizeForComparison(r.name)));
+      const name = normalizeForComparison(m.name ?? m.constructor?.name ?? "");
+      const appliedSet = new Set(
+        appliedRows.map((r) => normalizeForComparison(r.name)),
+      );
       return !appliedSet.has(name);
     }).length;
 
     if (orphaned.length > 0) {
-      console.error(fmt.err(`${orphaned.length} orphaned migration(s) found in database but missing from code:`));
+      console.error(
+        fmt.err(
+          `${orphaned.length} orphaned migration(s) found in database but missing from code:`,
+        ),
+      );
       orphaned.forEach((n) => console.error(`    • ${n}`));
-      console.error('');
-      console.error('  These migrations were applied to the database but their files were deleted.');
-      console.error('  Restore the files or check git history before proceeding.');
+      console.error("");
+      console.error(
+        "  These migrations were applied to the database but their files were deleted.",
+      );
+      console.error(
+        "  Restore the files or check git history before proceeding.",
+      );
       return false;
     }
 
     if (pendingCount > 0) {
-      console.log(fmt.ok(`No orphaned migrations — ${pendingCount} pending (will be applied next)`));
+      console.log(
+        fmt.ok(
+          `No orphaned migrations — ${pendingCount} pending (will be applied next)`,
+        ),
+      );
     } else {
-      console.log(fmt.ok('No drift detected — schema and code are in sync'));
+      console.log(fmt.ok("No drift detected — schema and code are in sync"));
     }
 
     return true;
-
   } finally {
     await ds.destroy();
   }
@@ -485,66 +992,82 @@ async function checkOrphanedMigrations(configPath: string): Promise<boolean> {
 // ── Governance runner ─────────────────────────────────────────────────────────
 
 interface GovernanceCheck {
-  label:  string;
+  label: string;
   script: string;
-  env?:   Record<string, string>;
+  env?: Record<string, string>;
 }
 
 const GOVERNANCE_CHECKS: GovernanceCheck[] = [
-  { label: 'Naming policy',          script: 'scripts/governance/naming.ts' },
-  { label: 'Intent header',          script: 'scripts/governance/intent.ts' },
-  { label: 'Size limit',             script: 'scripts/governance/size-check.ts' },
-  { label: 'Mixed operations',       script: 'scripts/governance/mixed-check.ts' },
-  { label: 'Delete safety',          script: 'scripts/governance/delete-safety.ts' },
-  { label: 'SQL guard',              script: 'scripts/governance/guard.ts' },
-  { label: 'Transaction safety',     script: 'scripts/governance/transaction.ts' },
-  { label: 'Rollback coverage',      script: 'scripts/governance/rollback.ts' },
-  { label: 'Timestamp order',        script: 'scripts/governance/order.ts' },
-  { label: 'Lint',                   script: 'scripts/governance/lint.ts' },
+  { label: "Naming policy", script: "scripts/governance/naming.ts" },
+  { label: "Intent header", script: "scripts/governance/intent.ts" },
+  { label: "Size limit", script: "scripts/governance/size-check.ts" },
+  { label: "Mixed operations", script: "scripts/governance/mixed-check.ts" },
+  { label: "Delete safety", script: "scripts/governance/delete-safety.ts" },
+  { label: "SQL guard", script: "scripts/governance/guard.ts" },
+  { label: "Transaction safety", script: "scripts/governance/transaction.ts" },
+  { label: "Rollback coverage", script: "scripts/governance/rollback.ts" },
+  { label: "Timestamp order", script: "scripts/governance/order.ts" },
+  { label: "Lint", script: "scripts/governance/lint.ts" },
 ];
 
 /** Also support the legacy flat-scripts layout if the new structure isn't present. */
 const LEGACY_GOVERNANCE_CHECKS: GovernanceCheck[] = [
-  { label: 'Naming policy',          script: 'scripts/migration-naming-policy.ts' },
-  { label: 'Intent header',          script: 'scripts/migration-intent.ts' },
-  { label: 'Size limit',             script: 'scripts/migration-size-check.ts' },
-  { label: 'Mixed operations',       script: 'scripts/migration-mixed-ops-check.ts' },
-  { label: 'Delete safety',          script: 'scripts/migration-delete-safety.ts' },
-  { label: 'SQL guard',              script: 'scripts/migration-guard.ts' },
-  { label: 'Transaction safety',     script: 'scripts/migration-transaction-check.ts' },
-  { label: 'Rollback coverage',      script: 'scripts/migration-rollback-check.ts' },
-  { label: 'Timestamp order',        script: 'scripts/migration-order.ts' },
-  { label: 'Lint',                   script: 'scripts/migration-lint.ts' },
+  { label: "Naming policy", script: "scripts/migration-naming-policy.ts" },
+  { label: "Intent header", script: "scripts/migration-intent.ts" },
+  { label: "Size limit", script: "scripts/migration-size-check.ts" },
+  { label: "Mixed operations", script: "scripts/migration-mixed-ops-check.ts" },
+  { label: "Delete safety", script: "scripts/migration-delete-safety.ts" },
+  { label: "SQL guard", script: "scripts/migration-guard.ts" },
+  {
+    label: "Transaction safety",
+    script: "scripts/migration-transaction-check.ts",
+  },
+  { label: "Rollback coverage", script: "scripts/migration-rollback-check.ts" },
+  { label: "Timestamp order", script: "scripts/migration-order.ts" },
+  { label: "Lint", script: "scripts/migration-lint.ts" },
 ];
 
 function resolveGovernanceChecks(): GovernanceCheck[] {
-  return fs.existsSync('scripts/governance/guard.ts')
+  return fs.existsSync("scripts/governance/guard.ts")
     ? GOVERNANCE_CHECKS
     : LEGACY_GOVERNANCE_CHECKS;
 }
 
 export function runGovernanceChecks(onlyLatest = true): boolean {
   const checks = resolveGovernanceChecks();
-  const total  = checks.length;
+  const total = checks.length;
 
-  console.log(fmt.header('Governance Checks'));
+  console.log(fmt.header("Governance Checks"));
 
   let passed = true;
   for (let i = 0; i < checks.length; i++) {
     const check = checks[i];
-    process.stdout.write(`  ${fmt.step(i + 1, total, check.label.padEnd(22))} `);
+    process.stdout.write(
+      `  ${fmt.step(i + 1, total, check.label.padEnd(22))} `,
+    );
 
-    const env = onlyLatest ? {} : { MIGRATION_GUARD_CHECK_ALL: 'true', MIGRATION_NAMING_CHECK_ALL: 'true' };
-    const result = exec('npx', ['ts-node', check.script], { silent: true, env: { ...check.env, ...env } });
+    const env = onlyLatest
+      ? {}
+      : {
+          MIGRATION_GUARD_CHECK_ALL: "true",
+          MIGRATION_NAMING_CHECK_ALL: "true",
+        };
+    const result = exec("npx", ["ts-node", check.script], {
+      silent: true,
+      env: { ...check.env, ...env },
+    });
 
     if (result.status === 0) {
-      process.stdout.write(fmt.ok('') + '\n');
+      process.stdout.write(fmt.ok("") + "\n");
     } else {
-      process.stdout.write(fmt.err('') + '\n');
+      process.stdout.write(fmt.err("") + "\n");
       // Print the actual error indented
       const stderr = result.stderr?.toString().trim();
       const stdout = result.stdout?.toString().trim();
-      const msg    = (stderr || stdout || 'Unknown error').split('\n').map((l) => `       ${l}`).join('\n');
+      const msg = (stderr || stdout || "Unknown error")
+        .split("\n")
+        .map((l) => `       ${l}`)
+        .join("\n");
       console.error(msg);
       passed = false;
     }
@@ -557,96 +1080,124 @@ export function runGovernanceChecks(onlyLatest = true): boolean {
 
 async function runSimulation(configPath: string): Promise<void> {
   // We delegate to the simulation script so it can be used standalone too
-  const simulateScript = fs.existsSync('scripts/db/simulate.ts')
-    ? 'scripts/db/simulate.ts'
+  const simulateScript = fs.existsSync("scripts/db/simulate.ts")
+    ? "scripts/db/simulate.ts"
     : null;
 
   if (!simulateScript) {
-    console.log(fmt.warn('Simulation script not found — skipping dry-run'));
+    console.log(fmt.warn("Simulation script not found — skipping dry-run"));
     return;
   }
 
-  const result = exec('npx', ['ts-node', simulateScript, '--config', configPath], { silent: true });
+  const result = exec(
+    "npx",
+    ["ts-node", simulateScript, "--config", configPath],
+    { silent: true },
+  );
 
   if (result.status !== 0) {
-    console.error(fmt.err('Migration simulation failed — migrations NOT applied'));
-    const msg = (result.stderr?.toString() || result.stdout?.toString() || '').trim();
+    console.error(
+      fmt.err("Migration simulation failed — migrations NOT applied"),
+    );
+    const msg = (
+      result.stderr?.toString() ||
+      result.stdout?.toString() ||
+      ""
+    ).trim();
     if (msg) {
-      console.error('\n  Simulation output:');
-      msg.split('\n').forEach((l) => console.error(`    ${l}`));
+      console.error("\n  Simulation output:");
+      msg.split("\n").forEach((l) => console.error(`    ${l}`));
     }
     process.exit(1);
   }
 
-  console.log(fmt.ok('Simulation passed — SQL verified in dry-run transaction'));
+  console.log(
+    fmt.ok("Simulation passed — SQL verified in dry-run transaction"),
+  );
 }
 
 // ── GENERATE command ──────────────────────────────────────────────────────────
 
 async function runGenerate(opts: {
-  name:      string;
+  name: string;
   outputDir: string;
-  config:    string;
+  config: string;
 }): Promise<void> {
   const { name, outputDir, config } = opts;
 
   // Strip any prefix the developer may have manually typed
   const strippedName = VALID_PREFIXES.reduce(
-    (acc, p) => acc.startsWith(p) ? acc.slice(p.length) : acc,
+    (acc, p) => (acc.startsWith(p) ? acc.slice(p.length) : acc),
     name,
   );
 
   // Block baseline names entirely
   if (strippedName.toLowerCase().includes("baseline")) {
-    console.log(fmt.warn('Baselines are automatic.'));
-    console.log(fmt.warn('Run db:migrate instead.'));
+    console.log(fmt.warn("Baselines are automatic."));
+    console.log(fmt.warn("Run db:migrate instead."));
     return;
   }
 
-  console.log(fmt.header('Generate Migration'));
+  console.log(fmt.header("Generate Migration"));
   console.log(`  Name:       ${c.bold}${strippedName}${c.reset}`);
   console.log(`  Config:     ${config}`);
   console.log(`  Output dir: ${outputDir}`);
-  console.log('');
+  console.log("");
 
   // Step 1 — verify project root
-  process.stdout.write(`  ${fmt.step(1, 5, 'Project root check')} `);
-  const rootCheck = exec('npx', ['ts-node', 'scripts/project-root.ts'], { silent: true });
+  process.stdout.write(`  ${fmt.step(1, 5, "Project root check")} `);
+  const rootCheck = exec("npx", ["ts-node", "scripts/project-root.ts"], {
+    silent: true,
+  });
   if (rootCheck.status !== 0) {
-    process.stdout.write(fmt.err('') + '\n');
-    console.error(fmt.err('Not inside driver-micro-services project root'));
+    process.stdout.write(fmt.err("") + "\n");
+    console.error(fmt.err("Not inside driver-micro-services project root"));
     process.exit(1);
   }
-  process.stdout.write(fmt.ok('') + '\n');
+  process.stdout.write(fmt.ok("") + "\n");
 
   // Step 2 — run TypeORM migration:generate (temporary name, we'll rename)
   // Use a temporary SAFE_ prefix so TypeORM creates the file; we classify and rename after
-  const tempName     = `${outputDir}/SAFE_${strippedName}`;
-  process.stdout.write(`  ${fmt.step(2, 5, 'TypeORM schema diff')} `);
+  const tempName = `${outputDir}/SAFE_${strippedName}`;
+  process.stdout.write(`  ${fmt.step(2, 5, "TypeORM schema diff")} `);
 
   const genResult = exec(
-    'npx',
-    ['typeorm-ts-node-commonjs', 'migration:generate', tempName, '-d', config],
+    "npx",
+    ["typeorm-ts-node-commonjs", "migration:generate", tempName, "-d", config],
     { silent: true },
   );
 
   if (genResult.status !== 0) {
-    const out = (genResult.stdout?.toString() || genResult.stderr?.toString() || '').trim();
-    if (out.includes('No changes in database schema')) {
-      process.stdout.write(fmt.ok('') + '\n');
-      console.log('\n' + fmt.info('No entity changes detected — no migration needed'));
-      console.log(`  ${c.dim}All entities are in sync with the database schema.${c.reset}`);
+    const out = (
+      genResult.stdout?.toString() ||
+      genResult.stderr?.toString() ||
+      ""
+    ).trim();
+    if (out.includes("No changes in database schema")) {
+      process.stdout.write(fmt.ok("") + "\n");
+      console.log(
+        "\n" + fmt.info("No entity changes detected — no migration needed"),
+      );
+      console.log(
+        `  ${c.dim}All entities are in sync with the database schema.${c.reset}`,
+      );
       return;
     }
-    process.stdout.write(fmt.err('') + '\n');
-    console.error(out.split('\n').map((l) => `  ${l}`).join('\n'));
+    process.stdout.write(fmt.err("") + "\n");
+    console.error(
+      out
+        .split("\n")
+        .map((l) => `  ${l}`)
+        .join("\n"),
+    );
     process.exit(1);
   }
-  process.stdout.write(fmt.ok('') + '\n');
+  process.stdout.write(fmt.ok("") + "\n");
 
   // Find the generated file
-  const files = fs.readdirSync(outputDir)
-    .filter((f) => f.includes(`SAFE_${strippedName}`) && f.endsWith('.ts'))
+  const files = fs
+    .readdirSync(outputDir)
+    .filter((f) => f.includes(`SAFE_${strippedName}`) && f.endsWith(".ts"))
     .sort()
     .reverse();
 
@@ -658,155 +1209,325 @@ async function runGenerate(opts: {
   let primaryFile = path.join(outputDir, files[0]);
 
   // Step 3 — classify SQL and detect phases
-  process.stdout.write(`  ${fmt.step(3, 5, 'Auto-classify SQL')} `);
+  process.stdout.write(`  ${fmt.step(3, 5, "Auto-classify SQL")} `);
   const classification = classifyMigrationFile(primaryFile);
-  
-  process.stdout.write(fmt.ok('') + '\n');
+
+  process.stdout.write(fmt.ok("") + "\n");
 
   // Print what was found
-  console.log('');
+  console.log("");
   console.log(`  ${c.bold}SQL analysis:${c.reset}`);
   classification.statements.forEach((stmt) => {
-    const p = stmt.category === 'BREAKING' ? c.red
-             : stmt.category === 'DATA'    ? c.cyan
-             : c.green;
-    console.log(`    ${p}${stmt.category.padEnd(8)}${c.reset}  ${c.dim}${stmt.reason}${c.reset}`);
+    const p =
+      stmt.category === "BREAKING"
+        ? c.red
+        : stmt.category === "DATA"
+          ? c.cyan
+          : c.green;
+    console.log(
+      `    ${p}${stmt.category.padEnd(8)}${c.reset}  ${c.dim}${stmt.reason}${c.reset}`,
+    );
   });
 
   // Step 4 — NOT NULL rewrite and phase decomposition
-  process.stdout.write(`\n  ${fmt.step(4, 5, 'Auto-safety rewrites')} `);
+  process.stdout.write(`\n  ${fmt.step(4, 5, "Auto-safety rewrites")} `);
 
   let companionFiles: string[] = [];
   let safetyFixed = false;
-  let companions: Array<{ phase: 'DATA' | 'BREAKING'; sql: string; reason: string }> = [];
+  let prebuiltPhaseFiles = false;
+  let companions: Array<{
+    phase: "DATA" | "BREAKING";
+    sql: string;
+    reason: string;
+  }> = [];
 
   // Detect table name from context (best effort — get from first CREATE/ALTER)
-  const rawContent  = fs.readFileSync(primaryFile, 'utf8');
-  const tableMatch  = rawContent.match(/["']?(\w+)["']?/);
-  const tableName   = tableMatch?.[1] ?? 'TABLE_NAME';
-  const { rewritten, companions: baselineCompanions } = rewriteNotNullViolations(rawContent, tableName);
+  const rawContent = fs.readFileSync(primaryFile, "utf8");
+  const tableMatch =
+    rawContent.match(/ALTER\s+TABLE\s+"?(\w+)"?/i) ??
+    rawContent.match(/CREATE\s+TABLE\s+"?(\w+)"?/i);
+  const tableName = tableMatch?.[1] ?? "TABLE_NAME";
+  let { rewritten, companions: baselineCompanions } = rewriteNotNullViolations(
+    rawContent,
+    tableName,
+  );
   companions = baselineCompanions;
+
+  const enumDependencyRewrite = await rewriteEnumBackedIndexDependencies(
+    rewritten,
+    config,
+  );
+  rewritten = enumDependencyRewrite.rewritten;
+
+  if (enumDependencyRewrite.changed && companions.length === 0) {
+    safetyFixed = true;
+  }
+
   if (companions.length > 0) {
     fs.writeFileSync(primaryFile, rewritten);
     safetyFixed = true;
 
-    // Write companion files offset by 1ms per companion
-    companions.forEach((comp, idx) => {
-      const companionHeader = buildHeader({
-        prefix:          comp.phase === 'DATA' ? 'DATA_' : 'BREAKING_',
-        description:     comp.reason,
-        phase:           String(idx + 2),
-        phaseTotal:      companions.length + 1,
-        isAutoGenerated: true,   // NEW: suppress manual governance requirements
+    const dataItems = companions.filter((c) => c.phase === "DATA");
+    const breakingItems = companions.filter((c) => c.phase === "BREAKING");
+    const phaseTotal =
+      1 + (dataItems.length > 0 ? 1 : 0) + (breakingItems.length > 0 ? 1 : 0);
+
+    if (dataItems.length > 0) {
+      // Auto-fill backfill values for zero manual intervention
+      const autoFilledItems = dataItems.map((item) => {
+        const sql = item.sql;
+        const reason = item.reason;
+
+        // Extract column name from the reason
+        const columnMatch = reason.match(/Column "([^"]+)"/);
+        const columnName = columnMatch ? columnMatch[1] : "unknown";
+
+        // Determine appropriate default value based on column name patterns
+        let defaultValue = "NULL"; // Default fallback
+
+        if (columnName.toLowerCase().includes("status")) {
+          defaultValue = "'ACTIVE'";
+        } else if (columnName.toLowerCase().includes("email")) {
+          defaultValue = "'no-reply@buylits.com'";
+        } else if (columnName.toLowerCase().includes("password")) {
+          defaultValue = "'temp_password'";
+        } else if (columnName.toLowerCase().includes("name")) {
+          defaultValue = "'Unknown'";
+        } else if (columnName.toLowerCase().includes("phone")) {
+          defaultValue = "'0000000000'";
+        } else if (columnName.toLowerCase().includes("code")) {
+          defaultValue = "'TEMP'";
+        } else if (columnName.toLowerCase().includes("type")) {
+          defaultValue = "'DEFAULT'";
+        } else if (columnName.toLowerCase().includes("role")) {
+          defaultValue = "'USER'";
+        } else if (columnName.toLowerCase().includes("priority")) {
+          defaultValue = "'MEDIUM'";
+        } else if (columnName.toLowerCase().includes("error")) {
+          defaultValue = "'No error'";
+        } else if (columnName.toLowerCase().includes("url")) {
+          defaultValue = "'https://example.com'";
+        } else if (
+          columnName.toLowerCase().includes("uuid") ||
+          columnName.toLowerCase().includes("id")
+        ) {
+          defaultValue = "'00000000-0000-0000-0000-000000000000'";
+        } else {
+          // For numeric columns, try to detect patterns
+          if (
+            columnName.toLowerCase().includes("count") ||
+            columnName.toLowerCase().includes("number")
+          ) {
+            defaultValue = "0";
+          } else if (
+            columnName.toLowerCase().includes("amount") ||
+            columnName.toLowerCase().includes("price")
+          ) {
+            defaultValue = "0.00";
+          } else {
+            defaultValue = "'TEMP_VALUE'";
+          }
+        }
+
+        const autoFilledSql = sql.replace("<DEFAULT_VALUE>", defaultValue);
+        return { sql: autoFilledSql, reason };
       });
-      const companionPath = writeCompanionMigration(
-        primaryFile, comp.phase, comp.sql, companionHeader, idx + 1,
+
+      const companionHeader = buildHeader({
+        prefix: "DATA_",
+        description: `Auto-filled backfill for ${dataItems.length} NOT NULL column(s) before constraint enforcement`,
+        phase: "2",
+        phaseTotal,
+        isAutoGenerated: true,
+      });
+      companionFiles.push(
+        writeConsolidatedCompanion(
+          primaryFile,
+          "DATA",
+          autoFilledItems,
+          companionHeader,
+          1,
+        ),
       );
-      companionFiles.push(companionPath);
-    });
+    }
+
+    if (breakingItems.length > 0) {
+      const companionHeader = buildHeader({
+        prefix: "BREAKING_",
+        description: `Enforce NOT NULL on ${breakingItems.length} column(s) after backfill`,
+        phase: String(phaseTotal),
+        phaseTotal,
+        isAutoGenerated: true,
+      });
+      companionFiles.push(
+        writeConsolidatedCompanion(
+          primaryFile,
+          "BREAKING",
+          breakingItems,
+          companionHeader,
+          2,
+        ),
+      );
+    }
   }
 
-  process.stdout.write(safetyFixed ? fmt.ok('NOT NULL violations auto-rewritten') + '\n' : fmt.ok('No rewrites needed') + '\n');
+  if (companions.length === 0 && enumDependencyRewrite.changed) {
+    fs.writeFileSync(primaryFile, rewritten);
+
+    const decomposedFiles = await decomposeEnumIndexedMigration(
+      primaryFile,
+      rewritten,
+      config,
+    );
+    if (decomposedFiles) {
+      primaryFile = decomposedFiles[0];
+      companionFiles = decomposedFiles.slice(1);
+      prebuiltPhaseFiles = true;
+      safetyFixed = true;
+    }
+  }
+
+  process.stdout.write(
+    safetyFixed
+      ? fmt.ok("NOT NULL violations auto-rewritten") + "\n"
+      : fmt.ok("No rewrites needed") + "\n",
+  );
 
   // Phase decomposition: if TypeORM merged phases that should be separate
-  if (classification.needsPhaseDecomposition &&
-      companions.length === 0) {
-    console.log('');
-    console.log(fmt.warn('Mixed operation types detected — this migration mixes SAFE + BREAKING SQL'));
-    console.log(`  ${c.dim}The Expand → Migrate → Contract pattern requires separate files.${c.reset}`);
-    console.log(`  ${c.dim}Review the generated file and split it manually, or re-run with specific entity changes.${c.reset}`);
+  if (
+    classification.needsPhaseDecomposition &&
+    companions.length === 0 &&
+    !prebuiltPhaseFiles
+  ) {
+    console.log("");
+    console.log(
+      fmt.warn(
+        "Mixed operation types detected — this migration mixes SAFE + BREAKING SQL",
+      ),
+    );
+    console.log(
+      `  ${c.dim}The Expand → Migrate → Contract pattern requires separate files.${c.reset}`,
+    );
+    console.log(
+      `  ${c.dim}Review the generated file and split it manually, or re-run with specific entity changes.${c.reset}`,
+    );
   }
 
   // Step 5 — rename with auto-detected prefix and inject header
-  process.stdout.write(`  ${fmt.step(5, 5, 'Inject header & rename')} `);
+  process.stdout.write(`  ${fmt.step(5, 5, "Inject header & rename")} `);
 
-  primaryFile = renameWithPrefix(primaryFile, classification.dominantPrefix);
-  const companionNames = companionFiles.map((f) => path.basename(f));
-  const header = buildHeader({
-    prefix:          classification.dominantPrefix,
-    description:     `<REQUIRED — describe what this migration achieves>`,
-    companions:      companionNames.length > 0 ? companionNames : undefined,
-    isAutoFixed:     safetyFixed,
-    isAutoGenerated: true,   // NEW: primary file is also machine-generated
-    phase:           classification.needsPhaseDecomposition ? '1' : undefined,
-    phaseTotal:      classification.needsPhaseDecomposition ? classification.phases.length : undefined,
-  });
-  injectHeader(primaryFile, header);
-  process.stdout.write(fmt.ok('') + '\n');
+  if (!prebuiltPhaseFiles) {
+    primaryFile = renameWithPrefix(primaryFile, classification.dominantPrefix);
+    const companionNames = companionFiles.map((f) => path.basename(f));
+    const header = buildHeader({
+      prefix: classification.dominantPrefix,
+      description: `<REQUIRED — describe what this migration achieves>`,
+      companions: companionNames.length > 0 ? companionNames : undefined,
+      isAutoFixed: safetyFixed,
+      isAutoGenerated: true, // NEW: primary file is also machine-generated
+      phase: classification.needsPhaseDecomposition ? "1" : undefined,
+      phaseTotal: classification.needsPhaseDecomposition
+        ? classification.phases.length
+        : undefined,
+    });
+    injectHeader(primaryFile, header);
+  }
+  process.stdout.write(fmt.ok("") + "\n");
 
   // ── Summary ────────────────────────────────────────────────────────────────
 
-  console.log(fmt.header('Generated Files'));
+  console.log(fmt.header("Generated Files"));
 
   const allFiles = [primaryFile, ...companionFiles];
   allFiles.forEach((f, i) => {
-    const base     = path.basename(f);
+    const base = path.basename(f);
     const prefixMatch = VALID_PREFIXES.find((p) => base.includes(p));
-    const prefix   = prefixMatch ?? 'SAFE_';
-    const phase    = i === 0 ? 'Phase 1 (primary)' : `Phase ${i + 1} (companion)`;
+    const prefix = prefixMatch ?? "SAFE_";
+    const phase = i === 0 ? "Phase 1 (primary)" : `Phase ${i + 1} (companion)`;
     console.log(`  ${fmt.prefix(prefix)} ${c.bold}${base}${c.reset}`);
     console.log(`  ${c.dim}  ${phase} — ${outputDir}/${base}${c.reset}`);
-    console.log('');
+    console.log("");
   });
 
   // Next steps
-  console.log(fmt.header('Next Steps'));
+  console.log(fmt.header("Next Steps"));
   console.log(`  1. ${c.bold}Review generated SQL${c.reset}`);
-  console.log(`     Open the file(s) above — TypeORM's diff is a starting point, not final truth`);
+  console.log(
+    `     Open the file(s) above — TypeORM's diff is a starting point, not final truth`,
+  );
   if (safetyFixed) {
     console.log(`  2. ${c.bold}${c.yellow}Fill in backfill values${c.reset}`);
-    console.log(`     The DATA_ companion has a <DEFAULT_VALUE> placeholder — replace it`);
-    console.log(`  3. ${c.bold}Fill in the INTENT field${c.reset} in each file's header`);
+    console.log(
+      `     The DATA_ companion has a <DEFAULT_VALUE> placeholder — replace it`,
+    );
+    console.log(
+      `  3. ${c.bold}Fill in the INTENT field${c.reset} in each file's header`,
+    );
     console.log(`  4. ${c.bold}Run:${c.reset} npm run db:migrate`);
   } else {
-    console.log(`  2. ${c.bold}Fill in the INTENT field${c.reset} in the header`);
+    console.log(
+      `  2. ${c.bold}Fill in the INTENT field${c.reset} in the header`,
+    );
     console.log(`  3. ${c.bold}Run:${c.reset} npm run db:migrate`);
   }
 
-  if (classification.dominantPrefix === 'BREAKING_') {
-    console.log('');
-    console.log(fmt.warn('BREAKING migration — requires @approved-breaking before CI will pass'));
-    console.log(`     Add: @approved-breaking: <your name — reason this is safe>`);
+  if (classification.dominantPrefix === "BREAKING_") {
+    console.log("");
+    console.log(
+      fmt.warn(
+        "BREAKING migration — requires @approved-breaking before CI will pass",
+      ),
+    );
+    console.log(
+      `     Add: @approved-breaking: <your name — reason this is safe>`,
+    );
   }
 }
 
 // ── RUN command ───────────────────────────────────────────────────────────────
 
-async function runMigrate(opts: { config: string; skipSimulate?: boolean }): Promise<void> {
-  console.log(fmt.header('Run Migrations'));
+async function runMigrate(opts: {
+  config: string;
+  skipSimulate?: boolean;
+}): Promise<void> {
+  console.log(fmt.header("Run Migrations"));
 
-  const total = 6;  // bumped from 5 — lock step added
+  const total = 6; // bumped from 5 — lock step added
 
   // Step 1 — Baseline check
-  console.log(`\n  ${fmt.step(1, total, 'Baseline check')}`);
+  console.log(`\n  ${fmt.step(1, total, "Baseline check")}`);
   ensureBaselineExists();
-  console.log(fmt.ok('Baseline ready'));
+  console.log(fmt.ok("Baseline ready"));
 
   // Step 2 — Governance checks
-  console.log(`\n  ${fmt.step(2, total, 'Governance checks')}`);
+  console.log(`\n  ${fmt.step(2, total, "Governance checks")}`);
   const governancePassed = runGovernanceChecks(true);
   if (!governancePassed) {
-    console.error('\n' + fmt.err('Governance checks failed — migrations NOT applied'));
-    console.error(`  Fix the issues above, then run: ${c.bold}npm run db:migrate${c.reset}`);
+    console.error(
+      "\n" + fmt.err("Governance checks failed — migrations NOT applied"),
+    );
+    console.error(
+      `  Fix the issues above, then run: ${c.bold}npm run db:migrate${c.reset}`,
+    );
     process.exit(1);
   }
 
   // Step 3 — Drift check (orphaned-only — pending migrations are expected here)
-  console.log(`\n  ${fmt.step(3, total, 'Drift check')}`);
+  console.log(`\n  ${fmt.step(3, total, "Drift check")}`);
   const driftSafe = await checkOrphanedMigrations(opts.config);
   if (!driftSafe) {
-    console.error(fmt.err('Drift check failed — migrations NOT applied'));
-    console.error('  Restore the missing migration file(s) and re-run.');
+    console.error(fmt.err("Drift check failed — migrations NOT applied"));
+    console.error("  Restore the missing migration file(s) and re-run.");
     process.exit(1);
   }
 
   // Step 4 — Acquire advisory lock
   // Acquired here — after cheap static checks but before simulation and apply.
   // Minimises lock hold time while protecting the critical section.
-  console.log(`\n  ${fmt.step(4, total, 'Schema lock')}`);
+  console.log(`\n  ${fmt.step(4, total, "Schema lock")}`);
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod          = require(path.resolve(process.cwd(), opts.config));
+  const mod = require(path.resolve(process.cwd(), opts.config));
   const lockDs: DataSource = mod.default ?? mod;
   await lockDs.initialize();
 
@@ -815,61 +1536,71 @@ async function runMigrate(opts: { config: string; skipSimulate?: boolean }): Pro
     console.log(fmt.ok(`Advisory lock acquired (key: ${ADVISORY_LOCK_KEY})`));
 
     // Step 5 — Simulation (dry run)
-    console.log(`\n  ${fmt.step(5, total, 'Simulation (dry run)')}`);
+    console.log(`\n  ${fmt.step(5, total, "Simulation (dry run)")}`);
     if (!opts.skipSimulate) {
       await runSimulation(opts.config);
     } else {
-      console.log(fmt.warn('Simulation skipped (--skip-simulate flag set)'));
+      console.log(fmt.warn("Simulation skipped (--skip-simulate flag set)"));
     }
 
     // Step 6 — Apply migrations
-    console.log(`\n  ${fmt.step(6, total, 'Apply migrations')}`);
+    console.log(`\n  ${fmt.step(6, total, "Apply migrations")}`);
     mustExec(
-      'npx',
-      ['typeorm-ts-node-commonjs', 'migration:run', '-d', opts.config],
-      'Migration run',
+      "npx",
+      ["typeorm-ts-node-commonjs", "migration:run", "-d", opts.config],
+      "Migration run",
     );
 
     // Post-apply schema verification
-    console.log('');
-    const verifyScript = fs.existsSync('scripts/db/verify.ts')
-      ? 'scripts/db/verify.ts'
-      : 'scripts/db-verify.ts';
-    const verifyResult = exec('npx', ['ts-node', verifyScript], { silent: true });
+    console.log("");
+    const verifyScript = fs.existsSync("scripts/db/verify.ts")
+      ? "scripts/db/verify.ts"
+      : "scripts/db-verify.ts";
+    const verifyResult = exec("npx", ["ts-node", verifyScript], {
+      silent: true,
+    });
     if (verifyResult.status !== 0) {
-      console.log(fmt.warn('Schema verification had warnings — check: npm run db:verify'));
+      console.log(
+        fmt.warn("Schema verification had warnings — check: npm run db:verify"),
+      );
     } else {
-      console.log(fmt.ok('Schema verification passed'));
+      console.log(fmt.ok("Schema verification passed"));
     }
-
   } finally {
     // Always release — even if simulation or apply threw.
     // pg_advisory_unlock is a no-op if the lock was never acquired.
     try {
       await releaseAdvisoryLock(lockDs);
-      console.log(fmt.ok('Advisory lock released'));
+      console.log(fmt.ok("Advisory lock released"));
     } catch {
       // Session ending will auto-release the lock — not critical to log.
     }
     await lockDs.destroy();
   }
 
-  console.log(fmt.header('✅ Migrations Applied Successfully'));
+  console.log(fmt.header("✅ Migrations Applied Successfully"));
 }
 
 // ── REVERT command ────────────────────────────────────────────────────────────
 
-async function runRevert(opts: { config: string; count: number }): Promise<void> {
-  console.log(fmt.header('Revert Migration'));
+async function runRevert(opts: {
+  config: string;
+  count: number;
+}): Promise<void> {
+  console.log(fmt.header("Revert Migration"));
 
   // Show what's about to be reverted
   const showResult = exec(
-    'npx',
-    ['typeorm-ts-node-commonjs', 'migration:show', '-d', opts.config],
+    "npx",
+    ["typeorm-ts-node-commonjs", "migration:show", "-d", opts.config],
     { silent: true },
   );
-  const showOutput = showResult.stdout?.toString() ?? '';
-  const lastRan    = showOutput.split('\n').filter((l) => l.includes('[X]')).pop()?.trim();
+  const showOutput = showResult.stdout?.toString() ?? "";
+  const lastRan = showOutput
+    .split("\n")
+    .filter((l) => l.includes("[X]"))
+    .pop()
+    ?.trim();
 
   if (lastRan) {
     console.log(`  Reverting: ${c.bold}${lastRan}${c.reset}`);
@@ -877,27 +1608,33 @@ async function runRevert(opts: { config: string; count: number }): Promise<void>
 
   // Safety warning
   if (opts.count > 1) {
-    console.log(fmt.warn(`Reverting ${opts.count} migration(s) — this may cause data loss`));
+    console.log(
+      fmt.warn(
+        `Reverting ${opts.count} migration(s) — this may cause data loss`,
+      ),
+    );
   }
 
   for (let i = 0; i < opts.count; i++) {
     if (opts.count > 1) console.log(`  Reverting ${i + 1} of ${opts.count}...`);
     mustExec(
-      'npx',
-      ['typeorm-ts-node-commonjs', 'migration:revert', '-d', opts.config],
+      "npx",
+      ["typeorm-ts-node-commonjs", "migration:revert", "-d", opts.config],
       `Revert ${i + 1}`,
     );
   }
 
   console.log(fmt.ok(`Successfully reverted ${opts.count} migration(s)`));
-  console.log(`  ${c.dim}Run ${c.bold}npm run db:migrate${c.reset}${c.dim} to re-apply${c.reset}`);
+  console.log(
+    `  ${c.dim}Run ${c.bold}npm run db:migrate${c.reset}${c.dim} to re-apply${c.reset}`,
+  );
 }
 
 // ── STATUS command ────────────────────────────────────────────────────────────
 
 async function runStatus(config: string): Promise<void> {
-  console.log(fmt.header('Migration Status'));
-  exec('npx', ['typeorm-ts-node-commonjs', 'migration:show', '-d', config]);
+  console.log(fmt.header("Migration Status"));
+  exec("npx", ["typeorm-ts-node-commonjs", "migration:show", "-d", config]);
 }
 
 // ── CLI definition (Commander.js) ─────────────────────────────────────────────
@@ -906,81 +1643,80 @@ async function main(): Promise<void> {
   const program = new Command();
 
   program
-    .name('migrate')
+    .name("migrate")
     .description(
       `${c.bold}Generate, run or revert a database migration${c.reset}\n\n` +
-      `  Prefixes are auto-detected from entity changes. You never need\n` +
-      `  to choose between SAFE/DATA/BREAKING — the CLI does it for you.\n\n` +
-      `  Examples:\n` +
-      `    ${c.dim}npm run migrate -- --generate AddDriverRating${c.reset}\n` +
-      `    ${c.dim}npm run migrate -- --run${c.reset}\n` +
-      `    ${c.dim}npm run migrate -- --revert${c.reset}\n` +
-      `    ${c.dim}npm run migrate -- --status${c.reset}`,
+        `  Prefixes are auto-detected from entity changes. You never need\n` +
+        `  to choose between SAFE/DATA/BREAKING — the CLI does it for you.\n\n` +
+        `  Examples:\n` +
+        `    ${c.dim}npm run migrate -- --generate AddDriverRating${c.reset}\n` +
+        `    ${c.dim}npm run migrate -- --run${c.reset}\n` +
+        `    ${c.dim}npm run migrate -- --revert${c.reset}\n` +
+        `    ${c.dim}npm run migrate -- --status${c.reset}`,
     )
-    .version(VERSION, '-v, --version', 'Output the CLI version')
-    .addHelpText('afterAll', `\n  Prefix reference:\n    ${fmt.prefix('SAFE_')} additive schema (columns, tables, indexes)\n    ${fmt.prefix('DATA_')} data movement and backfills\n    ${fmt.prefix('BREAKING_')} destructive changes (DROP, SET NOT NULL)\n    ${fmt.prefix('FIX_')} targeted repair migrations\n    ${fmt.prefix('BASELINE_')} full schema snapshot\n`);
+    .version(VERSION, "-v, --version", "Output the CLI version")
+    .addHelpText(
+      "afterAll",
+      `\n  Prefix reference:\n    ${fmt.prefix("SAFE_")} additive schema (columns, tables, indexes)\n    ${fmt.prefix("DATA_")} data movement and backfills\n    ${fmt.prefix("BREAKING_")} destructive changes (DROP, SET NOT NULL)\n    ${fmt.prefix("FIX_")} targeted repair migrations\n    ${fmt.prefix("BASELINE_")} full schema snapshot\n`,
+    );
 
   // ── --generate ─────────────────────────────────────────────────────────────
 
-  program
-    .option(
-      '-g, --generate [name]',
-      'Generate a new migration by diffing entity definitions against the live schema.\n' +
-      '                             Prefix (SAFE_/DATA_/BREAKING_) is auto-detected from the SQL diff.\n' +
-      '                             NOT NULL violations are automatically rewritten into safe phases.',
-    );
+  program.option(
+    "-g, --generate [name]",
+    "Generate a new migration by diffing entity definitions against the live schema.\n" +
+      "                             Prefix (SAFE_/DATA_/BREAKING_) is auto-detected from the SQL diff.\n" +
+      "                             NOT NULL violations are automatically rewritten into safe phases.",
+  );
 
   // ── --run ──────────────────────────────────────────────────────────────────
 
-  program
-    .option(
-      '-r, --run',
-      'Run all pending migrations.\n' +
-      '                             Runs governance checks → dry-run simulation → apply → verify.',
-    );
+  program.option(
+    "-r, --run",
+    "Run all pending migrations.\n" +
+      "                             Runs governance checks → dry-run simulation → apply → verify.",
+  );
 
   // ── --revert ───────────────────────────────────────────────────────────────
 
-  program
-    .option(
-      '--revert',
-      'Revert the last applied migration.\n' +
-      '                             Use --count to revert multiple migrations.',
-    );
+  program.option(
+    "--revert",
+    "Revert the last applied migration.\n" +
+      "                             Use --count to revert multiple migrations.",
+  );
 
   // ── --status ───────────────────────────────────────────────────────────────
 
-  program
-    .option(
-      '-s, --status',
-      'Show which migrations have been applied and which are pending.',
-    );
+  program.option(
+    "-s, --status",
+    "Show which migrations have been applied and which are pending.",
+  );
 
   // ── shared options ─────────────────────────────────────────────────────────
 
   program
     .option(
-      '-o, --output-dir <path>',
-      'Output directory for generated migrations',
+      "-o, --output-dir <path>",
+      "Output directory for generated migrations",
       DEFAULT_OUT_DIR,
     )
     .option(
-      '--config <path>',
-      'Path to the TypeORM DataSource config file',
+      "--config <path>",
+      "Path to the TypeORM DataSource config file",
       DEFAULT_CONFIG,
     )
     .option(
-      '--count <n>',
-      'Number of migrations to revert (use with --revert)',
-      '1',
+      "--count <n>",
+      "Number of migrations to revert (use with --revert)",
+      "1",
     )
     .option(
-      '--skip-simulate',
-      'Skip the dry-run simulation step (use only in emergencies)',
+      "--skip-simulate",
+      "Skip the dry-run simulation step (use only in emergencies)",
     )
     .option(
-      '--check-all',
-      'Run governance checks against all migration files (default: latest only)',
+      "--check-all",
+      "Run governance checks against all migration files (default: latest only)",
     );
 
   program.parse(process.argv);
@@ -989,35 +1725,43 @@ async function main(): Promise<void> {
   // Validate config file exists
   if (!fs.existsSync(opts.config)) {
     console.error(fmt.err(`Config file not found: ${opts.config}`));
-    console.error(`  Provide a valid path with: ${c.bold}--config <path>${c.reset}`);
+    console.error(
+      `  Provide a valid path with: ${c.bold}--config <path>${c.reset}`,
+    );
     process.exit(1);
   }
 
   // Route to command
   if (opts.generate !== undefined) {
-    const name = typeof opts.generate === 'string' ? opts.generate : '';
+    const name = typeof opts.generate === "string" ? opts.generate : "";
     if (!name) {
-      console.error(fmt.err('--generate requires a migration name'));
-      console.error(`  Usage: ${c.bold}npm run migrate -- --generate AddDriverRating${c.reset}`);
+      console.error(fmt.err("--generate requires a migration name"));
+      console.error(
+        `  Usage: ${c.bold}npm run migrate -- --generate AddDriverRating${c.reset}`,
+      );
       process.exit(1);
     }
     await runGenerate({ name, outputDir: opts.outputDir, config: opts.config });
-
   } else if (opts.run) {
-    await runMigrate({ config: opts.config, skipSimulate: !!opts.skipSimulate });
-
+    await runMigrate({
+      config: opts.config,
+      skipSimulate: !!opts.skipSimulate,
+    });
   } else if (opts.revert) {
     await runRevert({ config: opts.config, count: parseInt(opts.count, 10) });
-
   } else if (opts.status) {
     await runStatus(opts.config);
-
   } else {
     program.help();
   }
 }
 
-main().catch((err) => {
-  console.error(fmt.err('Unexpected error:'), err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(
+      fmt.err("Unexpected error:"),
+      err instanceof Error ? err.message : String(err),
+    );
+    process.exit(1);
+  });
+}

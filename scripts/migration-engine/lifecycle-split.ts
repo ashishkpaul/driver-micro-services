@@ -70,7 +70,16 @@ export class LifecycleSplitter {
         continue;
       }
 
-      // 4. Standard Classification for everything else
+      // 4. Handle Enum-backed Partial Index Dependencies (NEW!)
+      if (this.isEnumIndexDependency(operation.sql)) {
+        const split = this.rewriteEnumIndexDependency(operation);
+        phases[0].operations.push(...split.safe);
+        phases[1].operations.push(...split.data);
+        phases[2].operations.push(...split.breaking);
+        continue;
+      }
+
+      // 5. Standard Classification for everything else
       const classification = this.classify(operation.sql);
       if (classification === "SAFE") {
         phases[0].operations.push(operation);
@@ -108,6 +117,22 @@ export class LifecycleSplitter {
    */
   private isTypeChange(sql: string): boolean {
     return /ALTER\s+COLUMN.*TYPE/i.test(sql);
+  }
+
+  /**
+   * Detects enum-backed partial index dependencies that need splitting
+   */
+  private isEnumIndexDependency(sql: string): boolean {
+    // Detect enum type rebuild operations that affect partial indexes
+    return (
+      /ALTER\s+TYPE\s+"public"\."outbox_(status|priority)_enum"\s+RENAME\s+TO/i.test(
+        sql,
+      ) ||
+      /CREATE\s+TYPE\s+"public"\."outbox_(status|priority)_enum"\s+AS\s+ENUM/i.test(
+        sql,
+      ) ||
+      /DROP\s+TYPE\s+"public"\."outbox_(status|priority)_enum_old"/i.test(sql)
+    );
   }
 
   /**
@@ -288,6 +313,172 @@ export class LifecycleSplitter {
         },
       ],
     };
+  }
+
+  /**
+   * Splits enum-backed partial index dependencies into safe phases
+   * Pattern: Enum type rebuild operations that affect partial indexes
+   * Into:
+   * SAFE: Drop dependent partial indexes first
+   * DATA: Rebuild enum types safely
+   * BREAKING: Recreate dependent partial indexes last
+   */
+  private rewriteEnumIndexDependency(
+    operation: SchemaOperation,
+  ): MigrationLifecycleSet {
+    const sql = operation.sql;
+
+    // Extract enum type name from SQL
+    const enumMatch = sql.match(/outbox_(status|priority)_enum/i);
+    if (!enumMatch) return { safe: [operation], data: [], breaking: [] };
+
+    const enumType = enumMatch[0];
+    const tableName = "outbox";
+
+    // Determine if this is a rename, create, or drop operation
+    if (/ALTER\s+TYPE.*RENAME.*TO.*_old/i.test(sql)) {
+      // Phase 1: Drop dependent partial indexes
+      const safeOps = [
+        {
+          sql: `DROP INDEX IF EXISTS idx_outbox_worker`,
+          category: "SAFE" as const,
+          reason: `Drop partial index depending on ${enumType} before enum rename`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+        {
+          sql: `DROP INDEX IF EXISTS idx_outbox_locked`,
+          category: "SAFE" as const,
+          reason: `Drop partial index depending on ${enumType} before enum rename`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+      ];
+
+      // Phase 2: Perform enum rename (this is the original operation)
+      const dataOps = [operation];
+
+      // Phase 3: Recreate partial indexes
+      const breakingOps = [
+        {
+          sql: `CREATE INDEX idx_outbox_worker ON "${tableName}" ("status", "next_retry_at") WHERE (status = 'PENDING'::${enumType})`,
+          category: "BREAKING" as const,
+          reason: `Recreate partial index after ${enumType} rename`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+        {
+          sql: `CREATE INDEX idx_outbox_locked ON "${tableName}" ("locked_at") WHERE (status = 'PROCESSING'::${enumType})`,
+          category: "BREAKING" as const,
+          reason: `Recreate partial index after ${enumType} rename`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+      ];
+
+      return { safe: safeOps, data: dataOps, breaking: breakingOps };
+    }
+
+    if (/CREATE\s+TYPE.*ENUM/i.test(sql)) {
+      // Phase 1: Drop dependent partial indexes
+      const safeOps = [
+        {
+          sql: `DROP INDEX IF EXISTS idx_outbox_worker`,
+          category: "SAFE" as const,
+          reason: `Drop partial index depending on ${enumType} before enum create`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+        {
+          sql: `DROP INDEX IF EXISTS idx_outbox_locked`,
+          category: "SAFE" as const,
+          reason: `Drop partial index depending on ${enumType} before enum create`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+      ];
+
+      // Phase 2: Create new enum type (this is the original operation)
+      const dataOps = [operation];
+
+      // Phase 3: Recreate partial indexes
+      const breakingOps = [
+        {
+          sql: `CREATE INDEX idx_outbox_worker ON "${tableName}" ("status", "next_retry_at") WHERE (status = 'PENDING'::${enumType})`,
+          category: "BREAKING" as const,
+          reason: `Recreate partial index after ${enumType} create`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+        {
+          sql: `CREATE INDEX idx_outbox_locked ON "${tableName}" ("locked_at") WHERE (status = 'PROCESSING'::${enumType})`,
+          category: "BREAKING" as const,
+          reason: `Recreate partial index after ${enumType} create`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+      ];
+
+      return { safe: safeOps, data: dataOps, breaking: breakingOps };
+    }
+
+    if (/DROP\s+TYPE.*_old/i.test(sql)) {
+      // Phase 1: Drop dependent partial indexes
+      const safeOps = [
+        {
+          sql: `DROP INDEX IF EXISTS idx_outbox_worker`,
+          category: "SAFE" as const,
+          reason: `Drop partial index depending on ${enumType} before enum drop`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+        {
+          sql: `DROP INDEX IF EXISTS idx_outbox_locked`,
+          category: "SAFE" as const,
+          reason: `Drop partial index depending on ${enumType} before enum drop`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+      ];
+
+      // Phase 2: Drop old enum type (this is the original operation)
+      const dataOps = [operation];
+
+      // Phase 3: Recreate partial indexes
+      const breakingOps = [
+        {
+          sql: `CREATE INDEX idx_outbox_worker ON "${tableName}" ("status", "next_retry_at") WHERE (status = 'PENDING'::${enumType})`,
+          category: "BREAKING" as const,
+          reason: `Recreate partial index after ${enumType} drop`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+        {
+          sql: `CREATE INDEX idx_outbox_locked ON "${tableName}" ("locked_at") WHERE (status = 'PROCESSING'::${enumType})`,
+          category: "BREAKING" as const,
+          reason: `Recreate partial index after ${enumType} drop`,
+          metadata: operation.metadata,
+          dependencies: [],
+          conflicts: [],
+        },
+      ];
+
+      return { safe: safeOps, data: dataOps, breaking: breakingOps };
+    }
+
+    // If not a recognized enum operation, return original
+    return { safe: [operation], data: [], breaking: [] };
   }
 
   /**

@@ -28,7 +28,10 @@ export class OutboxArchiveEvent {
   @Column({ default: 0 })
   retryCount: number;
 
-  @Column({ nullable: true })
+  @Column({
+    type: "varchar",
+    nullable: true,
+  })
   lastError?: string;
 
   @Column({ nullable: true })

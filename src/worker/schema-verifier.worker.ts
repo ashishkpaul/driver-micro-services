@@ -243,7 +243,7 @@ export class SchemaVerifierWorker {
         // Check indexes
         for (const expectedIndex of expectedTable.indexes) {
           const currentIndex = currentTable.indexes.find(
-            (i) => i.name === expectedIndex,
+            (i) => i === expectedIndex,
           );
 
           if (!currentIndex) {

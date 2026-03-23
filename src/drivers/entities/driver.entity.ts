@@ -38,7 +38,7 @@ export class Driver {
   @Column({ name: "is_active", type: "boolean", default: true })
   isActive!: boolean;
 
-  @Index("idx_drivers_status")
+  // @Index("idx_drivers_status")
   @Column({
     type: "enum",
     enum: DriverStatus,

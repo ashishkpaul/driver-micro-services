@@ -54,7 +54,7 @@ export async function buildEntitySnapshot(
           nullable: column.isNullable,
           default: column.default as string | undefined,
           primaryKey: column.isPrimary,
-          unique: column.isUnique || false,
+          unique: (column as any).isUnique || false,
         };
         table.columns.push(columnSchema);
       }
