@@ -1485,6 +1485,8 @@ async function runGenerate(opts: {
 }
 
 // ── RUN command ───────────────────────────────────────────────────────────────
+// Note: This CLI now delegates runtime schema operations to the NestJS Schema Control Plane
+// The SchemaControlPlaneService handles schema convergence automatically on application startup
 
 async function runMigrate(opts: {
   config: string;

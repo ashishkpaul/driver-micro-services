@@ -17,6 +17,7 @@ import { AuthModule } from "./auth/auth.module";
 import { AdminModule } from "./modules/admin.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { DomainEventsApiModule } from "./domain-events/domain-events.module";
+import { SchemaModule } from "./schema/schema.module";
 
 @Module({
   imports: [

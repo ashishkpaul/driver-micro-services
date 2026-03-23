@@ -12,6 +12,7 @@ import { PushModule } from "../push/push.module";
 import { WebSocketModule } from "../websocket/websocket.module";
 import { DeadLetterWorker } from "./dead-letter.worker";
 import { ServicesModule } from "../services/services.module";
+import { SchemaModule } from "../schema/schema.module";
 
 @Module({
   imports: [
