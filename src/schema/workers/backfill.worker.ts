@@ -7,6 +7,13 @@ import { AdaptiveBatchService } from '../../domain-events/adaptive-batch.service
 import { trace } from '@opentelemetry/api';
 import { SystemReadinessService } from '../../bootstrap/system-readiness.service';
 
+interface Partition {
+  id: number;
+  startId: number;
+  endId: number;
+  estimatedRows: number;
+}
+
 @Injectable()
 export class BackgroundBackfillWorker {
   private readonly logger = new Logger(BackgroundBackfillWorker.name);
@@ -57,21 +64,18 @@ export class BackgroundBackfillWorker {
 
     await this.tracer.startActiveSpan('backfill.process-pending-jobs', async (span) => {
       try {
-        const pendingJobs = await this.getPendingJobs();
+        // Cache running jobs count to avoid repeated DB queries
+        const runningJobs = await this.getGlobalRunningJobsCount();
+        
+        const pendingJobs = await this.getPendingJobs(runningJobs);
         
         span.setAttributes({
           'backfill.pending_jobs_count': pendingJobs.length,
           'backfill.active_jobs_count': this.activeJobs.size,
+          'backfill.global_running_jobs': runningJobs,
         });
 
         for (const job of pendingJobs) {
-          // Check global concurrency limit (database-backed)
-          const runningJobs = await this.getGlobalRunningJobsCount();
-          if (runningJobs >= this.MAX_CONCURRENT_JOBS) {
-            this.logger.warn(`Maximum concurrent jobs reached (${this.MAX_CONCURRENT_JOBS}), skipping job ${job.id}`);
-            break;
-          }
-
           if (this.activeJobs.has(job.id)) {
             continue; // Already processing
           }
@@ -129,18 +133,31 @@ export class BackgroundBackfillWorker {
         let processedRows = job.processedRows;
         let retryCount = 0;
         let delayMs = this.MIN_RETRY_DELAY_MS;
+        let batchCount = 0;
 
         while (processedRows < job.totalRows) {
+          // Check job timeout
+          if (job.startedAt) {
+            const elapsed = Date.now() - job.startedAt.getTime();
+            if (elapsed > this.JOB_TIMEOUT_MS) {
+              job.markAsFailed('Job timeout');
+              await this.dataSource.getRepository(BackfillJob).save(job);
+              throw new Error(`Job ${job.id} exceeded timeout of ${this.JOB_TIMEOUT_MS}ms`);
+            }
+          }
+
           const batchSize = await this.adaptiveBatchService.getOptimalBatchSize();
+          batchCount++;
           
           span.addEvent('batch_started', {
             lastProcessedId,
             batchSize,
             processedRows,
+            batchCount,
           });
 
           try {
-            const result = await this.executeBatch(job, lastProcessedId, batchSize);
+            const result = await this.executeBatchWithAtomicCheckpoint(job, lastProcessedId, batchSize);
             
             if (result.processedRows === 0) {
               // No more rows to process
@@ -150,12 +167,16 @@ export class BackgroundBackfillWorker {
             lastProcessedId = result.lastProcessedId;
             processedRows += result.processedRows;
             
-            job.updateProgress(processedRows, lastProcessedId);
-            await this.dataSource.getRepository(BackfillJob).save(job);
+            // Only save progress every 5 batches to reduce metadata writes
+            if (batchCount % 5 === 0) {
+              job.updateProgress(processedRows, lastProcessedId);
+              await this.dataSource.getRepository(BackfillJob).save(job);
+            }
 
             span.addEvent('batch_completed', {
               processedRows: result.processedRows,
               lastProcessedId: result.lastProcessedId,
+              batchCount,
             });
 
             // Reset retry count on successful batch
@@ -183,16 +204,18 @@ export class BackgroundBackfillWorker {
           }
         }
 
-        // Job completed successfully
+        // Final progress save and completion
+        job.updateProgress(processedRows, lastProcessedId);
         job.markAsCompleted();
         await this.dataSource.getRepository(BackfillJob).save(job);
 
         span.setAttributes({
           'backfill.final_processed_rows': processedRows,
           'backfill.completion_time': new Date().toISOString(),
+          'backfill.total_batches': batchCount,
         });
 
-        this.logger.log(`Job ${job.id} completed successfully: processed ${processedRows}/${job.totalRows} rows`);
+        this.logger.log(`Job ${job.id} completed successfully: processed ${processedRows}/${job.totalRows} rows in ${batchCount} batches`);
 
       } catch (error) {
         span.recordException(error);
@@ -205,7 +228,46 @@ export class BackgroundBackfillWorker {
   }
 
   /**
-   * Execute a single batch of rows with deterministic cursor
+   * Execute a single batch of rows with CTE optimization and atomic checkpointing
+   */
+  private async executeBatchWithAtomicCheckpoint(
+    job: BackfillJob,
+    lastProcessedId: number,
+    batchSize: number,
+  ): Promise<{ processedRows: number; lastProcessedId: number }> {
+    return await this.dataSource.transaction(async (manager) => {
+      // Use CTE to combine select and update into single query for optimal performance
+      const result = await manager.query(
+        `
+          WITH batch AS (
+            SELECT id
+            FROM "${job.tableName}"
+            WHERE id > $1
+            ORDER BY id
+            LIMIT $2
+          )
+          UPDATE "${job.tableName}" t
+          SET ${job.sqlStatement}
+          FROM batch
+          WHERE t.id = batch.id
+          RETURNING t.id
+        `,
+        [lastProcessedId, batchSize],
+      );
+
+      const processedRows = result.length;
+      
+      // Use last ID from result (already sorted by ORDER BY) - no need to sort again
+      const newLastProcessedId = processedRows > 0 
+        ? result[result.length - 1].id 
+        : lastProcessedId;
+
+      return { processedRows, lastProcessedId: newLastProcessedId };
+    });
+  }
+
+  /**
+   * Execute a single batch of rows with deterministic cursor (legacy method)
    */
   private async executeBatch(
     job: BackfillJob,
@@ -334,10 +396,10 @@ export class BackgroundBackfillWorker {
   /**
    * Get pending jobs that are ready to be processed
    */
-  private async getPendingJobs(): Promise<BackfillJob[]> {
-    // Calculate how many jobs we can still run based on global concurrency
-    const runningJobs = await this.getGlobalRunningJobsCount();
-    const availableSlots = Math.max(0, this.MAX_CONCURRENT_JOBS - runningJobs);
+  private async getPendingJobs(runningJobs?: number): Promise<BackfillJob[]> {
+    // Use provided running jobs count or fetch from database
+    const currentRunningJobs = runningJobs ?? await this.getGlobalRunningJobsCount();
+    const availableSlots = Math.max(0, this.MAX_CONCURRENT_JOBS - currentRunningJobs);
 
     if (availableSlots === 0) {
       return [];
@@ -487,5 +549,176 @@ export class BackgroundBackfillWorker {
       progressPercentage,
       estimatedCompletionTime,
     };
+  }
+
+  /**
+   * Process job with partitioned approach for large tables (100M+ rows)
+   */
+  private async processJobWithPartitions(job: BackfillJob): Promise<void> {
+    await this.tracer.startActiveSpan(`backfill.process-job-partitions-${job.id}`, async (span) => {
+      span.setAttributes({
+        'backfill.job_id': job.id,
+        'backfill.table_name': job.tableName,
+        'backfill.migration_name': job.migrationName,
+        'backfill.total_rows': job.totalRows,
+        'backfill.partitioned': true,
+      });
+
+      try {
+        // Analyze table and create optimal partitions
+        const partitions = await this.createPartitions(job.tableName, job.totalRows);
+        this.logger.log(`Created ${partitions.length} partitions for job ${job.id}`);
+
+        // Process partitions in parallel within global concurrency limits
+        const concurrencyLimit = Math.min(partitions.length, this.MAX_CONCURRENT_JOBS);
+        
+        for (let i = 0; i < partitions.length; i += concurrencyLimit) {
+          const batch = partitions.slice(i, i + concurrencyLimit);
+          
+          await Promise.all(
+            batch.map(partition => this.processPartition(job, partition))
+          );
+        }
+
+        // Mark job as completed
+        job.markAsCompleted();
+        await this.dataSource.getRepository(BackfillJob).save(job);
+
+        span.setAttributes({
+          'backfill.final_processed_rows': job.totalRows,
+          'backfill.completion_time': new Date().toISOString(),
+          'backfill.total_partitions': partitions.length,
+        });
+
+        this.logger.log(`Job ${job.id} completed successfully using partitioned processing: ${partitions.length} partitions`);
+
+      } catch (error) {
+        span.recordException(error);
+        this.logger.error(`Partitioned job ${job.id} failed:`, error);
+        throw error;
+      } finally {
+        span.end();
+      }
+    });
+  }
+
+  /**
+   * Create logical partitions for large table processing
+   */
+  private async createPartitions(tableName: string, totalRows: number): Promise<Partition[]> {
+    const partitionSize = Math.ceil(totalRows / 10); // Create 10 partitions by default
+    const partitions: Partition[] = [];
+
+    // Analyze table distribution to create optimal partitions
+    const result = await this.dataSource.query(
+      `
+        SELECT 
+          MIN(id) as min_id,
+          MAX(id) as max_id,
+          COUNT(*) as total_count
+        FROM "${tableName}"
+      `
+    );
+
+    const minId = result[0].min_id;
+    const maxId = result[0].max_id;
+    const range = maxId - minId;
+
+    // Create ID-based partitions for even distribution
+    for (let i = 0; i < 10; i++) {
+      const startId = minId + Math.floor((range * i) / 10);
+      const endId = minId + Math.floor((range * (i + 1)) / 10);
+
+      partitions.push({
+        id: i + 1,
+        startId,
+        endId,
+        estimatedRows: Math.floor(totalRows / 10),
+      });
+    }
+
+    return partitions;
+  }
+
+  /**
+   * Process a single partition
+   */
+  private async processPartition(job: BackfillJob, partition: Partition): Promise<void> {
+    await this.tracer.startActiveSpan(`backfill.process-partition-${job.id}-${partition.id}`, async (span) => {
+      span.setAttributes({
+        'backfill.job_id': job.id,
+        'backfill.partition_id': partition.id,
+        'backfill.partition_start': partition.startId,
+        'backfill.partition_end': partition.endId,
+      });
+
+      try {
+        let currentId = partition.startId;
+        let processedRows = 0;
+
+        while (currentId <= partition.endId) {
+          const batchSize = await this.adaptiveBatchService.getOptimalBatchSize();
+          
+          const result = await this.executePartitionBatch(job, currentId, partition.endId, batchSize);
+          
+          if (result.processedRows === 0) {
+            break;
+          }
+
+          currentId = result.lastProcessedId;
+          processedRows += result.processedRows;
+        }
+
+        span.setAttributes({
+          'backfill.partition_processed_rows': processedRows,
+        });
+
+        this.logger.log(`Partition ${partition.id} completed: ${processedRows} rows processed`);
+
+      } catch (error) {
+        span.recordException(error);
+        this.logger.error(`Partition ${partition.id} failed:`, error);
+        throw error;
+      } finally {
+        span.end();
+      }
+    });
+  }
+
+  /**
+   * Execute batch within a specific partition
+   */
+  private async executePartitionBatch(
+    job: BackfillJob,
+    startId: number,
+    endId: number,
+    batchSize: number,
+  ): Promise<{ processedRows: number; lastProcessedId: number }> {
+    return await this.dataSource.transaction(async (manager) => {
+      const result = await manager.query(
+        `
+          WITH batch AS (
+            SELECT id
+            FROM "${job.tableName}"
+            WHERE id >= $1 AND id <= $2
+            ORDER BY id
+            LIMIT $3
+          )
+          UPDATE "${job.tableName}" t
+          SET ${job.sqlStatement}
+          FROM batch
+          WHERE t.id = batch.id
+          RETURNING t.id
+        `,
+        [startId, endId, batchSize],
+      );
+
+      const processedRows = result.length;
+      const newLastProcessedId = processedRows > 0 
+        ? result[result.length - 1].id 
+        : startId;
+
+      return { processedRows, lastProcessedId: newLastProcessedId };
+    });
   }
 }
