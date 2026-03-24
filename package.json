@@ -35,6 +35,7 @@
     "db:validate": "npm run migration:naming && npm run migration:intent && npm run migration:order && npm run migration:guard && npm run migration:rollback-check && npm run migration:transaction-check && npm run migration:size-check && npm run migration:mixed-ops-check && npm run migration:delete-safety && npm run migration:lint",
     "entity:guard": "ts-node scripts/entity-governance.ts",
     "db:zero-drift": "ts-node scripts/db-zero-drift.ts",
+    "schema:intent": "ts-node scripts/cli/intent.ts",
     "db:deploy": "npm run db:validate && npm run db:simulate && npm run migration:run && npm run db:verify",
     "migration:generate": "npm run project:check && ts-node scripts/migration-generate.ts",
     "intent:cli": "ts-node src/cli/intent-cli.ts",

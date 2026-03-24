@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import { BackfillJob, BackfillJobStatus } from '../entities/backfill-job.entity';
 import { AdaptiveBatchService } from '../../domain-events/adaptive-batch.service';
 import { trace } from '@opentelemetry/api';
+import { SystemReadinessService } from '../../bootstrap/system-readiness.service';
 
 @Injectable()
 export class BackgroundBackfillWorker {
@@ -24,6 +25,7 @@ export class BackgroundBackfillWorker {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly adaptiveBatchService: AdaptiveBatchService,
+    private readonly readinessService: SystemReadinessService,
   ) {}
 
   /**
@@ -31,6 +33,11 @@ export class BackgroundBackfillWorker {
    */
   @Cron(CronExpression.EVERY_30_SECONDS)
   async processPendingJobs(): Promise<void> {
+    // 🛡️ CRITICAL: Do not poll the DB until the Schema Control Plane is finished!
+    if (!this.readinessService.isReady()) {
+      return; 
+    }
+
     await this.tracer.startActiveSpan('backfill.process-pending-jobs', async (span) => {
       try {
         const pendingJobs = await this.getPendingJobs();
