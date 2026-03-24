@@ -441,6 +441,7 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     this.metricsInterval = setInterval(async () => {
       try {
         await this.metricsService.updateMetrics();
+        await this.logWorkerHealth(); // Add health logging
       } catch (error) {
         this.logger.error("Failed to update metrics:", error);
       }
@@ -473,6 +474,45 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
       this.logger.log("Janitor cleanup completed successfully");
     } catch (error) {
       this.logger.error("Janitor cleanup failed:", error);
+    }
+  }
+
+  /**
+   * Log worker health metrics for operational visibility
+   */
+  private async logWorkerHealth(): Promise<void> {
+    try {
+      this.logger.log("OUTBOX STATUS");
+      
+      // Get pending events count
+      const pendingCount = await this.dataSource.query(`
+        SELECT COUNT(*) as count
+        FROM outbox
+        WHERE status = 'PENDING'
+      `);
+      
+      // Get processing stats
+      const processingStats = await this.dataSource.query(`
+        SELECT 
+          COUNT(*) as processing_count,
+          COUNT(CASE WHEN retry_count > 0 THEN 1 END) as retrying_count,
+          COUNT(CASE WHEN status = 'FAILED' THEN 1 END) as failed_count
+        FROM outbox
+        WHERE status IN ('PROCESSING', 'FAILED')
+      `);
+
+      // Get worker stats
+      const workerStats = this.workerLifecycleService.getProcessingStats();
+
+      this.logger.log(`Pending events: ${pendingCount[0]?.count || 0}`);
+      this.logger.log(`Processing rate: ${this.metricsService.getMetrics()}/sec`);
+      this.logger.log(`Retries: ${processingStats[0]?.retrying_count || 0}`);
+      this.logger.log(`Dead letters: ${processingStats[0]?.failed_count || 0}`);
+      this.logger.log(`Active workers: ${workerStats.activeWorkers}`);
+      this.logger.log(`Processing events: ${workerStats.processingEvents}`);
+
+    } catch (error) {
+      this.logger.error("Failed to log worker health:", error);
     }
   }
 }

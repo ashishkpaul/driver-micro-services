@@ -99,6 +99,13 @@ export class PushNotificationService {
   }
 
   /**
+   * Check if push notifications are enabled
+   */
+  isEnabled(): boolean {
+    return this.firebaseApp !== null;
+  }
+
+  /**
    * Offer notification with fallback chain: WS → Push → SMS (future)
    */
   async notifyOffer(
@@ -108,6 +115,11 @@ export class PushNotificationService {
   ): Promise<void> {
     if (wsConnected) {
       this.logger.debug(`Driver ${driverId} connected via WS, skipping push`);
+      return;
+    }
+
+    if (!this.isEnabled()) {
+      this.logger.warn(`Push notifications disabled for driver ${driverId}`);
       return;
     }
 

@@ -18,6 +18,8 @@ import { AdminModule } from "./modules/admin.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { DomainEventsApiModule } from "./domain-events/domain-events.module";
 import { SchemaModule } from "./schema/schema.module";
+import { BootstrapModule } from "./bootstrap/bootstrap.module";
+import { ObservabilityModule } from "./observability/observability.module";
 
 @Module({
   imports: [
@@ -59,6 +61,8 @@ import { SchemaModule } from "./schema/schema.module";
     EventsModule,
     WebhooksModule,
     DomainEventsApiModule,
+    BootstrapModule,
+    ObservabilityModule,
   ],
   providers: [],
 })

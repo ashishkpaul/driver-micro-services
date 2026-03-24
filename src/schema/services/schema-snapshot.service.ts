@@ -111,4 +111,148 @@ export class SchemaSnapshotService {
       throw error;
     }
   }
+
+  /**
+   * Creates a snapshot of the current database schema (for compatibility analysis)
+   */
+  async createSnapshot(): Promise<{
+    timestamp: string;
+    entities: any[];
+    tables: any[];
+    indexes: any[];
+    constraints: any[];
+    hash: string;
+  }> {
+    this.logger.log('📸 Creating schema snapshot for compatibility analysis...');
+
+    try {
+      const snapshot = {
+        timestamp: new Date().toISOString(),
+        entities: await this.getEntitiesSnapshot(),
+        tables: await this.getTablesSnapshot(),
+        indexes: await this.getIndexesSnapshot(),
+        constraints: await this.getConstraintsSnapshot(),
+        hash: '', // Will be calculated
+      };
+
+      // Calculate hash of the snapshot
+      snapshot.hash = this.calculateSnapshotHash(snapshot);
+
+      this.logger.log(`✅ Schema snapshot created: ${snapshot.hash}`);
+      return snapshot;
+
+    } catch (error) {
+      this.logger.error('❌ Failed to create schema snapshot', error.stack);
+      throw new Error(`Schema snapshot creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Gets entities snapshot
+   */
+  private async getEntitiesSnapshot(): Promise<any[]> {
+    const entityMetadatas = this.dataSource.entityMetadatas;
+    return entityMetadatas.map(metadata => ({
+      name: metadata.name,
+      tableName: metadata.tableName,
+      columns: metadata.columns.map(col => ({
+        name: col.databaseName,
+        type: col.type,
+        nullable: col.isNullable,
+        default: col.default,
+        primaryKey: col.isPrimary,
+      }))
+    }));
+  }
+
+  /**
+   * Gets tables snapshot
+   */
+  private async getTablesSnapshot(): Promise<any[]> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      const tables = await queryRunner.getTables();
+      return tables.map(table => ({
+        name: table.name,
+        columns: table.columns.map(col => ({
+          name: col.name,
+          type: col.type,
+          nullable: col.isNullable,
+          default: col.default,
+          primaryKey: col.isPrimary,
+        }))
+      }));
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Gets indexes snapshot
+   */
+  private async getIndexesSnapshot(): Promise<any[]> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      const tables = await queryRunner.getTables();
+      const indexes: { indexname: string; indexdef: string }[] = [];
+      for (const table of tables) {
+        const tableIndexes = await queryRunner.query(
+          `SELECT indexname, indexdef FROM pg_indexes WHERE tablename = $1`,
+          [table.name]
+        );
+        indexes.push(...(tableIndexes as { indexname: string; indexdef: string }[]));
+      }
+      return indexes;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Gets constraints snapshot
+   */
+  private async getConstraintsSnapshot(): Promise<any[]> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      const constraints = await queryRunner.query(`
+        SELECT 
+          tc.table_name,
+          tc.constraint_name,
+          tc.constraint_type,
+          kcu.column_name,
+          ccu.table_name AS foreign_table_name,
+          ccu.column_name AS foreign_column_name
+        FROM information_schema.table_constraints tc
+        LEFT JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema = kcu.table_schema
+        LEFT JOIN information_schema.constraint_column_usage ccu
+          ON tc.constraint_name = ccu.constraint_name
+          AND tc.table_schema = ccu.table_schema
+        WHERE tc.table_schema = 'public'
+      `);
+      return constraints;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Calculates snapshot hash
+   */
+  private calculateSnapshotHash(snapshot: {
+    timestamp: string;
+    entities: any[];
+    tables: any[];
+    indexes: any[];
+    constraints: any[];
+  }): string {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    hash.update(JSON.stringify(snapshot));
+    return hash.digest('hex');
+  }
 }

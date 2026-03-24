@@ -37,6 +37,7 @@
     "db:zero-drift": "ts-node scripts/db-zero-drift.ts",
     "db:deploy": "npm run db:validate && npm run db:simulate && npm run migration:run && npm run db:verify",
     "migration:generate": "npm run project:check && ts-node scripts/migration-generate.ts",
+    "intent:cli": "ts-node src/cli/intent-cli.ts",
     "migration:naming": "ts-node scripts/migration-naming-policy.ts",
     "migration:intent": "ts-node scripts/migration-intent.ts",
     "migration:order": "ts-node scripts/migration-order.ts",

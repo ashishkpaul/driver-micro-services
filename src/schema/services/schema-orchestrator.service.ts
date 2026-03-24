@@ -6,6 +6,8 @@ import { SchemaDiffService } from "./schema-diff.service";
 import { SchemaClassificationService } from "./schema-classification.service";
 import { SchemaLockService } from "./schema-lock.service";
 import { DriftEngine } from "../engine/drift-engine";
+import { ExecutionPlanner } from "../engine/execution-planner";
+import { BackfillJob, BackfillJobStatus } from "../entities/backfill-job.entity";
 import {
   SchemaSnapshot,
   SchemaDiff,
@@ -82,7 +84,7 @@ export class SchemaOrchestratorService {
 
           // Step 4: Classify operations by risk and type
           const classificationStartTime = Date.now();
-          const classified = this.schemaClassificationService.classifyOperations(diff.up);
+          const classified = await this.schemaClassificationService.classifyOperations(diff.up);
           const classificationDuration = Date.now() - classificationStartTime;
 
           const categoryCounts = this.getCategoryCounts(classified);
@@ -304,7 +306,7 @@ export class SchemaOrchestratorService {
   }
 
   /**
-   * Execute migration
+   * Execute migration with zero-downtime strategy
    */
   private async executeMigration(
     diff: SchemaDiff,
@@ -314,16 +316,83 @@ export class SchemaOrchestratorService {
   ): Promise<void> {
     this.logger.log(`Executing migration with ${diff.up.length} operations...`);
 
-    // For now, we'll simulate the execution
-    // In a real implementation, this would use TypeORM's migration runner
-    // or execute the SQL statements directly
+    // Create execution planner
+    const executionPlanner = new ExecutionPlanner({
+      getState: () => null, // Simplified for runtime execution
+      updateState: () => {}, // Simplified for runtime execution
+    } as any);
 
-    for (const operation of diff.up) {
-      this.logger.log(`Executing: ${operation}`);
-      // Simulate execution delay
-      await new Promise(resolve => setTimeout(resolve, 100));
+    // Create migration plan from diff
+    const migrationPlan = {
+      phases: [
+        {
+          phase: 'EXPAND' as const,
+          operations: classified.filter(c => c.category === 'SAFE'),
+          order: classified.filter(c => c.category === 'SAFE').map(c => c.sql),
+        },
+        {
+          phase: 'DATA' as const,
+          operations: classified.filter(c => c.category === 'DATA'),
+          order: classified.filter(c => c.category === 'DATA').map(c => c.sql),
+        },
+        {
+          phase: 'CONTRACT' as const,
+          operations: classified.filter(c => c.category === 'BREAKING'),
+          order: classified.filter(c => c.category === 'BREAKING').map(c => c.sql),
+        },
+      ],
+      operations: classified,
+      executionOrder: classified.map(c => c.sql),
+      dependencies: new Map(), // Simplified for runtime execution
+      risks,
+      compatibility,
+      metadata: {
+        entitySnapshot: {} as any, // Simplified for runtime execution
+        databaseSnapshot: {} as any, // Simplified for runtime execution
+        diff,
+        createdAt: new Date().toISOString(),
+        version: '1.0.0',
+        planHash: this.generatePlanHash(classified),
+      },
+    };
+
+    try {
+      // Execute fast phases synchronously (SAFE and BREAKING)
+      const { executedPhases, skippedPhases } = await executionPlanner.executeFastPhases(migrationPlan, this.dataSource);
+      
+      this.logger.log(`✅ Executed phases synchronously: ${executedPhases.join(', ')}`);
+      
+      if (skippedPhases.length > 0) {
+        this.logger.log(`⏳ Deferred phases to background: ${skippedPhases.join(', ')}`);
+        
+        // Create backfill jobs for DATA phases
+        const migrationId = `runtime_${Date.now()}`;
+        const backfillJobs = await executionPlanner.createBackfillJobs(migrationPlan, migrationId, this.dataSource);
+        
+        if (backfillJobs.length > 0) {
+          this.logger.log(`📋 Created ${backfillJobs.length} background backfill job(s)`);
+          
+          // Log job details for monitoring
+          for (const job of backfillJobs) {
+            this.logger.log(`  - Job ${job.id}: ${job.tableName} (${job.totalRows} rows, batch size: ${job.batchSize})`);
+          }
+        }
+      }
+
+      this.logger.log("✅ Migration execution completed with zero-downtime strategy");
+
+    } catch (error) {
+      this.logger.error("Migration execution failed", error);
+      throw error;
     }
+  }
 
-    this.logger.log("✅ Migration execution completed");
+  /**
+   * Generate plan hash for tracking
+   */
+  private generatePlanHash(classified: any[]): string {
+    const crypto = require('crypto');
+    const planData = JSON.stringify(classified.map(c => ({ sql: c.sql, category: c.category })));
+    return crypto.createHash('sha256').update(planData).digest('hex').substring(0, 16);
   }
 }

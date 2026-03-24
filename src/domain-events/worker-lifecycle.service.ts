@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common";
+import { SystemReadinessService } from "../bootstrap/system-readiness.service";
 
 @Injectable()
 export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
@@ -14,6 +15,8 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
   private processingEvents = new Set<number>();
   private activeWorkers = new Set<string>();
   private shutdownPromises = new Map<string, Promise<void>>();
+
+  constructor(private readonly readinessService: SystemReadinessService) {}
 
   onModuleInit(): void {
     this.logger.log("Worker lifecycle service initialized");
@@ -152,6 +155,15 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
         resolve();
       }
     });
+  }
+
+  /**
+   * Wait for system readiness before starting workers
+   */
+  async waitForReadiness(): Promise<void> {
+    this.logger.log("Workers waiting for readiness confirmed...");
+    await this.readinessService.waitUntilReady();
+    this.logger.log("Workers starting after readiness confirmed.");
   }
 
   /**

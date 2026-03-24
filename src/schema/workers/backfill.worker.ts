@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { BackfillJob, BackfillJobStatus } from '../entities/backfill-job.entity';
 import { AdaptiveBatchService } from '../../domain-events/adaptive-batch.service';
 import { trace } from '@opentelemetry/api';
@@ -23,8 +23,6 @@ export class BackgroundBackfillWorker {
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    @InjectRepository(BackfillJob)
-    private readonly backfillJobRepository: Repository<BackfillJob>,
     private readonly adaptiveBatchService: AdaptiveBatchService,
   ) {}
 
@@ -91,7 +89,7 @@ export class BackgroundBackfillWorker {
       try {
         // Mark job as started
         job.markAsStarted();
-        await this.backfillJobRepository.save(job);
+        await this.dataSource.getRepository(BackfillJob).save(job);
 
         let lastProcessedId = job.lastProcessedId;
         let processedRows = job.processedRows;
@@ -119,7 +117,7 @@ export class BackgroundBackfillWorker {
             processedRows += result.processedRows;
             
             job.updateProgress(processedRows, lastProcessedId);
-            await this.backfillJobRepository.save(job);
+            await this.dataSource.getRepository(BackfillJob).save(job);
 
             span.addEvent('batch_completed', {
               processedRows: result.processedRows,
@@ -142,7 +140,7 @@ export class BackgroundBackfillWorker {
 
             if (retryCount > job.maxRetries) {
               job.markAsFailed(error.message);
-              await this.backfillJobRepository.save(job);
+              await this.dataSource.getRepository(BackfillJob).save(job);
               throw new Error(`Job ${job.id} failed after ${job.maxRetries} retries: ${error.message}`);
             }
 
@@ -153,7 +151,7 @@ export class BackgroundBackfillWorker {
 
         // Job completed successfully
         job.markAsCompleted();
-        await this.backfillJobRepository.save(job);
+        await this.dataSource.getRepository(BackfillJob).save(job);
 
         span.setAttributes({
           'backfill.final_processed_rows': processedRows,
@@ -215,7 +213,7 @@ export class BackgroundBackfillWorker {
    * Get pending jobs that are ready to be processed
    */
   private async getPendingJobs(): Promise<BackfillJob[]> {
-    return await this.backfillJobRepository.find({
+    return await this.dataSource.getRepository(BackfillJob).find({
       where: {
         status: BackfillJobStatus.PENDING,
       },
@@ -253,10 +251,10 @@ export class BackgroundBackfillWorker {
     adaptiveBatchSize: number;
   }> {
     const [pendingJobs, totalJobs] = await Promise.all([
-      this.backfillJobRepository.count({
+      this.dataSource.getRepository(BackfillJob).count({
         where: { status: BackfillJobStatus.PENDING },
       }),
-      this.backfillJobRepository.count(),
+      this.dataSource.getRepository(BackfillJob).count(),
     ]);
 
     const adaptiveBatchSize = await this.adaptiveBatchService.getCurrentBatchSize();
@@ -273,7 +271,7 @@ export class BackgroundBackfillWorker {
    * Retry a failed job
    */
   async retryJob(jobId: string): Promise<void> {
-    const job = await this.backfillJobRepository.findOne({ where: { id: jobId } });
+    const job = await this.dataSource.getRepository(BackfillJob).findOne({ where: { id: jobId } });
     
     if (!job) {
       throw new Error(`Job ${jobId} not found`);
@@ -294,7 +292,7 @@ export class BackgroundBackfillWorker {
     job.processedRows = 0;
     job.completedAt = null;
 
-    await this.backfillJobRepository.save(job);
+    await this.dataSource.getRepository(BackfillJob).save(job);
     this.logger.log(`Job ${jobId} marked for retry`);
   }
 
@@ -302,7 +300,7 @@ export class BackgroundBackfillWorker {
    * Cancel a running job
    */
   async cancelJob(jobId: string): Promise<void> {
-    const job = await this.backfillJobRepository.findOne({ where: { id: jobId } });
+    const job = await this.dataSource.getRepository(BackfillJob).findOne({ where: { id: jobId } });
     
     if (!job) {
       throw new Error(`Job ${jobId} not found`);
@@ -316,7 +314,7 @@ export class BackgroundBackfillWorker {
     job.errorMessage = 'Cancelled by administrator';
     job.completedAt = new Date();
 
-    await this.backfillJobRepository.save(job);
+    await this.dataSource.getRepository(BackfillJob).save(job);
     
     // Remove from active jobs if currently running
     this.activeJobs.delete(jobId);
@@ -332,7 +330,7 @@ export class BackgroundBackfillWorker {
     progressPercentage: number;
     estimatedCompletionTime: Date | null;
   }> {
-    const job = await this.backfillJobRepository.findOne({ where: { id: jobId } });
+    const job = await this.dataSource.getRepository(BackfillJob).findOne({ where: { id: jobId } });
     
     if (!job) {
       throw new Error(`Job ${jobId} not found`);

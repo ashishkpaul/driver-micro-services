@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "type": "add-index",
+  "metadata": {
+    "author": "Developer",
+    "description": "Add index on driver location for faster geospatial queries",
+    "priority": "medium",
+    "estimatedImpact": "performance",
+    "createdAt": "2025-01-20T10:30:00Z",
+    "tags": ["performance", "geospatial"]
+  },
+  "payload": {
+    "table": "driver_locations",
+    "index": {
+      "name": "idx_driver_locations_geo",
+      "columns": ["latitude", "longitude"],
+      "type": "spatial"
+    },
+    "rollback": {
+      "type": "drop-index",
+      "name": "idx_driver_locations_geo"
+    }
+  },
+  "validation": {
+    "schemaVersion": "1.0.0",
+    "rules": [
+      "index-name-convention",
+      "column-exists",
+      "performance-impact"
+    ]
+  }
+}

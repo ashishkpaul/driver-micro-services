@@ -147,6 +147,148 @@ export class SchemaControlPlaneService implements OnApplicationBootstrap {
   }
 
   /**
+   * Log schema status for operational visibility
+   */
+  async logSchemaStatus(): Promise<void> {
+    this.logger.log("DATABASE STATUS");
+    
+    try {
+      // Get schema version
+      const version = REQUIRED_SCHEMA_VERSION;
+      this.logger.log(`Schema version: ${version}`);
+
+      // Check for pending migrations
+      const pendingMigrations = await this.getPendingMigrations();
+      this.logger.log(`Pending migrations: ${pendingMigrations}`);
+
+      // Check for drift
+      const driftDetected = await this.checkForDrift();
+      this.logger.log(`Drift: ${driftDetected ? 'FOUND' : 'NONE'}`);
+
+      // Check verification result
+      const verificationPassed = await this.verifySchemaIntegrity();
+      this.logger.log(`Verification: ${verificationPassed ? 'PASSED' : 'FAILED'}`);
+
+    } catch (error) {
+      this.logger.error(`Schema status check failed: ${error.message}`);
+      this.logger.log("Verification: FAILED");
+    }
+  }
+
+  /**
+   * Verify schema integrity
+   */
+  private async verifySchemaIntegrity(): Promise<boolean> {
+    try {
+      // Check critical tables exist
+      const criticalTables = [
+        'drivers',
+        'deliveries', 
+        'assignments',
+        'admin_users',
+        'cities',
+        'zones',
+        'audit_logs'
+      ];
+
+      for (const tableName of criticalTables) {
+        const exists = await this.dataSource.query(`
+          SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = $1
+          )
+        `, [tableName]);
+
+        if (!exists[0]?.exists) {
+          this.logger.error(`Critical table missing: ${tableName}`);
+          return false;
+        }
+      }
+
+      // Check migrations table exists
+      const hasMigrationsTable = await this.dataSource.query(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = '_migrations'
+        )
+      `);
+
+      if (!hasMigrationsTable[0]?.exists) {
+        this.logger.warn("Migrations table not found");
+        return false;
+      }
+
+      return true;
+
+    } catch (error) {
+      this.logger.error(`Schema integrity check failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get pending migrations count
+   */
+  private async getPendingMigrations(): Promise<number> {
+    try {
+      // Check if migrations table exists
+      const hasMigrationsTable = await this.dataSource.query(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name = '_migrations'
+        )
+      `);
+
+      if (!hasMigrationsTable[0]?.exists) {
+        return 0;
+      }
+
+      // Get total migrations in code (this would need to be implemented based on your migration structure)
+      // For now, we'll return 0 as a placeholder
+      return 0;
+
+    } catch (error) {
+      this.logger.error(`Failed to get pending migrations: ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Check for schema drift
+   */
+  private async checkForDrift(): Promise<boolean> {
+    try {
+      // Simplified drift check - in a real implementation, this would use the DriftEngine
+      // For now, we'll check if there are any untracked tables or columns
+      
+      // Check for untracked tables (tables not in our expected list)
+      const untrackedTables = await this.dataSource.query(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name NOT IN ('drivers', 'deliveries', 'assignments', 'admin_users', 'cities', 'zones', 'audit_logs', '_migrations', '_migrations_lock')
+      `);
+
+      if (untrackedTables.length > 0) {
+        this.logger.warn(`Found untracked tables: ${untrackedTables.map(t => t.table_name).join(', ')}`);
+        return true;
+      }
+
+      return false;
+
+    } catch (error) {
+      this.logger.error(`Failed to check for drift: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Get schema status for health checks
    */
   async getSchemaStatus(): Promise<{

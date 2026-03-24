@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { BootstrapModule } from "../bootstrap/bootstrap.module";
 
 import { OutboxEvent } from "./outbox.entity";
 import { OutboxArchiveEvent } from "./outbox-archive.entity";
@@ -19,6 +20,7 @@ import { AdaptiveBatchService } from "./adaptive-batch.service";
       OutboxArchiveEvent,
       IdempotencyTracker,
     ]),
+    BootstrapModule,
   ],
 
   providers: [
