@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TerminusModule } from "@nestjs/terminus";
 import { HealthController } from "./health.controller";
 import { HealthAggregatorService } from "./health-aggregator.service";
+import { HealthDashboardService } from "./health-dashboard.service";
 import { RedisHealthIndicator } from "./redis.health";
 import { TypeOrmHealthIndicator } from "./typeorm.health";
 import { OutboxHealthIndicator } from "./outbox.health";
@@ -16,6 +17,7 @@ import { ObservabilityModule } from "../observability/observability.module";
   controllers: [HealthController],
   providers: [
     HealthAggregatorService,
+    HealthDashboardService,
     RedisHealthIndicator,
     TypeOrmHealthIndicator,
     OutboxHealthIndicator,

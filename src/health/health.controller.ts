@@ -1,9 +1,10 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Query } from "@nestjs/common";
 import { HealthCheck, HealthCheckService } from "@nestjs/terminus";
 import { TypeOrmHealthIndicator } from "./typeorm.health";
 import { RedisHealthIndicator } from "./redis.health";
 import { OutboxHealthIndicator } from "./outbox.health";
 import { HealthAggregatorService } from "./health-aggregator.service";
+import { HealthDashboardService } from "./health-dashboard.service";
 
 @Controller("health")
 export class HealthController {
@@ -13,6 +14,7 @@ export class HealthController {
     private redis: RedisHealthIndicator,
     private outbox: OutboxHealthIndicator,
     private healthAggregator: HealthAggregatorService,
+    private healthDashboardService: HealthDashboardService,
   ) {}
 
   @Get()
@@ -62,18 +64,52 @@ export class HealthController {
   }
 
   /**
-   * Database pool status endpoint
+   * Database pool status endpoint with detailed metrics
    */
   @Get("db-pool")
-  async dbPoolStatus() {
-    return await this.healthAggregator.getDbPoolStatus();
+  async dbPoolStatus(@Query("detailed") detailed?: string) {
+    const includeDetails = detailed === 'true';
+    return await this.healthAggregator.getDbPoolStatus(includeDetails);
   }
 
   /**
-   * Schema status endpoint
+   * Schema status endpoint with detailed drift information
    */
   @Get("schema")
-  async schemaStatus() {
-    return await this.healthAggregator.getSchemaStatus();
+  async schemaStatus(@Query("detailed") detailed?: string) {
+    const includeDetails = detailed === 'true';
+    return await this.healthAggregator.getSchemaStatus(includeDetails);
+  }
+
+  /**
+   * System metrics endpoint for monitoring dashboards
+   */
+  @Get("metrics")
+  async systemMetrics() {
+    return await this.healthAggregator.getSystemMetrics();
+  }
+
+  /**
+   * Component health status with dependency mapping
+   */
+  @Get("components")
+  async componentHealth() {
+    return await this.healthAggregator.getComponentHealth();
+  }
+
+  /**
+   * Health summary for quick status overview
+   */
+  @Get("summary")
+  async healthSummary() {
+    return await this.healthAggregator.getHealthSummary();
+  }
+
+  /**
+   * Comprehensive health dashboard with alerts and recommendations
+   */
+  @Get("dashboard")
+  async healthDashboard() {
+    return await this.healthDashboardService.getHealthDashboard();
   }
 }

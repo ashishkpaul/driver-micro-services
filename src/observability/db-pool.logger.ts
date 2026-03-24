@@ -136,6 +136,134 @@ export class DbPoolLogger {
   }
 
   /**
+   * Get comprehensive database metrics for monitoring
+   */
+  async getDatabaseMetrics(): Promise<{
+    connectionPool: {
+      healthy: boolean;
+      poolSize: number;
+      activeConnections: number;
+      idleConnections: number;
+      utilization: number;
+      waitingClients: number;
+      maxConnections: number;
+    };
+    performance: {
+      activeQueries: number;
+      longestRunningQuery: number;
+      lockWaits: number;
+      deadlocks: number;
+    };
+    health: {
+      connectionHealth: boolean;
+      queryPerformance: string;
+      lockHealth: string;
+      overallHealth: string;
+    };
+  }> {
+    try {
+      const poolStats = await this.getPoolStats();
+      const utilization = poolStats.poolSize > 0 ? poolStats.activeConnections / poolStats.poolSize : 0;
+      
+      // Get performance metrics
+      const performanceMetrics = await this.getPerformanceMetrics();
+      
+      // Calculate health scores
+      const connectionHealth = utilization < 0.8 && poolStats.waitingClients === 0;
+      const queryPerformance = performanceMetrics.longestRunningQuery < 30000 ? 'GOOD' : 'POOR'; // 30 seconds threshold
+      const lockHealth = performanceMetrics.lockWaits < 10 ? 'GOOD' : 'POOR';
+      
+      let overallHealth = 'HEALTHY';
+      if (!connectionHealth || queryPerformance === 'POOR' || lockHealth === 'POOR') {
+        overallHealth = 'WARNING';
+      }
+      if (utilization > 0.9 || performanceMetrics.longestRunningQuery > 60000) {
+        overallHealth = 'CRITICAL';
+      }
+
+      return {
+        connectionPool: {
+          healthy: connectionHealth,
+          poolSize: poolStats.poolSize,
+          activeConnections: poolStats.activeConnections,
+          idleConnections: poolStats.idleConnections,
+          utilization: utilization * 100,
+          waitingClients: poolStats.waitingClients,
+          maxConnections: poolStats.poolSize,
+        },
+        performance: performanceMetrics,
+        health: {
+          connectionHealth,
+          queryPerformance,
+          lockHealth,
+          overallHealth,
+        },
+      };
+    } catch (error) {
+      return {
+        connectionPool: {
+          healthy: false,
+          poolSize: 0,
+          activeConnections: 0,
+          idleConnections: 0,
+          utilization: 0,
+          waitingClients: 0,
+          maxConnections: 0,
+        },
+        performance: {
+          activeQueries: 0,
+          longestRunningQuery: 0,
+          lockWaits: 0,
+          deadlocks: 0,
+        },
+        health: {
+          connectionHealth: false,
+          queryPerformance: 'UNKNOWN',
+          lockHealth: 'UNKNOWN',
+          overallHealth: 'CRITICAL',
+        },
+      };
+    }
+  }
+
+  /**
+   * Get detailed performance metrics
+   */
+  private async getPerformanceMetrics(): Promise<{
+    activeQueries: number;
+    longestRunningQuery: number;
+    lockWaits: number;
+    deadlocks: number;
+  }> {
+    try {
+      const result = await this.dataSource.query(`
+        SELECT 
+          (SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query NOT LIKE '%pg_stat_activity%') as active_queries,
+          (SELECT COALESCE(max(extract(epoch from now() - query_start) * 1000), 0) 
+           FROM pg_stat_activity 
+           WHERE state = 'active' AND query NOT LIKE '%pg_stat_activity%') as longest_running_query,
+          (SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock') as lock_waits,
+          (SELECT count(*) FROM pg_stat_database_conflicts WHERE confl_deadlock > 0) as deadlocks
+      `);
+
+      return {
+        activeQueries: result[0]?.active_queries || 0,
+        longestRunningQuery: result[0]?.longest_running_query || 0,
+        lockWaits: result[0]?.lock_waits || 0,
+        deadlocks: result[0]?.deadlocks || 0,
+      };
+    } catch (error) {
+      this.logger.warn('Could not retrieve performance metrics:', error.message);
+      return {
+        activeQueries: 0,
+        longestRunningQuery: 0,
+        lockWaits: 0,
+        deadlocks: 0,
+      };
+    }
+  }
+
+  /**
    * Test database connection
    */
   async testConnection(): Promise<boolean> {
