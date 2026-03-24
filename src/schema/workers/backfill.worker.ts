@@ -18,9 +18,12 @@ export class BackgroundBackfillWorker {
   private readonly BATCH_PROCESSING_INTERVAL = CronExpression.EVERY_10_SECONDS;
   private readonly MAX_RETRY_DELAY_MS = 300000; // 5 minutes
   private readonly MIN_RETRY_DELAY_MS = 1000; // 1 second
+  private readonly JOB_TIMEOUT_MS = 3600000; // 1 hour
+  private readonly WORKER_LOCK_KEY = 987654321; // Advisory lock key for worker coordination
 
   // Track active jobs to prevent overloading
   private activeJobs = new Set<string>();
+  private isRunning = false;
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -38,6 +41,20 @@ export class BackgroundBackfillWorker {
       return; 
     }
 
+    // Prevent concurrent execution within this instance
+    if (this.isRunning) {
+      return;
+    }
+
+    // Acquire distributed worker lock to prevent multiple instances from running
+    const workerLocked = await this.acquireWorkerLock();
+    if (!workerLocked) {
+      this.logger.debug('Another instance is already running backfill worker');
+      return;
+    }
+
+    this.isRunning = true;
+
     await this.tracer.startActiveSpan('backfill.process-pending-jobs', async (span) => {
       try {
         const pendingJobs = await this.getPendingJobs();
@@ -48,13 +65,21 @@ export class BackgroundBackfillWorker {
         });
 
         for (const job of pendingJobs) {
-          if (this.activeJobs.size >= this.MAX_CONCURRENT_JOBS) {
+          // Check global concurrency limit (database-backed)
+          const runningJobs = await this.getGlobalRunningJobsCount();
+          if (runningJobs >= this.MAX_CONCURRENT_JOBS) {
             this.logger.warn(`Maximum concurrent jobs reached (${this.MAX_CONCURRENT_JOBS}), skipping job ${job.id}`);
             break;
           }
 
           if (this.activeJobs.has(job.id)) {
             continue; // Already processing
+          }
+
+          // Atomically claim the job
+          const claimed = await this.claimJob(job.id);
+          if (!claimed) {
+            continue; // Job was taken by another worker
           }
 
           this.activeJobs.add(job.id);
@@ -76,6 +101,8 @@ export class BackgroundBackfillWorker {
         span.recordException(error);
         this.logger.error('Error in processPendingJobs:', error);
       } finally {
+        this.isRunning = false;
+        await this.releaseWorkerLock();
         span.end();
       }
     });
@@ -178,7 +205,7 @@ export class BackgroundBackfillWorker {
   }
 
   /**
-   * Execute a single batch of rows
+   * Execute a single batch of rows with deterministic cursor
    */
   private async executeBatch(
     job: BackfillJob,
@@ -186,49 +213,147 @@ export class BackgroundBackfillWorker {
     batchSize: number,
   ): Promise<{ processedRows: number; lastProcessedId: number }> {
     return await this.dataSource.transaction(async (manager) => {
-      // Use cursor-based pagination to avoid table locks
-      const result = await manager.query(
+      // Step 1: Select batch IDs to ensure deterministic coverage
+      const batchIdsResult = await manager.query(
         `
-          UPDATE ${job.tableName}
-          SET ${job.sqlStatement}
+          SELECT id
+          FROM "${job.tableName}"
           WHERE id > $1
-          AND id <= (
-            SELECT COALESCE(MIN(id), $1 + $2)
-            FROM (
-              SELECT id
-              FROM ${job.tableName}
-              WHERE id > $1
-              ORDER BY id
-              LIMIT $2
-            ) sub
-          )
-          RETURNING id
+          ORDER BY id
+          LIMIT $2
         `,
         [lastProcessedId, batchSize],
       );
 
-      const processedRows = result.length;
-      const newLastProcessedId = processedRows > 0 
-        ? Math.max(...result.map(row => row.id))
-        : lastProcessedId;
+      if (batchIdsResult.length === 0) {
+        return { processedRows: 0, lastProcessedId };
+      }
+
+      const batchIds = batchIdsResult.map(row => row.id);
+
+      // Step 2: Update by specific IDs to prevent row skipping
+      const updateResult = await manager.query(
+        `
+          UPDATE "${job.tableName}"
+          SET ${job.sqlStatement}
+          WHERE id = ANY($1)
+          RETURNING id
+        `,
+        [batchIds],
+      );
+
+      const processedRows = updateResult.length;
+      
+      // Step 3: Use last ID from sorted batch for deterministic cursor
+      const sortedIds = batchIds.sort((a, b) => a - b);
+      const newLastProcessedId = sortedIds[sortedIds.length - 1];
 
       return { processedRows, lastProcessedId: newLastProcessedId };
     });
   }
 
   /**
+   * Atomically claim a job to prevent race conditions
+   */
+  private async claimJob(jobId: string): Promise<boolean> {
+    const result = await this.dataSource
+      .createQueryBuilder()
+      .update(BackfillJob)
+      .set({
+        status: BackfillJobStatus.PROCESSING,
+        startedAt: new Date(),
+        retryCount: 0,           // Reset retry count when starting
+        errorMessage: null,      // Clear any previous error
+      })
+      .where('id = :id', { id: jobId })
+      .andWhere('status = :status', { status: BackfillJobStatus.PENDING })
+      .execute();
+
+    return result.affected === 1;
+  }
+
+  /**
+   * Validate job before processing
+   */
+  private validateJob(job: BackfillJob): void {
+    if (!/^[a-zA-Z0-9_]+$/.test(job.tableName)) {
+      throw new Error('Invalid table name');
+    }
+
+    if (job.sqlStatement.includes(';')) {
+      throw new Error('Multiple SQL statements not allowed');
+    }
+
+    if (job.totalRows <= 0) {
+      throw new Error('Invalid job size');
+    }
+  }
+
+  /**
+   * Acquire distributed worker lock using advisory locks
+   */
+  private async acquireWorkerLock(): Promise<boolean> {
+    try {
+      const result = await this.dataSource.query(
+        'SELECT pg_try_advisory_lock($1)',
+        [this.WORKER_LOCK_KEY]
+      );
+      return result[0].pg_try_advisory_lock;
+    } catch (error) {
+      this.logger.error('Failed to acquire worker lock:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Release distributed worker lock
+   */
+  private async releaseWorkerLock(): Promise<void> {
+    try {
+      await this.dataSource.query(
+        'SELECT pg_advisory_unlock($1)',
+        [this.WORKER_LOCK_KEY]
+      );
+    } catch (error) {
+      this.logger.error('Failed to release worker lock:', error);
+    }
+  }
+
+  /**
+   * Get global count of running jobs from database
+   */
+  private async getGlobalRunningJobsCount(): Promise<number> {
+    const count = await this.dataSource
+      .getRepository(BackfillJob)
+      .count({
+        where: { status: BackfillJobStatus.PROCESSING },
+      });
+    return count;
+  }
+
+  /**
    * Get pending jobs that are ready to be processed
    */
   private async getPendingJobs(): Promise<BackfillJob[]> {
-    return await this.dataSource.getRepository(BackfillJob).find({
-      where: {
-        status: BackfillJobStatus.PENDING,
-      },
-      order: {
-        createdAt: 'ASC', // Process oldest jobs first
-      },
-      take: this.MAX_CONCURRENT_JOBS,
-    });
+    // Calculate how many jobs we can still run based on global concurrency
+    const runningJobs = await this.getGlobalRunningJobsCount();
+    const availableSlots = Math.max(0, this.MAX_CONCURRENT_JOBS - runningJobs);
+
+    if (availableSlots === 0) {
+      return [];
+    }
+
+    return this.dataSource
+      .getRepository(BackfillJob)
+      .find({
+        where: {
+          status: BackfillJobStatus.PENDING,
+        },
+        order: {
+          createdAt: 'ASC',
+        },
+        take: availableSlots,
+      });
   }
 
   /**

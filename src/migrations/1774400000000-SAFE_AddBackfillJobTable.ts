@@ -6,34 +6,37 @@ export class SAFEAddBackfillJobTable1774400000000 implements MigrationInterface 
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS backfill_jobs (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        "tableName" VARCHAR NOT NULL,
-        "migrationName" VARCHAR NOT NULL,
-        "sqlStatement" TEXT NOT NULL,
-        "totalRows" INTEGER NOT NULL,
-        "processedRows" INTEGER DEFAULT 0,
-        "lastProcessedId" INTEGER DEFAULT 0,
-        "status" VARCHAR DEFAULT 'PENDING',
-        "retryCount" INTEGER DEFAULT 0,
-        "maxRetries" INTEGER DEFAULT 3,
-        "errorMessage" TEXT,
-        "startedAt" TIMESTAMP,
-        "completedAt" TIMESTAMP,
-        "createdAt" TIMESTAMP DEFAULT NOW(),
-        "updatedAt" TIMESTAMP DEFAULT NOW()
+        table_name VARCHAR NOT NULL,
+        migration_name VARCHAR NOT NULL,
+        sql_statement TEXT NOT NULL,
+        total_rows INTEGER NOT NULL,
+        processed_rows INTEGER DEFAULT 0,
+        last_processed_id INTEGER DEFAULT 0,
+        batch_size INTEGER DEFAULT 1000,
+        status VARCHAR DEFAULT 'PENDING',
+        retry_count INTEGER DEFAULT 0,
+        max_retries INTEGER DEFAULT 3,
+        error_message TEXT,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        last_processed_at TIMESTAMP,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
 
     // Create indexes with idempotency
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS IDX_backfill_jobs_status ON backfill_jobs ("status")
+      CREATE INDEX IF NOT EXISTS IDX_backfill_jobs_status ON backfill_jobs (status)
     `);
     
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS IDX_backfill_jobs_table_name ON backfill_jobs ("tableName")
+      CREATE INDEX IF NOT EXISTS IDX_backfill_jobs_table_name ON backfill_jobs (table_name)
     `);
     
     await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS IDX_backfill_jobs_created_at ON backfill_jobs ("createdAt")
+      CREATE INDEX IF NOT EXISTS IDX_backfill_jobs_created_at ON backfill_jobs (created_at)
     `);
   }
 
