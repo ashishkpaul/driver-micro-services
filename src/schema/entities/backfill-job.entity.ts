@@ -13,59 +13,60 @@ export class BackfillJob {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ name: 'table_name', type: 'varchar', length: 255 })
   tableName: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ name: 'migration_name', type: 'varchar', length: 255 })
   migrationName: string;
 
-  @Column({ type: 'varchar', length: 500 })
+  @Column({ name: 'sql_statement', type: 'varchar', length: 500 })
   sqlStatement: string;
 
-  @Column({ type: 'bigint' })
+  @Column({ name: 'total_rows', type: 'bigint' })
   totalRows: number;
 
-  @Column({ type: 'bigint', default: 0 })
+  @Column({ name: 'processed_rows', type: 'bigint', default: 0 })
   processedRows: number;
 
-  @Column({ type: 'bigint', default: 0 })
+  @Column({ name: 'last_processed_id', type: 'bigint', default: 0 })
   lastProcessedId: number;
 
   @Column({
+    name: 'status',
     type: 'enum',
     enum: BackfillJobStatus,
     default: BackfillJobStatus.PENDING,
   })
   status: BackfillJobStatus;
 
-  @Column({ type: 'integer', default: 1000 })
+  @Column({ name: 'batch_size', type: 'integer', default: 1000 })
   batchSize: number;
 
-  @Column({ type: 'integer', default: 0 })
+  @Column({ name: 'retry_count', type: 'integer', default: 0 })
   retryCount: number;
 
-  @Column({ type: 'integer', default: 5 })
+  @Column({ name: 'max_retries', type: 'integer', default: 5 })
   maxRetries: number;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'started_at', type: 'timestamp', nullable: true })
   startedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'completed_at', type: 'timestamp', nullable: true })
   completedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'last_processed_at', type: 'timestamp', nullable: true })
   lastProcessedAt: Date;
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ name: 'metadata', type: 'jsonb', default: {} })
   metadata: Record<string, any>;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
   /**

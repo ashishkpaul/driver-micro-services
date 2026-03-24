@@ -195,8 +195,12 @@ export class SchemaSnapshotService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     try {
+      await queryRunner.startTransaction();
+      
       const tables = await queryRunner.getTables();
       const indexes: { indexname: string; indexdef: string }[] = [];
+      
+      // Process tables sequentially to avoid QueryRunner concurrency issues
       for (const table of tables) {
         const tableIndexes = await queryRunner.query(
           `SELECT indexname, indexdef FROM pg_indexes WHERE tablename = $1`,
@@ -204,7 +208,12 @@ export class SchemaSnapshotService {
         );
         indexes.push(...(tableIndexes as { indexname: string; indexdef: string }[]));
       }
+      
+      await queryRunner.commitTransaction();
       return indexes;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
     } finally {
       await queryRunner.release();
     }
@@ -217,6 +226,8 @@ export class SchemaSnapshotService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     try {
+      await queryRunner.startTransaction();
+      
       const constraints = await queryRunner.query(`
         SELECT 
           tc.table_name,
@@ -234,7 +245,12 @@ export class SchemaSnapshotService {
           AND tc.table_schema = ccu.table_schema
         WHERE tc.table_schema = 'public'
       `);
+      
+      await queryRunner.commitTransaction();
       return constraints;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
     } finally {
       await queryRunner.release();
     }
