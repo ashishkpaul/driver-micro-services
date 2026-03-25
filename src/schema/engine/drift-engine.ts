@@ -5,8 +5,13 @@
  * Eliminates the contradiction between db:drift and db:zero-drift.
  */
 
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectDataSource } from "@nestjs/typeorm";
+import { Cron } from "@nestjs/schedule";
 import { DataSource } from "typeorm";
 import { SchemaSnapshot } from "./types";
+import { SchemaDiffService, DetailedSchemaDiff, SchemaDifference } from "../services/schema-diff.service";
+import { DriftCacheService } from "../services/drift-cache.service";
 
 export interface DriftReport {
   entityDrift: boolean;
@@ -14,6 +19,7 @@ export interface DriftReport {
   schemaDrift: boolean;
   driftDetails: DriftDetail[];
   recommendations: string[];
+  detailedDiff?: DetailedSchemaDiff;
 }
 
 export interface DriftDetail {
@@ -22,6 +28,7 @@ export interface DriftDetail {
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   affectedTables?: string[];
   suggestedAction: string;
+  differences?: SchemaDifference[];
 }
 
 /**
@@ -29,15 +36,30 @@ export interface DriftDetail {
  *
  * Provides unified drift detection across entities, migrations, and schema
  */
+@Injectable()
 export class DriftEngine {
-  private dataSource: DataSource;
+  private readonly logger = new Logger(DriftEngine.name);
+  private running = false;
 
-  constructor(dataSource: DataSource) {
-    this.dataSource = dataSource;
+  constructor(
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
+    private readonly schemaDiffService: SchemaDiffService,
+    private readonly driftCacheService: DriftCacheService,
+  ) {}
+
+  private ensureReady() {
+    if (!this.dataSource) {
+      throw new Error("DriftEngine DataSource not injected");
+    }
+
+    if (!this.dataSource.isInitialized) {
+      throw new Error("DataSource not initialized");
+    }
   }
 
   /**
-   * Check full drift status
+   * Check full drift status with detailed explanations
    */
   public async checkFullDrift(): Promise<DriftReport> {
     console.log("🔍 Checking full drift status...");
@@ -49,13 +71,24 @@ export class DriftEngine {
     const driftDetails: DriftDetail[] = [];
     const recommendations: string[] = [];
 
+    // Get detailed schema differences for better explanations
+    let detailedDiff: DetailedSchemaDiff | undefined;
+    
+    try {
+      detailedDiff = await this.schemaDiffService.getDetailedSchemaDiff();
+    } catch (error) {
+      console.warn("Failed to get detailed schema diff:", error);
+    }
+
     if (entityDrift) {
+      const entityDifferences = detailedDiff?.differences.filter(d => d.table) || [];
       driftDetails.push({
         type: "ENTITY",
         description: "Entity definitions differ from database schema",
         severity: "HIGH",
-        suggestedAction:
-          "Run schema synchronization or generate new migrations",
+        suggestedAction: "Run schema synchronization or generate new migrations",
+        affectedTables: entityDifferences.map(d => d.table),
+        differences: entityDifferences,
       });
       recommendations.push(
         "Review entity changes and generate appropriate migrations",
@@ -75,11 +108,14 @@ export class DriftEngine {
     }
 
     if (schemaDrift) {
+      const schemaDifferences = detailedDiff?.differences.filter(d => d.table) || [];
       driftDetails.push({
         type: "SCHEMA",
         description: "Database schema differs from expected state",
         severity: "HIGH",
         suggestedAction: "Compare schema snapshots and resolve discrepancies",
+        affectedTables: schemaDifferences.map(d => d.table),
+        differences: schemaDifferences,
       });
       recommendations.push(
         "Investigate manual schema changes and update entity definitions",
@@ -92,6 +128,7 @@ export class DriftEngine {
       schemaDrift,
       driftDetails,
       recommendations,
+      detailedDiff,
     };
   }
 
@@ -99,22 +136,27 @@ export class DriftEngine {
    * Check entity drift (TypeORM entities vs database)
    */
   public async checkEntityDrift(): Promise<boolean> {
+    this.ensureReady();
     console.log("  Checking entity drift...");
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+
     try {
-      // Use TypeORM's schema validation
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-
-      // Check if schema synchronization is needed by comparing entity metadata
+      // Check if schema synchronization is needed by comparing entity metadata with database
       const entityMetadatas = this.dataSource.entityMetadatas;
-      const hasSchemaChanges = entityMetadatas.length > 0; // Simplified check
-      await queryRunner.release();
+      const currentSchema = await this.buildDatabaseSnapshot();
+      const expectedSchema = await this.buildEntitySnapshot();
 
+      // If schemas match, no entity drift
+      const hasSchemaChanges = this.compareSchemas(currentSchema, expectedSchema);
+      
       return hasSchemaChanges;
     } catch (error) {
       console.warn("  Entity drift check failed:", error);
       return false;
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -122,6 +164,7 @@ export class DriftEngine {
    * Check migration drift (pending migrations)
    */
   public async checkMigrationDrift(): Promise<boolean> {
+    this.ensureReady();
     console.log("  Checking migration drift...");
 
     try {
@@ -137,6 +180,7 @@ export class DriftEngine {
    * Check schema drift (database vs expected schema)
    */
   public async checkSchemaDrift(): Promise<boolean> {
+    this.ensureReady();
     console.log("  Checking schema drift...");
 
     try {
@@ -352,6 +396,54 @@ export class DriftEngine {
       !driftReport.migrationDrift &&
       !driftReport.schemaDrift
     );
+  }
+
+  /**
+   * Background drift analysis - runs every 120 seconds
+   */
+  @Cron("*/120 * * * * *")
+  async runBackgroundDriftAnalysis(): Promise<void> {
+    // Prevent overlapping runs
+    if (this.running) {
+      this.logger.debug("Background drift analysis already running, skipping...");
+      return;
+    }
+
+    this.running = true;
+    const startTime = Date.now();
+
+    try {
+      this.logger.log("🔄 Running background drift analysis...");
+
+      const driftReport = await this.checkFullDrift();
+      const durationMs = Date.now() - startTime;
+
+      // Cache the result
+      await this.driftCacheService.update(driftReport, durationMs);
+
+      this.logger.log(`✅ Background drift analysis completed (${durationMs}ms)`);
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      this.logger.error(`❌ Background drift analysis failed after ${durationMs}ms`, error);
+      
+      // Mark as failed in cache
+      this.driftCacheService.markFailed(error as Error);
+    } finally {
+      this.running = false;
+    }
+  }
+
+  /**
+   * Get cached drift status for health checks
+   */
+  public getCachedDriftStatus(): {
+    report?: DriftReport;
+    lastRun?: Date;
+    lastDurationMs?: number;
+    status: "HEALTHY" | "DEGRADED" | "FAILED" | "UNKNOWN";
+    error?: string;
+  } {
+    return this.driftCacheService.get();
   }
 }
 

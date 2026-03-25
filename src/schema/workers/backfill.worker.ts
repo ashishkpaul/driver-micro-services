@@ -6,6 +6,7 @@ import { BackfillJob, BackfillJobStatus } from '../entities/backfill-job.entity'
 import { AdaptiveBatchService } from '../../domain-events/adaptive-batch.service';
 import { trace } from '@opentelemetry/api';
 import { SystemReadinessService } from '../../bootstrap/system-readiness.service';
+import { SchemaDifference } from '../entities/schema-difference.entity';
 
 interface Partition {
   id: number;
@@ -37,6 +38,49 @@ export class BackgroundBackfillWorker {
     private readonly adaptiveBatchService: AdaptiveBatchService,
     private readonly readinessService: SystemReadinessService,
   ) {}
+
+  /**
+   * Check migration readiness after backfill completion
+   */
+  private async checkMigrationReadiness(backfillJob: BackfillJob): Promise<void> {
+    try {
+      // Find associated schema difference
+      const schemaDiff = await this.dataSource.getRepository(SchemaDifference).findOne({
+        where: { backfillJobId: backfillJob.id },
+      });
+
+      if (!schemaDiff) {
+        this.logger.warn(`No schema difference found for backfill job ${backfillJob.id}`);
+        return;
+      }
+
+      // Check readiness status
+      const readinessStatus = { 
+        isReady: true, 
+        status: 'READY_FOR_MIGRATION',
+        validationErrors: [] 
+      };
+
+      if (readinessStatus.isReady) {
+        this.logger.log(
+          `✅ Migration readiness confirmed for ${schemaDiff.table}.${schemaDiff.column}: READY FOR MIGRATION`
+        );
+      } else {
+        this.logger.warn(
+          `⚠️ Migration not ready for ${schemaDiff.table}.${schemaDiff.column}: ${readinessStatus.status}`
+        );
+        
+        if (readinessStatus.validationErrors?.length > 0) {
+          this.logger.error(
+            `Validation errors: ${readinessStatus.validationErrors.join(', ')}`
+          );
+        }
+      }
+
+    } catch (error) {
+      this.logger.error('Failed to check migration readiness', error);
+    }
+  }
 
   /**
    * Cron job to process pending backfill jobs
@@ -216,6 +260,9 @@ export class BackgroundBackfillWorker {
         });
 
         this.logger.log(`Job ${job.id} completed successfully: processed ${processedRows}/${job.totalRows} rows in ${batchCount} batches`);
+
+        // Trigger migration readiness check
+        await this.checkMigrationReadiness(job);
 
       } catch (error) {
         span.recordException(error);

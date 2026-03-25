@@ -99,7 +99,7 @@ export class OutboxJanitorService {
         archiveEvent.processedAt = event.processedAt;
         archiveEvent.lockedAt = event.lockedAt;
         archiveEvent.lockedBy = event.lockedBy;
-        archiveEvent.idempotencyKey = event.idempotencyKey || undefined;
+        archiveEvent.idempotencyKey = event.idempotencyKey ?? null;
         archiveEvent.archivedAt = new Date();
         archiveEvent.isCompressed = false;
         archiveEvent.originalPayloadSize = JSON.stringify(event.payload).length;
@@ -451,7 +451,7 @@ export class OutboxJanitorService {
       archiveEvent.processedAt = event.processedAt;
       archiveEvent.lockedAt = event.lockedAt;
       archiveEvent.lockedBy = event.lockedBy;
-      archiveEvent.idempotencyKey = event.idempotencyKey || undefined;
+      archiveEvent.idempotencyKey = event.idempotencyKey ?? null;
       archiveEvent.archivedAt = new Date();
       archiveEvent.isCompressed = false;
       archiveEvent.originalPayloadSize = JSON.stringify(event.payload).length;

@@ -29,6 +29,7 @@ export class SchemaOrchestratorService {
     private readonly schemaDiffService: SchemaDiffService,
     private readonly schemaClassificationService: SchemaClassificationService,
     private readonly schemaLockService: SchemaLockService,
+    private readonly driftEngine: DriftEngine,
   ) {}
 
   /**
@@ -177,8 +178,7 @@ export class SchemaOrchestratorService {
     this.logger.log("Checking for schema drift...");
 
     try {
-      const driftEngine = new DriftEngine(this.dataSource);
-      const driftReport = await driftEngine.checkFullDrift();
+      const driftReport = await this.driftEngine.checkFullDrift();
 
       if (driftReport.entityDrift || driftReport.migrationDrift || driftReport.schemaDrift) {
         this.logger.warn("Drift detected", driftReport.driftDetails);

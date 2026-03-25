@@ -119,6 +119,9 @@ export class OutboxEvent {
   @CreateDateColumn()
   createdAt: Date;
 
+  @UpdateDateColumn({ name: "updated_at", nullable: true })
+  updatedAt?: Date;
+
   @Column({ nullable: true })
   processedAt?: Date;
 
@@ -131,10 +134,10 @@ export class OutboxEvent {
   @Column({
     name: "idempotency_key",
     type: "varchar",
-    nullable: true,
-    unique: true, // 👈 ADDED: Matches baseline.ts CONSTRAINT uq_outbox_idempotency_key
+    nullable: false,
+    unique: true,
   })
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 
   @Column({
     type: "smallint",

@@ -120,8 +120,9 @@ export class Driver {
 
   @Column({
     name: "auth_provider",
-    type: "varchar",
-    length: 255,
+    type: "enum",
+    enum: ["legacy", "google", "email"],
+    enumName: "auth_provider_enum",
     default: "legacy",
   })
   authProvider!: "legacy" | "google" | "email";

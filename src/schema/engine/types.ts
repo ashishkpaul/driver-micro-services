@@ -45,11 +45,6 @@ export interface HeaderOptions {
   isAutoFixed?: boolean;
 }
 
-export interface SchemaDiff {
-  up: string[];
-  down: string[];
-}
-
 export interface MigrationGenerationOptions {
   name: string;
   outputDir: string;
@@ -174,6 +169,60 @@ export interface CompatibilityReport {
   apiCompatibility: boolean;
   migrationCompatibility: boolean;
   recommendations: string[];
+}
+
+export interface DriftReport {
+  entityDrift: boolean;
+  migrationDrift: boolean;
+  schemaDrift: boolean;
+  driftDetails: DriftDetail[];
+  recommendations: string[];
+  detailedDiff?: DetailedSchemaDiff;
+}
+
+export interface DriftDetail {
+  type: "ENTITY" | "MIGRATION" | "SCHEMA";
+  description: string;
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  affectedTables?: string[];
+  suggestedAction: string;
+  differences?: SchemaDifference[];
+}
+
+export interface DetailedSchemaDiff {
+  differences: SchemaDifference[];
+  newTables: string[];
+  droppedTables: string[];
+  alteredTables: string[];
+  summary: {
+    totalDifferences: number;
+    criticalDifferences: number;
+    mediumDifferences: number;
+    lowDifferences: number;
+  };
+}
+
+export interface SchemaDifference {
+  table: string;
+  column?: string;
+  index?: string;
+  constraint?: string;
+  entity: {
+    type?: string;
+    nullable?: boolean;
+    default?: any;
+    primaryKey?: boolean;
+    unique?: boolean;
+  };
+  database: {
+    type?: string;
+    nullable?: boolean;
+    default?: any;
+    primaryKey?: boolean;
+    unique?: boolean;
+  };
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  description: string;
 }
 
 export interface ValidationResult {

@@ -35,6 +35,8 @@ export class HealthAggregatorService {
         version: schemaStatus.version,
         driftDetected: schemaStatus.driftDetected,
         lastConvergence: schemaStatus.lastConvergence,
+        status: schemaStatus.status,
+        error: schemaStatus.error,
         pool: {
           healthy: dbPoolStatus.healthy,
           poolSize: dbPoolStatus.poolSize,

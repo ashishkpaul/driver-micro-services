@@ -37,12 +37,15 @@ export class Delivery {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "uuid" })
+  @Column({
+    type: "uuid",
+    nullable: false
+  })
   @IsNotEmpty()
   @IsUUID()
   sellerOrderId!: string;
 
-  @Column({ type: "uuid" })
+  @Column({ type: "varchar" })
   @IsNotEmpty()
   @IsUUID()
   channelId!: string;

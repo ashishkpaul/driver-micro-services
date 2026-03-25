@@ -49,8 +49,8 @@ export class OutboxArchiveEvent {
   @Column({ nullable: true })
   lockedBy?: string;
 
-  @Column({ unique: true, nullable: true })
-  idempotencyKey?: string;
+  @Column({ unique: true, nullable: false })
+  idempotencyKey!: string;
 
   @Column({ type: "timestamp" })
   archivedAt: Date;

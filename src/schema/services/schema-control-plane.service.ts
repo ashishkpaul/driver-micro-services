@@ -2,7 +2,11 @@ import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { SchemaOrchestratorService } from "./schema-orchestrator.service";
+import { DriftEngine } from "../engine/drift-engine";
+import { SchemaDiffService } from "./schema-diff.service";
 import { REQUIRED_SCHEMA_VERSION, SCHEMA_LOCK_KEY } from "../schema.constants";
+import { MigrationReadinessService } from "./migration-readiness.service";
+import { BackfillJob } from "../entities/backfill-job.entity";
 
 @Injectable()
 export class SchemaControlPlaneService implements OnApplicationBootstrap {
@@ -11,6 +15,9 @@ export class SchemaControlPlaneService implements OnApplicationBootstrap {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly schemaOrchestratorService: SchemaOrchestratorService,
+    private readonly driftEngine: DriftEngine,
+    private readonly schemaDiffService: SchemaDiffService,
+    private readonly migrationReadinessService: MigrationReadinessService,
   ) {}
 
   /**
@@ -48,11 +55,109 @@ export class SchemaControlPlaneService implements OnApplicationBootstrap {
   }
 
   /**
-   * Check if DataSource is properly connected
+   * Check for schema drift and return true if drift is detected
+   */
+  private async checkForDrift(): Promise<boolean> {
+    try {
+      const driftReport = await this.driftEngine.checkFullDrift();
+
+      if (driftReport.entityDrift || driftReport.schemaDrift) {
+        this.logger.warn("Schema drift detected", {
+          entityDrift: driftReport.entityDrift,
+          schemaDrift: driftReport.schemaDrift,
+          driftDetails: driftReport.driftDetails.map(detail => ({
+            ...detail,
+            affectedTables: detail.affectedTables ? [...new Set(detail.affectedTables)] : undefined
+          })),
+        });
+
+        // Log detailed differences if available
+        if (driftReport.detailedDiff) {
+          this.logger.warn("Detailed drift report:", {
+            totalDifferences: driftReport.detailedDiff.summary.totalDifferences,
+            criticalDifferences: driftReport.detailedDiff.summary.criticalDifferences,
+            mediumDifferences: driftReport.detailedDiff.summary.mediumDifferences,
+            lowDifferences: driftReport.detailedDiff.summary.lowDifferences,
+            affectedTables: driftReport.detailedDiff.alteredTables,
+          });
+        }
+
+        // Check for critical differences that should block startup
+        const criticalDifferences = driftReport.detailedDiff?.differences.filter(
+          d => d.severity === "HIGH"
+        ) || [];
+
+        if (criticalDifferences.length > 0) {
+          this.logger.error(
+            `${criticalDifferences.length} critical schema differences detected - blocking startup`,
+            criticalDifferences
+          );
+          return true;
+        }
+
+        this.logger.log("Only non-critical drift detected - continuing startup");
+        return false;
+      }
+
+      this.logger.log("No schema drift detected");
+      return false;
+    } catch (error) {
+      this.logger.error("Failed to check for schema drift", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get drift status summary with migration readiness
+   */
+  async getDriftStatus(): Promise<{
+    totalDifferences: number;
+    criticalDifferences: number;
+    mediumDifferences: number;
+    lowDifferences: number;
+    backfillJobs: number;
+    readyForMigration: number;
+    status: 'HEALTHY' | 'DRIFT_DETECTED' | 'BACKFILLING' | 'READY_FOR_MIGRATION';
+  }> {
+    const detailedDiff = await this.schemaDiffService.getDetailedSchemaDiff();
+    const backfillJobs = await this.dataSource.getRepository(BackfillJob).count();
+    
+    // Get migration readiness summary
+    const readinessSummary = await this.migrationReadinessService.getReadinessSummary();
+
+    let status: 'HEALTHY' | 'DRIFT_DETECTED' | 'BACKFILLING' | 'READY_FOR_MIGRATION' = 'HEALTHY';
+
+    if (detailedDiff.summary.totalDifferences > 0) {
+      status = 'DRIFT_DETECTED';
+    }
+
+    if (backfillJobs > 0) {
+      const activeJobs = await this.dataSource.getRepository(BackfillJob).count({
+        where: { status: 'PROCESSING' as any },
+      });
+      
+      if (activeJobs > 0) {
+        status = 'BACKFILLING';
+      } else if (readinessSummary.readyForMigration > 0) {
+        status = 'READY_FOR_MIGRATION';
+      }
+    }
+
+    return {
+      totalDifferences: detailedDiff.summary.totalDifferences,
+      criticalDifferences: detailedDiff.summary.criticalDifferences,
+      mediumDifferences: detailedDiff.summary.mediumDifferences,
+      lowDifferences: detailedDiff.summary.lowDifferences,
+      backfillJobs,
+      readyForMigration: readinessSummary.readyForMigration,
+      status,
+    };
+  }
+
+  /**
+   * Check DataSource connection
    */
   private async checkDataSourceConnection(): Promise<void> {
-    this.logger.log("Checking DataSource connection...");
-
     try {
       await this.dataSource.query("SELECT 1");
       this.logger.log("✅ DataSource connection verified");
@@ -62,7 +167,7 @@ export class SchemaControlPlaneService implements OnApplicationBootstrap {
   }
 
   /**
-   * Check if database schema version meets requirements
+   * Check if schema version meets requirements
    */
   private async checkSchemaVersion(): Promise<void> {
     this.logger.log(`Checking schema version (required: ${REQUIRED_SCHEMA_VERSION})...`);
@@ -79,7 +184,7 @@ export class SchemaControlPlaneService implements OnApplicationBootstrap {
       `);
 
       if (!hasMigrationsTable[0]?.exists) {
-        this.logger.warn("Migrations table not found - this appears to be a fresh database");
+        this.logger.warn("Migrations table not found - assuming fresh database");
         return;
       }
 
@@ -259,43 +364,53 @@ export class SchemaControlPlaneService implements OnApplicationBootstrap {
     }
   }
 
+
   /**
-   * Check for schema drift
+   * Get cached drift status for fast health checks
    */
-  private async checkForDrift(): Promise<boolean> {
+  async getCachedDriftStatus(): Promise<{
+    driftDetected: boolean;
+    lastRun?: Date;
+    lastDurationMs?: number;
+    status: "HEALTHY" | "DEGRADED" | "FAILED" | "UNKNOWN";
+    error?: string;
+  }> {
     try {
-      // Simplified drift check - in a real implementation, this would use the DriftEngine
-      // For now, we'll check if there are any untracked tables or columns
+      const cachedStatus = this.driftEngine.getCachedDriftStatus();
       
-      // Check for untracked tables (tables not in our expected list)
-      const untrackedTables = await this.dataSource.query(`
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_name NOT IN ('drivers', 'deliveries', 'assignments', 'admin_users', 'cities', 'zones', 'audit_logs', '_migrations', '_migrations_lock')
-      `);
-
-      if (untrackedTables.length > 0) {
-        this.logger.warn(`Found untracked tables: ${untrackedTables.map(t => t.table_name).join(', ')}`);
-        return true;
-      }
-
-      return false;
-
+      return {
+        driftDetected: cachedStatus.status === "DEGRADED",
+        lastRun: cachedStatus.lastRun,
+        lastDurationMs: cachedStatus.lastDurationMs,
+        status: cachedStatus.status,
+        error: cachedStatus.error,
+      };
     } catch (error) {
-      this.logger.error(`Failed to check for drift: ${error.message}`);
-      return false;
+      this.logger.error(`Cached drift status check failed: ${error.message}`, error);
+      return {
+        driftDetected: false,
+        status: "FAILED",
+        error: `Cached drift status check failed: ${error.message}`,
+      };
     }
   }
 
   /**
-   * Get schema status for health checks
+   * Get schema status for health checks with migration readiness (fast version)
    */
   async getSchemaStatus(): Promise<{
     connected: boolean;
     version: string;
     driftDetected: boolean;
     lastConvergence: string;
+    migrationReadiness: {
+      readyForMigration: number;
+      backfilling: number;
+      pending: number;
+      migrated: number;
+    };
+    status: "HEALTHY" | "DEGRADED" | "FAILED";
+    error?: string;
   }> {
     try {
       // Check connection
@@ -305,25 +420,67 @@ export class SchemaControlPlaneService implements OnApplicationBootstrap {
       // Get version info
       const version = REQUIRED_SCHEMA_VERSION;
 
-      // Check for drift (simplified check)
-      const driftDetected = false; // Would be implemented with actual drift detection
+      // Get cached drift status (fast, non-blocking)
+      const cachedDriftStatus = await this.getCachedDriftStatus();
+      const driftDetected = cachedDriftStatus.driftDetected;
 
       // Get last convergence time (would be stored in a status table)
       const lastConvergence = new Date().toISOString();
+
+      // Get migration readiness summary
+      let readinessSummary;
+      let readinessError: string | undefined;
+      try {
+        readinessSummary = await this.migrationReadinessService.getReadinessSummary();
+      } catch (error) {
+        this.logger.error(`Migration readiness check failed: ${error.message}`, error);
+        readinessError = `Migration readiness check failed: ${error.message}`;
+        readinessSummary = {
+          readyForMigration: 0,
+          backfilling: 0,
+          pending: 0,
+          migrated: 0,
+        };
+      }
+
+      // Determine overall status
+      let status: "HEALTHY" | "DEGRADED" | "FAILED" = "HEALTHY";
+      let error: string | undefined;
+
+      if (cachedDriftStatus.status === "FAILED" || readinessError) {
+        status = "FAILED";
+        error = cachedDriftStatus.error || readinessError;
+      } else if (driftDetected || cachedDriftStatus.status === "DEGRADED") {
+        status = "DEGRADED";
+        error = "Schema drift detected";
+      }
 
       return {
         connected,
         version,
         driftDetected,
         lastConvergence,
+        migrationReadiness: readinessSummary,
+        status,
+        error,
       };
 
     } catch (error) {
+      this.logger.error(`Schema status check failed: ${error.message}`, error);
+      
       return {
         connected: false,
         version: REQUIRED_SCHEMA_VERSION,
         driftDetected: false,
         lastConvergence: "never",
+        migrationReadiness: {
+          readyForMigration: 0,
+          backfilling: 0,
+          pending: 0,
+          migrated: 0,
+        },
+        status: "FAILED",
+        error: `Schema status check failed: ${error.message}`,
       };
     }
   }

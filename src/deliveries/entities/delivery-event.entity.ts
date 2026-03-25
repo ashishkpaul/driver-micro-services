@@ -33,7 +33,7 @@ export class DeliveryEvent {
   @IsUUID()
   deliveryId!: string;
 
-  @Column({ type: "uuid" })
+  @Column({ type: "varchar" })
   @IsUUID()
   sellerOrderId!: string;
 
