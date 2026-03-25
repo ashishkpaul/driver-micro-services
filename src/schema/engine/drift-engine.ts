@@ -82,17 +82,22 @@ export class DriftEngine {
 
     if (entityDrift) {
       const entityDifferences = detailedDiff?.differences.filter(d => d.table) || [];
-      driftDetails.push({
-        type: "ENTITY",
-        description: "Entity definitions differ from database schema",
-        severity: "HIGH",
-        suggestedAction: "Run schema synchronization or generate new migrations",
-        affectedTables: entityDifferences.map(d => d.table),
-        differences: entityDifferences,
-      });
-      recommendations.push(
-        "Review entity changes and generate appropriate migrations",
-      );
+      if (entityDifferences.length > 0) {
+        driftDetails.push({
+          type: "ENTITY",
+          description: "Entity definitions differ from database schema",
+          severity: "HIGH",
+          suggestedAction: "Run schema synchronization or generate new migrations",
+          affectedTables: entityDifferences.map(d => d.table),
+          differences: entityDifferences,
+        });
+        recommendations.push(
+          "Review entity changes and generate appropriate migrations",
+        );
+      } else {
+        // If entityDrift is true but no differences, it might be a false positive
+        this.logger.warn("Entity drift detected but no differences found - possible false positive");
+      }
     }
 
     if (migrationDrift) {
@@ -109,17 +114,22 @@ export class DriftEngine {
 
     if (schemaDrift) {
       const schemaDifferences = detailedDiff?.differences.filter(d => d.table) || [];
-      driftDetails.push({
-        type: "SCHEMA",
-        description: "Database schema differs from expected state",
-        severity: "HIGH",
-        suggestedAction: "Compare schema snapshots and resolve discrepancies",
-        affectedTables: schemaDifferences.map(d => d.table),
-        differences: schemaDifferences,
-      });
-      recommendations.push(
-        "Investigate manual schema changes and update entity definitions",
-      );
+      if (schemaDifferences.length > 0) {
+        driftDetails.push({
+          type: "SCHEMA",
+          description: "Database schema differs from expected state",
+          severity: "HIGH",
+          suggestedAction: "Compare schema snapshots and resolve discrepancies",
+          affectedTables: schemaDifferences.map(d => d.table),
+          differences: schemaDifferences,
+        });
+        recommendations.push(
+          "Investigate manual schema changes and update entity definitions",
+        );
+      } else {
+        // If schemaDrift is true but no differences, it might be a false positive
+        this.logger.warn("Schema drift detected but no differences found - possible false positive");
+      }
     }
 
     return {
