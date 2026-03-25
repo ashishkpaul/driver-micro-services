@@ -68,8 +68,8 @@ export class AdaptiveBatchService {
       .createQueryBuilder("tracker")
       .select([
         "COUNT(*) as totalEvents",
-        "COUNT(CASE WHEN tracker.status = :completedStatus THEN 1 END) as completedEvents",
-        "COUNT(CASE WHEN tracker.status = :failedStatus THEN 1 END) as failedEvents",
+        "COUNT(CASE WHEN tracker.status = 'COMPLETED' THEN 1 END) as completedEvents",
+        "COUNT(CASE WHEN tracker.status = 'FAILED' THEN 1 END) as failedEvents",
         "AVG(tracker.processing_duration_ms) as avgDuration",
         "MAX(tracker.processing_duration_ms) as maxDuration",
         "MIN(tracker.processing_duration_ms) as minDuration",
@@ -298,7 +298,7 @@ export class AdaptiveBatchService {
       .createQueryBuilder("tracker")
       .select([
         "COUNT(*) as totalEvents",
-        "COUNT(CASE WHEN tracker.status = :completedStatus THEN 1 END) as completedEvents",
+        "COUNT(CASE WHEN tracker.status = 'COMPLETED' THEN 1 END) as completedEvents",
         "AVG(tracker.processing_duration_ms) as avgDuration",
       ])
       .where("tracker.createdAt >= :cutoffTime", { cutoffTime })
