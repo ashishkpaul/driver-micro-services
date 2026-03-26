@@ -21,7 +21,6 @@ import { DriversService } from "./drivers.service";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { UpdateDriverLocationDto } from "./dto/update-driver-location.dto";
 import { UpdateDriverStatusDto } from "./dto/update-driver-status.dto";
-import { DriverStatsDto } from "./dto/driver-stats.dto";
 import { AuthGuard } from "@nestjs/passport";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";

@@ -9,6 +9,7 @@ import {
 import { DeliveriesService } from "../deliveries/deliveries.service"; // ADDED
 import { DriversService } from "../drivers/drivers.service"; // ADDED
 import { OffersService } from "../offers/offers.service"; // ADDED
+import { SafeDispatchService } from "../safe-dispatch/safe-dispatch.service"; // ADDED
 import { ConfigService } from "@nestjs/config";
 import {
   IsNumber,
@@ -71,6 +72,7 @@ export class EventsController {
     private deliveriesService: DeliveriesService, // REPLACED AssignmentService
     private driversService: DriversService, // ADDED
     private offersService: OffersService, // ADDED
+    private safeDispatchService: SafeDispatchService, // ADDED
     private configService: ConfigService,
     private redisService: RedisService,
   ) {
@@ -129,46 +131,65 @@ export class EventsController {
         dropLon: payload.drop.lon,
       });
 
-      // 2. Find nearest available driver
-      const nearestDriver = await this.driversService.findNearestAvailable(
-        payload.pickup.lat,
-        payload.pickup.lon,
+      // 2. Use SafeDispatchService for intelligent dispatch
+      const dispatchResult = await this.safeDispatchService.executeSafeDispatch(
+        delivery.id,
+        await this.safeDispatchService.getEligibleDrivers(
+          delivery.id,
+          payload.pickup.lat,
+          payload.pickup.lon,
+          10, // maxDistanceKm
+          20, // limit
+        ),
+        // Fallback callback for legacy dispatch
+        async (deliveryId: string, reason: string) => {
+          this.logger.warn(`Using legacy dispatch for delivery ${deliveryId}: ${reason}`);
+          
+          // Legacy dispatch logic
+          const nearestDriver = await this.driversService.findNearestAvailable(
+            payload.pickup.lat,
+            payload.pickup.lon,
+          );
+
+          if (!nearestDriver) {
+            this.logger.warn(
+              `No available drivers for order ${payload.sellerOrderId}`,
+            );
+            return {
+              status: "queued",
+              deliveryId: delivery.id,
+              message: "No drivers available",
+            };
+          }
+
+          // Create offer — This triggers OFFER_CREATED_V2 via WebSocket
+          await this.offersService.createOfferForDriver({
+            driverId: nearestDriver.id,
+            deliveryId: delivery.id,
+            expiresInSeconds: 30,
+          });
+
+          return {
+            status: "success",
+            deliveryId: delivery.id,
+            message: "Legacy dispatch: Offer broadcasted to nearest driver",
+          };
+        },
       );
-
-      if (!nearestDriver) {
-        this.logger.warn(
-          `No available drivers for order ${payload.sellerOrderId}`,
-        );
-        // Mark as processed so Vendure stops retrying; fallback logic handles re-dispatch
-        await this.redisService
-          .getClient()
-          .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
-        return {
-          status: "queued",
-          deliveryId: delivery.id,
-          message: "No drivers available",
-        };
-      }
-
-      // 3. Create offer — This triggers OFFER_CREATED_V2 via WebSocket
-      await this.offersService.createOfferForDriver({
-        driverId: nearestDriver.id,
-        deliveryId: delivery.id,
-        expiresInSeconds: 30,
-      });
 
       await this.redisService
         .getClient()
         .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
 
       this.logger.log(
-        `V2: Created offer for order ${payload.sellerOrderId}, delivery ID: ${delivery.id}`,
+        `Dispatch completed for order ${payload.sellerOrderId}, delivery ID: ${delivery.id}, method: ${dispatchResult.method || 'legacy'}`,
       );
 
       return {
         status: "success",
         deliveryId: delivery.id,
-        message: "Offer broadcasted to nearest driver",
+        message: dispatchResult.message || "Dispatch completed",
+        method: dispatchResult.method || "legacy",
       };
     } catch (error: any) {
       // PostgreSQL unique violation code: 23505

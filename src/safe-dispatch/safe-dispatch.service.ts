@@ -10,7 +10,7 @@ import { DispatchScoringService } from "../dispatch-scoring/dispatch-scoring.ser
 import { DispatchConfigService } from "../dispatch-scoring/dispatch-config.service";
 import { DispatchDecision, DispatchCohort, DispatchMethod, DispatchStatus } from "./entities/dispatch-decision.entity";
 import { Driver } from "../drivers/entities/driver.entity";
-import { Delivery } from "../deliveries/entities/delivery.entity";
+import { DriversService } from "../drivers/drivers.service";
 
 @Injectable()
 export class SafeDispatchService {
@@ -37,6 +37,7 @@ export class SafeDispatchService {
     private readonly dispatchScoringService: DispatchScoringService,
     private readonly dispatchConfigService: DispatchConfigService,
     private readonly dataSource: DataSource,
+    private readonly driversService: DriversService,
   ) {}
 
   /**
@@ -356,6 +357,64 @@ export class SafeDispatchService {
     });
 
     return assignedDecisions / totalDecisions;
+  }
+
+  /**
+   * Get eligible drivers for dispatch scoring
+   */
+  async getEligibleDrivers(
+    deliveryId: string,
+    pickupLat: number,
+    pickupLon: number,
+    maxDistanceKm: number = 10,
+    limit: number = 20,
+  ): Promise<Array<{ driverId: string; score: number; driver: Driver }>> {
+    try {
+      // Get available drivers within radius
+      const availableDrivers = await this.driversService.findAvailable(
+        pickupLat,
+        pickupLon,
+        maxDistanceKm,
+      );
+
+      if (availableDrivers.length === 0) {
+        this.logger.debug(`No available drivers found for delivery ${deliveryId}`);
+        return [];
+      }
+
+      // Filter eligible drivers and get their scores
+      const eligibleDrivers: Array<{ driverId: string; score: number; driver: Driver }> = [];
+      
+      for (const driver of availableDrivers) {
+        try {
+          // Check if driver is eligible for scoring
+          const isEligible = await this.dispatchScoringService.isDriverEligible(driver.id);
+          
+          if (isEligible) {
+            // Get driver's current score
+            const score = await this.dispatchScoringService.getCurrentScore(driver.id);
+            
+            eligibleDrivers.push({
+              driverId: driver.id,
+              score,
+              driver,
+            });
+          } else {
+            this.logger.debug(`Driver ${driver.id} not eligible for scoring dispatch`);
+          }
+        } catch (error) {
+          this.logger.warn(`Error checking eligibility for driver ${driver.id}:`, error);
+          // Skip this driver and continue with others
+        }
+      }
+
+      // Sort by score (highest first) and limit results
+      eligibleDrivers.sort((a, b) => b.score - a.score);
+      return eligibleDrivers.slice(0, limit);
+    } catch (error) {
+      this.logger.error(`Failed to get eligible drivers for delivery ${deliveryId}:`, error);
+      return [];
+    }
   }
 
   /**

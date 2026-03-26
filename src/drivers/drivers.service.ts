@@ -7,7 +7,6 @@ import { DriverStats } from "../delivery-intelligence/driver/driver-stats.entity
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { RedisService } from "../redis/redis.service";
 import { DriverStatus } from "./enums/driver-status.enum";
-import { calculateDistance } from "../common/utils/geo.utils";
 
 @Injectable()
 export class DriversService {
