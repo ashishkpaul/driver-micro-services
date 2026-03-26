@@ -179,10 +179,22 @@ export class DriverAdminApplicationService {
           continue;
         }
 
-        // Update driver status
-        const updatedDriver = await this.driversService.setActive(
+        // STAGE 3: City Isolation Check for Bulk Operations
+        // Check if actor has permission to modify this driver
+        if (actor.role !== 'SUPER_ADMIN' && actor.cityId !== currentDriver.cityId) {
+          errors.push({
+            driverId,
+            status: "error" as const,
+            message: `You do not have permission to manage drivers outside your city. Driver is in ${currentDriver.cityId}, you are in ${actor.cityId}`,
+          });
+          continue;
+        }
+
+        // Update driver status with city isolation
+        const updatedDriver = await this.driversService.setActiveWithCityIsolation(
           driverId,
           isActive,
+          { role: actor.role, cityId: actor.cityId }
         );
 
         // Audit log

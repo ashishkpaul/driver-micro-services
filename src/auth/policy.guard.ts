@@ -153,34 +153,54 @@ export class PolicyGuard implements CanActivate {
 
   private buildPolicyContext(request: Request): PolicyContext {
     const user = (request as any).user;
+    const params = request.params;
+    const path = request.route?.path || '';
+
+    // 1. Identify what the generic :id represents based on the route
+    let inferredDriverId: string | undefined;
+    let inferredDeliveryId: string | undefined;
+
+    if (params.id) {
+      if (path.includes('/drivers')) {
+        inferredDriverId = params.id;
+      } else if (path.includes('/deliveries')) {
+        inferredDeliveryId = params.id;
+      }
+    }
 
     return {
-      userId: user?.userId,
+      userId: user?.userId || user?.sub, // Support both naming conventions
       driverId: user?.driverId,
       role: user?.role || user?.type,
       cityId: user?.cityId,
       zoneId: user?.zoneId,
       permissions: user?.permissions || [],
       isActive: user?.isActive !== false,
-      // Extract from request params/body for resource-level checks
+      
+      // Resource Mapping with correct precedence: 
+      // Specific param > Inferred generic :id > Body > User Context
       resourceCityId:
-        request.params.cityId ||
+        params.cityId ||
         request.body.cityId ||
         request.query?.cityId ||
         user?.resourceCityId,
+
       resourceZoneId:
-        request.params.zoneId ||
+        params.zoneId ||
         request.body.zoneId ||
         request.query?.zoneId ||
         user?.resourceZoneId,
+
       resourceDriverId:
-        request.params.driverId ||
+        params.driverId ||
+        inferredDriverId || // Fixed: Now catches :id in /drivers routes
         request.body.driverId ||
         request.query?.driverId ||
         user?.resourceDriverId,
+
       resourceDeliveryId:
-        request.params.deliveryId ||
-        request.params.id ||
+        params.deliveryId ||
+        inferredDeliveryId || // Fixed: No longer blindly grabs :id for non-delivery routes
         request.body.deliveryId ||
         request.query?.deliveryId ||
         user?.resourceDeliveryId,

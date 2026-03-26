@@ -1,5 +1,5 @@
 // src/drivers/drivers.service.ts
-import { Injectable, NotFoundException, Logger } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger, ForbiddenException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Driver } from "./entities/driver.entity";
@@ -114,6 +114,39 @@ export class DriversService {
     if (!isActive) {
       try {
         await this.redisService.markDriverOffline(id);
+        // Force invalidation in Redis for 24 hours (or your JWT TTL)
+        await this.redisService.getClient().set(`revoked_token:${id}`, 'true', 'EX', 86400);
+      } catch (e) {
+        this.logger.error(`Redis offline failed for ${id}`, e);
+      }
+    }
+
+    return savedDriver;
+  }
+
+  async setActiveWithCityIsolation(
+    id: string, 
+    isActive: boolean, 
+    actor: { role: string; cityId?: string }
+  ): Promise<Driver> {
+    const driver = await this.findOne(id);
+
+    // STAGE 3: City Isolation Check
+    if (actor.role !== 'SUPER_ADMIN' && actor.cityId !== driver.cityId) {
+      this.logger.warn(`City mismatch: Admin ${actor.cityId} attempted to modify Driver in ${driver.cityId}`);
+      throw new ForbiddenException('You do not have permission to manage drivers outside your city.');
+    }
+
+    driver.isActive = isActive;
+    driver.lastActiveAt = new Date();
+
+    const savedDriver = await this.driverRepository.save(driver);
+
+    if (!isActive) {
+      try {
+        await this.redisService.markDriverOffline(id);
+        // Force invalidation in Redis for 24 hours (or your JWT TTL)
+        await this.redisService.getClient().set(`revoked_token:${id}`, 'true', 'EX', 86400);
       } catch (e) {
         this.logger.error(`Redis offline failed for ${id}`, e);
       }

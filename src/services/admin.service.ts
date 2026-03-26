@@ -15,6 +15,7 @@ import {
   AdminLoginDto,
 } from "../dto/admin.dto";
 import { City } from "../entities/city.entity";
+import { RedisService } from "../redis/redis.service";
 
 @Injectable()
 export class AdminService {
@@ -24,6 +25,7 @@ export class AdminService {
     @InjectRepository(City)
     private cityRepository: Repository<City>,
     private passwordService: PasswordService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -193,12 +195,15 @@ export class AdminService {
   ): Promise<AdminUser> {
     const admin = await this.findById(id);
 
-    // Superadmin can update any admin, regular admin can only update their own city
-    if (
-      updatedBy.role !== AdminRole.SUPER_ADMIN &&
-      admin.cityId !== updatedBy.cityId
-    ) {
-      throw new BadRequestException("You can only update admins in your city");
+    // STAGE 3: Admin-to-Admin Isolation
+    if (updatedBy.role !== AdminRole.SUPER_ADMIN) {
+      if (updatedBy.cityId !== admin.cityId) {
+        throw new BadRequestException('Cannot modify admin users from other cities.');
+      }
+      // Prevent City Admins from changing roles to SUPER_ADMIN
+      if (updateAdminDto.role === AdminRole.SUPER_ADMIN) {
+        throw new BadRequestException('Only Super Admins can grant Super Admin privileges.');
+      }
     }
 
     // Check for email conflicts (excluding current admin)
@@ -225,11 +230,24 @@ export class AdminService {
       }
     }
 
+    // If role or city changes, the old JWT claims are dangerous/stale
+    const needsInvalidation = 
+      (updateAdminDto.role && updateAdminDto.role !== admin.role) ||
+      (updateAdminDto.cityId && updateAdminDto.cityId !== admin.cityId) ||
+      (updateAdminDto.isActive === false);
+
     // Update admin
     Object.assign(admin, updateAdminDto);
     admin.updatedAt = new Date();
 
-    return this.adminRepository.save(admin);
+    const updated = await this.adminRepository.save(admin);
+
+    if (needsInvalidation) {
+      // Use the same key pattern as the JwtStrategy
+      await this.redisService.getClient().set(`revoked_token:${id}`, 'true', 'EX', 86400);
+    }
+
+    return updated;
   }
 
   /**

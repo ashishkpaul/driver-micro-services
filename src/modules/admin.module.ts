@@ -1,6 +1,7 @@
 // src/modules/admin.module.ts
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { RedisModule } from "../redis/redis.module";
 import { AdminUser } from "../entities/admin-user.entity";
 import { City } from "../entities/city.entity";
 import { Zone } from "../entities/zone.entity";
@@ -19,6 +20,7 @@ import { DriversModule } from "../drivers/drivers.module";
 @Module({
   imports: [
     TypeOrmModule.forFeature([AdminUser, City, Zone, AuditLog]),
+    RedisModule,
     DriversModule,
   ],
   providers: [

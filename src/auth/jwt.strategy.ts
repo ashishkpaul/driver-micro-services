@@ -2,10 +2,11 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 import { RolePermissions } from "./permissions";
+import { RedisService } from "../redis/redis.service";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly redisService: RedisService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -15,6 +16,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any) {
     try {
+      const userId = payload.sub;
+      
+      // NEW: Hot-check Redis for revocation status
+      // If the key exists, it means the user was manually logged out or disabled
+      const isRevoked = await this.redisService.getClient().get(`revoked_token:${userId}`);
+      if (isRevoked) {
+        throw new UnauthorizedException("Session invalidated. Please log in again.");
+      }
+
       if (payload.role === "SYSTEM" || payload.type === "system") {
         return {
           role: "SYSTEM",
