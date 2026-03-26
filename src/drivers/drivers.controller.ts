@@ -107,6 +107,11 @@ export class DriversController {
     return stats;
   }
 
+  @Get(":id/score")
+  async getDriverScore(@Param("id", ParseUUIDPipe) id: string) {
+    return await this.driversService.getDriverScore(id);
+  }
+
   @Patch(":id/location")
   @UseGuards(AuthGuard("jwt"), PolicyGuard)
   @RequirePermissions(Permission.DRIVER_UPDATE_OWN_LOCATION)

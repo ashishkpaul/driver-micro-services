@@ -7,6 +7,7 @@ import { DriverStats } from "../delivery-intelligence/driver/driver-stats.entity
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { RedisService } from "../redis/redis.service";
 import { DriverStatus } from "./enums/driver-status.enum";
+import { DispatchScoringService } from "../dispatch-scoring/dispatch-scoring.service";
 
 @Injectable()
 export class DriversService {
@@ -22,7 +23,10 @@ export class DriversService {
   constructor(
     @InjectRepository(Driver)
     private readonly driverRepository: Repository<Driver>,
+    @InjectRepository(DriverStats)
+    private readonly driverStatsRepo: Repository<DriverStats>,
     private readonly redisService: RedisService,
+    private readonly dispatchScoringService: DispatchScoringService,
   ) {}
 
   /* ------------------------------------------------------------------ */
@@ -223,6 +227,26 @@ export class DriversService {
       .createQueryBuilder(DriverStats, "stats")
       .where("stats.driverId = :driverId", { driverId })
       .getOne();
+  }
+
+  async getDriverScore(driverId: string) {
+    // 1. Verify driver exists
+    await this.findOne(driverId);
+    
+    // 2. Get current aggregate score
+    const totalScore = await this.dispatchScoringService.getCurrentScore(driverId);
+    
+    // 3. Get eligibility status (context for ops)
+    const isEligible = await this.dispatchScoringService.isDriverEligible(driverId);
+
+    return {
+      driverId,
+      totalScore,
+      isEligible,
+      calculatedAt: new Date(),
+      // Note: If your DispatchScoringService has a breakdown method, call it here.
+      // Otherwise, this provides the high-level diagnostic ops needs.
+    };
   }
 
   /* ------------------------------------------------------------------ */
