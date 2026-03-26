@@ -2,6 +2,28 @@ import { MigrationInterface, QueryRunner, Table } from "typeorm";
 
 export class AddSafeDispatch1774425400000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Create enum types first
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE dispatch_decisions_cohort_enum AS ENUM ('CONTROL', 'SCORING', 'MANUAL');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE dispatch_decisions_dispatch_method_enum AS ENUM ('LEGACY', 'SCORING_BASED', 'MANUAL_OVERRIDE');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE dispatch_decisions_dispatch_status_enum AS ENUM ('PENDING', 'ASSIGNED', 'FAILED', 'TIMEOUT');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
     // Check if table already exists
     const tableExists = await queryRunner.hasTable('dispatch_decisions');
     if (tableExists) {
@@ -33,20 +55,17 @@ export class AddSafeDispatch1774425400000 implements MigrationInterface {
           },
           {
             name: "cohort",
-            type: "enum",
-            enum: ["CONTROL", "SCORING", "MANUAL"],
+            type: "dispatch_decisions_cohort_enum",
             isNullable: false,
           },
           {
             name: "dispatch_method",
-            type: "enum",
-            enum: ["LEGACY", "SCORING_BASED", "MANUAL_OVERRIDE"],
+            type: "dispatch_decisions_dispatch_method_enum",
             isNullable: false,
           },
           {
             name: "dispatch_status",
-            type: "enum",
-            enum: ["PENDING", "ASSIGNED", "FAILED", "TIMEOUT"],
+            type: "dispatch_decisions_dispatch_status_enum",
             isNullable: false,
           },
           {
@@ -138,5 +157,12 @@ export class AddSafeDispatch1774425400000 implements MigrationInterface {
     `);
 
     await queryRunner.dropTable("dispatch_decisions", true);
+
+    // Drop enum types with idempotency
+    await queryRunner.query(`
+      DROP TYPE IF EXISTS dispatch_decisions_cohort_enum;
+      DROP TYPE IF EXISTS dispatch_decisions_dispatch_method_enum;
+      DROP TYPE IF EXISTS dispatch_decisions_dispatch_status_enum;
+    `);
   }
 }

@@ -36,7 +36,7 @@ export enum DispatchStatus {
 @Index("idx_dispatch_decisions_driver_id", ["driverId"])
 @Index("idx_dispatch_decisions_cohort", ["cohort"])
 @Index("idx_dispatch_decisions_method", ["dispatchMethod"])
-@Index("idx_dispatch_decisions_status", ["status"])
+@Index("idx_dispatch_decisions_status", ["dispatchStatus"])
 @Index("idx_dispatch_decisions_created_at", ["createdAt"])
 export class DispatchDecision {
   @PrimaryGeneratedColumn("uuid")
@@ -56,7 +56,7 @@ export class DispatchDecision {
     name: "cohort",
     type: "enum",
     enum: DispatchCohort,
-    enumName: "dispatch_cohort_enum",
+    enumName: "dispatch_decisions_cohort_enum",
   })
   @IsNotEmpty()
   @IsEnum(DispatchCohort)
@@ -66,7 +66,7 @@ export class DispatchDecision {
     name: "dispatch_method",
     type: "enum",
     enum: DispatchMethod,
-    enumName: "dispatch_method_enum",
+    enumName: "dispatch_decisions_dispatch_method_enum",
   })
   @IsNotEmpty()
   @IsEnum(DispatchMethod)
@@ -76,7 +76,7 @@ export class DispatchDecision {
     name: "dispatch_status",
     type: "enum",
     enum: DispatchStatus,
-    enumName: "dispatch_status_enum",
+    enumName: "dispatch_decisions_dispatch_status_enum",
   })
   @IsNotEmpty()
   @IsEnum(DispatchStatus)

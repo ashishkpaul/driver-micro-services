@@ -33,7 +33,7 @@ export class DispatchConfig {
     name: "config_type",
     type: "enum",
     enum: ConfigType,
-    enumName: "config_type_enum",
+    enumName: "dispatch_configs_config_type_enum",
   })
   @IsNotEmpty()
   configType!: ConfigType;
@@ -42,7 +42,7 @@ export class DispatchConfig {
     name: "config_scope",
     type: "enum",
     enum: ConfigScope,
-    enumName: "config_scope_enum",
+    enumName: "dispatch_configs_config_scope_enum",
   })
   @IsNotEmpty()
   configScope!: ConfigScope;

@@ -2,6 +2,35 @@ import { MigrationInterface, QueryRunner, Table, TableIndex } from "typeorm";
 
 export class AddDispatchScoring1774425300000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Create enum types first
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE dispatch_scores_score_type_enum AS ENUM ('OVERALL', 'COMPLETION_RATE', 'TIMING', 'QUALITY');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE dispatch_scores_score_source_enum AS ENUM ('DRIVER_STATS', 'DELIVERY_METRICS', 'MANUAL_ADJUSTMENT');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE dispatch_configs_config_type_enum AS ENUM ('SCORING_WEIGHTS', 'THRESHOLDS', 'DECAY_SETTINGS', 'ROLLOUT_SETTINGS');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+    
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE dispatch_configs_config_scope_enum AS ENUM ('GLOBAL', 'REGION', 'DRIVER_TYPE');
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;
+    `);
+
     // Check if tables already exist
     const dispatchScoresExists = await queryRunner.hasTable('dispatch_scores');
     const dispatchConfigsExists = await queryRunner.hasTable('dispatch_configs');
@@ -31,8 +60,7 @@ export class AddDispatchScoring1774425300000 implements MigrationInterface {
             },
             {
               name: "score_type",
-              type: "enum",
-              enum: ["OVERALL", "COMPLETION_RATE", "TIMING", "QUALITY"],
+              type: "dispatch_scores_score_type_enum",
               isNullable: false,
             },
             {
@@ -44,8 +72,7 @@ export class AddDispatchScoring1774425300000 implements MigrationInterface {
             },
             {
               name: "score_source",
-              type: "enum",
-              enum: ["DRIVER_STATS", "DELIVERY_METRICS", "MANUAL_ADJUSTMENT"],
+              type: "dispatch_scores_score_source_enum",
               isNullable: false,
             },
             {
@@ -127,14 +154,12 @@ export class AddDispatchScoring1774425300000 implements MigrationInterface {
             },
             {
               name: "config_type",
-              type: "enum",
-              enum: ["SCORING_WEIGHTS", "THRESHOLDS", "DECAY_SETTINGS", "ROLLOUT_SETTINGS"],
+              type: "dispatch_configs_config_type_enum",
               isNullable: false,
             },
             {
               name: "config_scope",
-              type: "enum",
-              enum: ["GLOBAL", "REGION", "DRIVER_TYPE"],
+              type: "dispatch_configs_config_scope_enum",
               isNullable: false,
             },
             {
@@ -231,5 +256,13 @@ export class AddDispatchScoring1774425300000 implements MigrationInterface {
       `);
       await queryRunner.dropTable("dispatch_configs", true);
     }
+
+    // Drop enum types with idempotency
+    await queryRunner.query(`
+      DROP TYPE IF EXISTS dispatch_scores_score_type_enum;
+      DROP TYPE IF EXISTS dispatch_scores_score_source_enum;
+      DROP TYPE IF EXISTS dispatch_configs_config_type_enum;
+      DROP TYPE IF EXISTS dispatch_configs_config_scope_enum;
+    `);
   }
 }

@@ -5,54 +5,54 @@ export class DeliveryMetrics {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('uuid', { unique: true })
+  @Column('uuid', { name: 'delivery_id', unique: true })
   deliveryId: string;
 
-  @Column()
+  @Column({ name: 'seller_order_id' })
   sellerOrderId: string;
 
-  @Column({ nullable: true })
+  @Column('uuid', { name: 'driver_id', nullable: true })
   driverId: string;
 
-  @Column({ nullable: true })
+  @Column('uuid', { name: 'zone_id', nullable: true })
   zoneId: string;
 
-  @Column({ nullable: true })
+  @Column({ name: 'assigned_at', nullable: true })
   assignedAt: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'picked_up_at', nullable: true })
   pickedUpAt: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'delivered_at', nullable: true })
   deliveredAt: Date;
 
-  @Column({ nullable: true })
+  @Column({ name: 'failed_at', nullable: true })
   failedAt: Date;
 
-  @Column({ default: 0 })
+  @Column({ name: 'assignment_time_seconds', default: 0, nullable: true })
   assignmentTimeSeconds: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'pickup_time_seconds', default: 0, nullable: true })
   pickupTimeSeconds: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'in_transit_time_seconds', default: 0, nullable: true })
   inTransitTimeSeconds: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'total_time_seconds', default: 0, nullable: true })
   totalTimeSeconds: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'retry_count', default: 0, nullable: true })
   retryCount: number;
 
-  @Column({ default: 0 })
+  @Column({ name: 'reassignment_count', default: 0, nullable: true })
   reassignmentCount: number;
 
-  @Column({ default: false })
+  @Column({ name: 'sla_breached', default: false, nullable: true })
   slaBreached: boolean;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at', nullable: true })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at', nullable: true })
   updatedAt: Date;
 }

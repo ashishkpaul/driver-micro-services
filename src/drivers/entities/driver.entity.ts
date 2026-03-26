@@ -66,6 +66,24 @@ export class Driver {
   currentLon?: number;
 
   @Column({
+    name: "last_lat",
+    type: "numeric",
+    precision: 10,
+    scale: 8,
+    nullable: true,
+  })
+  lastLat?: number;
+
+  @Column({
+    name: "last_lon",
+    type: "numeric",
+    precision: 10,
+    scale: 8,
+    nullable: true,
+  })
+  lastLon?: number;
+
+  @Column({
     name: "city_id",
     type: "uuid",
   })

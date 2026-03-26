@@ -39,7 +39,7 @@ export class DispatchScore {
     name: "score_type",
     type: "enum",
     enum: ScoreType,
-    enumName: "score_type_enum",
+    enumName: "dispatch_scores_score_type_enum",
   })
   @IsNotEmpty()
   scoreType!: ScoreType;
@@ -52,7 +52,7 @@ export class DispatchScore {
     name: "score_source",
     type: "enum",
     enum: ScoreSource,
-    enumName: "score_source_enum",
+    enumName: "dispatch_scores_score_source_enum",
   })
   @IsNotEmpty()
   scoreSource!: ScoreSource;

@@ -21,6 +21,8 @@ import { SchemaModule } from "./schema/schema.module";
 import { BootstrapModule } from "./bootstrap/bootstrap.module";
 import { ObservabilityModule } from "./observability/observability.module";
 import { DeliveryIntelligenceModule } from "./delivery-intelligence/delivery-intelligence.module";
+import { DispatchScoringModule } from "./dispatch-scoring/dispatch-scoring.module";
+import { SafeDispatchModule } from "./safe-dispatch/safe-dispatch.module";
 
 @Module({
   imports: [
@@ -65,6 +67,8 @@ import { DeliveryIntelligenceModule } from "./delivery-intelligence/delivery-int
     BootstrapModule,
     ObservabilityModule,
     DeliveryIntelligenceModule,
+    DispatchScoringModule,
+    SafeDispatchModule,
   ],
   providers: [],
 })
