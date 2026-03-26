@@ -14,12 +14,14 @@ import {
   UseGuards,
   Req,
   ParseUUIDPipe,
+  NotFoundException,
 } from "@nestjs/common";
 import { Request } from "express";
 import { DriversService } from "./drivers.service";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { UpdateDriverLocationDto } from "./dto/update-driver-location.dto";
 import { UpdateDriverStatusDto } from "./dto/update-driver-status.dto";
+import { DriverStatsDto } from "./dto/driver-stats.dto";
 import { AuthGuard } from "@nestjs/passport";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
@@ -95,6 +97,15 @@ export class DriversController {
   @Get(":id")
   findOne(@Param("id", ParseUUIDPipe) id: string) {
     return this.driversService.findOne(id);
+  }
+
+  @Get(":id/stats")
+  async getDriverStats(@Param("id", ParseUUIDPipe) id: string) {
+    const stats = await this.driversService.getStats(id);
+    if (!stats) {
+      throw new NotFoundException(`Stats for driver ${id} not found`);
+    }
+    return stats;
   }
 
   @Patch(":id/location")

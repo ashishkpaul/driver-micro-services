@@ -3,6 +3,7 @@ import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Driver } from "./entities/driver.entity";
+import { DriverStats } from "../delivery-intelligence/driver/driver-stats.entity";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { RedisService } from "../redis/redis.service";
 import { DriverStatus } from "./enums/driver-status.enum";
@@ -216,6 +217,13 @@ export class DriversService {
   async findNearestAvailable(lat: number, lon: number): Promise<Driver | null> {
     const available = await this.findAvailable(lat, lon, 5); // 5km radius
     return available.length > 0 ? available[0] : null;
+  }
+
+  async getStats(driverId: string): Promise<DriverStats | null> {
+    return this.driverRepository.manager
+      .createQueryBuilder(DriverStats, "stats")
+      .where("stats.driverId = :driverId", { driverId })
+      .getOne();
   }
 
   /* ------------------------------------------------------------------ */
