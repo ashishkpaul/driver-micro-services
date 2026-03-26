@@ -1,10 +1,12 @@
-import { IsUUID, IsNumber, IsOptional, IsDateString } from "class-validator";
+import { IsUUID, IsNumber, IsOptional, IsDateString, IsString, IsNotEmpty } from "class-validator";
 
 export class CreateDeliveryDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   sellerOrderId!: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   channelId!: string;
 
   @IsNumber()

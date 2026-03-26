@@ -28,6 +28,18 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
       case "PROOF_ACCEPTED_V1":
         await this.handleProofAccepted(event);
         break;
+      case "DELIVERY_PICKUP_CONFIRMED_V1":
+        await this.handleDeliveryPickupConfirmed(event);
+        break;
+      case "DELIVERY_DROPOFF_CONFIRMED_V1":
+        await this.handleDeliveryDropoffConfirmed(event);
+        break;
+      case "DELIVERY_FAILED_V1":
+        await this.handleDeliveryFailed(event);
+        break;
+      case "DELIVERY_CANCELLED_V1":
+        await this.handleDeliveryCancelled(event);
+        break;
       default:
         this.logger.warn(`No handler registered for event type: ${eventType}`);
         throw new Error(`Unknown outbox event type: ${eventType}`);
@@ -101,6 +113,76 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
       channelId,
       deliveryProofUrl,
       deliveredAt: new Date().toISOString(),
+    });
+  }
+
+  private async handleDeliveryPickupConfirmed(event: OutboxEvent): Promise<void> {
+    const payload = event.payload;
+    const { sellerOrderId, channelId } = payload;
+
+    this.logger.log(
+      `Processing DELIVERY_PICKUP_CONFIRMED_V1 for seller order ${sellerOrderId}`,
+    );
+
+    // For now, treat pickup confirmed as picked up
+    await this.webhookService.emitDeliveryPickedUp({
+      sellerOrderId,
+      channelId,
+      pickupProofUrl: payload.pickupProofUrl,
+      pickedUpAt: payload.pickedUpAt || new Date().toISOString(),
+    });
+  }
+
+  private async handleDeliveryDropoffConfirmed(event: OutboxEvent): Promise<void> {
+    const payload = event.payload;
+    const { sellerOrderId, channelId } = payload;
+
+    this.logger.log(
+      `Processing DELIVERY_DROPOFF_CONFIRMED_V1 for seller order ${sellerOrderId}`,
+    );
+
+    // For now, treat dropoff confirmed as delivered
+    await this.webhookService.emitDeliveryDelivered({
+      sellerOrderId,
+      channelId,
+      deliveryProofUrl: payload.deliveryProofUrl,
+      deliveredAt: payload.deliveredAt || new Date().toISOString(),
+    });
+  }
+
+  private async handleDeliveryFailed(event: OutboxEvent): Promise<void> {
+    const payload = event.payload;
+    const { sellerOrderId, channelId, reason } = payload;
+
+    this.logger.log(
+      `Processing DELIVERY_FAILED_V1 for seller order ${sellerOrderId}, reason: ${reason}`,
+    );
+
+    // Notify Vendure via webhook
+    await this.webhookService.emitDeliveryFailed({
+      sellerOrderId,
+      channelId,
+      failure: {
+        code: "DELIVERY_FAILED",
+        reason: reason || "Unknown failure",
+        occurredAt: payload.failedAt || new Date().toISOString(),
+      },
+    });
+  }
+
+  private async handleDeliveryCancelled(event: OutboxEvent): Promise<void> {
+    const payload = event.payload;
+    const { sellerOrderId, channelId, reason } = payload;
+
+    this.logger.log(
+      `Processing DELIVERY_CANCELLED_V1 for seller order ${sellerOrderId}, reason: ${reason}`,
+    );
+
+    // Notify Vendure via webhook
+    await this.webhookService.emitDeliveryCancelled({
+      sellerOrderId,
+      channelId,
+      reason,
     });
   }
 }

@@ -14,6 +14,7 @@ import { SlaMonitorService } from "./sla-monitor.service";
 import { RedisModule } from "../redis/redis.module";
 import { DomainEventsModule } from "../domain-events/domain-events.module";
 import { ServicesModule } from "../services/services.module";
+import { DeliveryIntelligenceModule } from "../delivery-intelligence/delivery-intelligence.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ServicesModule } from "../services/services.module";
     RedisModule,
     forwardRef(() => DomainEventsModule),
     ServicesModule,
+    DeliveryIntelligenceModule,
     // 🚫 DO NOT import WebSocketModule
   ],
   controllers: [DeliveriesController],

@@ -21,6 +21,8 @@ import { AuthorizationActor } from "../authorization/authorization.types";
 import { OutboxService } from "../domain-events/outbox.service";
 import { VersionedEventType } from "../domain-events/outbox.entity";
 import { WebSocketService } from "../websocket/websocket.service";
+import { DeliveryMetricsService } from "../delivery-intelligence/delivery/delivery-metrics.service";
+import { DriverStatsService } from "../delivery-intelligence/driver/driver-stats.service";
 
 import {
   DeliveryAssignedDto,
@@ -93,6 +95,8 @@ export class DeliveriesService {
     private readonly dataSource: DataSource,
     private readonly outbox: OutboxService,
     private readonly wsService: WebSocketService,
+    private readonly deliveryMetricsService: DeliveryMetricsService,
+    private readonly driverStatsService: DriverStatsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -228,6 +232,10 @@ export class DeliveriesService {
       });
 
       return delivery;
+    }).then(async (delivery) => {
+      // Projection hook: Record assignment in delivery metrics
+      await this.deliveryMetricsService.recordAssignment(delivery);
+      return delivery;
     });
   }
 
@@ -353,6 +361,7 @@ export class DeliveriesService {
       delivery.deliveredAt = new Date();
       delivery.deliveryProofUrl = proofUrl;
       delivery.slaBreachAt = undefined;
+      delivery.lastActivityUpdateAt = new Date(); // Activity tracking
 
       await manager.save(delivery);
 
@@ -372,6 +381,17 @@ export class DeliveriesService {
         deliveredAt: delivery.deliveredAt.toISOString(),
       });
 
+      return delivery;
+    }).then(async (delivery) => {
+      // Projection hooks: Record OTP delivery completion
+      await this.deliveryMetricsService.recordDelivery(delivery);
+      if (delivery.driverId) {
+        await this.driverStatsService.recordDeliveryCompleted(delivery.driverId, {
+          pickupTimeSeconds: delivery.pickedUpAt ? Math.round((delivery.pickedUpAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
+          totalTimeSeconds: delivery.deliveredAt ? Math.round((delivery.deliveredAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
+          deliveredAt: delivery.deliveredAt,
+        });
+      }
       return delivery;
     });
   }
@@ -406,6 +426,7 @@ export class DeliveriesService {
       }
 
       delivery.status = statusEnum;
+      delivery.lastActivityUpdateAt = new Date(); // Activity tracking
 
       switch (statusEnum) {
         case DeliveryStatus.PICKED_UP:
@@ -477,6 +498,36 @@ export class DeliveriesService {
         `Delivery ${deliveryId} status updated to ${updateDto.status}`,
       );
 
+      return delivery;
+    }).then(async (delivery) => {
+      // Projection hooks: Record status changes in delivery metrics and driver stats
+      switch (delivery.status) {
+        case DeliveryStatus.PICKED_UP:
+          await this.deliveryMetricsService.recordPickup(delivery);
+          break;
+        case DeliveryStatus.DELIVERED:
+          await this.deliveryMetricsService.recordDelivery(delivery);
+          if (delivery.driverId) {
+            await this.driverStatsService.recordDeliveryCompleted(delivery.driverId, {
+              pickupTimeSeconds: delivery.pickedUpAt ? Math.round((delivery.pickedUpAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
+              totalTimeSeconds: delivery.deliveredAt ? Math.round((delivery.deliveredAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
+              deliveredAt: delivery.deliveredAt,
+            });
+          }
+          break;
+        case DeliveryStatus.FAILED:
+          await this.deliveryMetricsService.recordFailure(delivery);
+          if (delivery.driverId) {
+            await this.driverStatsService.recordDeliveryFailed(delivery.driverId);
+          }
+          break;
+        case DeliveryStatus.CANCELLED:
+          await this.deliveryMetricsService.recordCancellation(delivery);
+          if (delivery.driverId) {
+            await this.driverStatsService.recordDeliveryCancelled(delivery.driverId);
+          }
+          break;
+      }
       return delivery;
     });
   }

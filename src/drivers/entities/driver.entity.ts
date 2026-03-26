@@ -126,4 +126,18 @@ export class Driver {
     default: "legacy",
   })
   authProvider!: "legacy" | "google" | "email";
+
+  @Column({
+    name: "last_location_update_at",
+    type: "timestamp",
+    nullable: true,
+  })
+  lastLocationUpdateAt?: Date;
+
+  @Column({
+    name: "last_status_update_at",
+    type: "timestamp",
+    nullable: true,
+  })
+  lastStatusUpdateAt?: Date;
 }

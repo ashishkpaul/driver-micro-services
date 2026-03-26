@@ -157,4 +157,11 @@ export class Delivery {
 
   @OneToMany(() => DeliveryEvent, (event) => event.delivery)
   events!: DeliveryEvent[];
+
+  @Column({
+    name: "last_activity_update_at",
+    type: "timestamp",
+    nullable: true,
+  })
+  lastActivityUpdateAt?: Date;
 }

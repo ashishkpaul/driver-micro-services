@@ -20,6 +20,7 @@ import { DomainEventsApiModule } from "./domain-events/domain-events.module";
 import { SchemaModule } from "./schema/schema.module";
 import { BootstrapModule } from "./bootstrap/bootstrap.module";
 import { ObservabilityModule } from "./observability/observability.module";
+import { DeliveryIntelligenceModule } from "./delivery-intelligence/delivery-intelligence.module";
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { ObservabilityModule } from "./observability/observability.module";
     DomainEventsApiModule,
     BootstrapModule,
     ObservabilityModule,
+    DeliveryIntelligenceModule,
   ],
   providers: [],
 })

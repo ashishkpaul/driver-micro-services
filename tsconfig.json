@@ -18,7 +18,9 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "useUnknownInCatchVariables": false,
-    "types": ["node", "jest"]
+    "types": ["node", "jest"],
+    "moduleDetection": "force",
+    "useDefineForClassFields": true
   },
   "exclude": ["node_modules", "dist"]
 }

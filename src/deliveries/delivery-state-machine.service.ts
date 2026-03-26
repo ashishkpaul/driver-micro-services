@@ -14,6 +14,7 @@ import { Assignment } from "../assignment/entities/assignment.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { OutboxService } from "../domain-events/outbox.service";
+import { DriverStatsService } from "../delivery-intelligence/driver/driver-stats.service";
 
 @Injectable()
 export class DeliveryStateMachine {
@@ -21,6 +22,7 @@ export class DeliveryStateMachine {
     @InjectDataSource()
     private dataSource: DataSource,
     private outbox: OutboxService,
+    private driverStatsService: DriverStatsService,
   ) {}
 
   private assertValidAssignment(delivery: Delivery): void {
@@ -116,6 +118,10 @@ export class DeliveryStateMachine {
       return {
         success: true,
       };
+    }).then(async () => {
+      // Projection hook: Record assignment acceptance in driver stats
+      await this.driverStatsService.recordAssignmentAccepted(driverId);
+      return { success: true };
     });
   }
 }

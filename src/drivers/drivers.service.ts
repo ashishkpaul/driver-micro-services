@@ -228,6 +228,7 @@ export class DriversService {
     driver.currentLat = lat;
     driver.currentLon = lon;
     driver.lastActiveAt = new Date();
+    driver.lastLocationUpdateAt = new Date(); // Activity tracking
 
     // DO NOT change driver status here
     // Location updates should not modify availability state
@@ -251,6 +252,7 @@ export class DriversService {
 
     driver.status = status;
     driver.lastActiveAt = new Date();
+    driver.lastStatusUpdateAt = new Date(); // Activity tracking
 
     const savedDriver = await this.driverRepository.save(driver);
 
