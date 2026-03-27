@@ -7,13 +7,23 @@ import {
   BadRequestException,
   UseGuards,
 } from "@nestjs/common";
+import {
+  ApiTags,
+  ApiOkResponse,
+  ApiExtraModels,
+  getSchemaPath,
+} from "@nestjs/swagger";
 import { ThrottlerGuard } from "@nestjs/throttler";
 import { AuthService } from "./auth.service";
 import { AdminLoginDto } from "../dto/admin.dto";
 import { AuditService } from "../services/audit.service";
 import { Request } from "express";
 import { ConfigService } from "@nestjs/config";
+import { ApiResponseDto } from "../common/dto/api-response.dto";
+import { LoginDto, LoginResponseDto } from "./dto/login.dto";
 
+@ApiTags("Auth")
+@ApiExtraModels(ApiResponseDto, LoginResponseDto)
 @Controller("auth")
 export class AuthController {
   constructor(
@@ -31,7 +41,19 @@ export class AuthController {
    * }
    */
   @Post("login")
-  async login(@Body() body: { driverId: string; deviceId?: string }) {
+  @ApiOkResponse({
+    schema: {
+      allOf: [
+        { $ref: getSchemaPath(ApiResponseDto) },
+        {
+          properties: {
+            data: { $ref: getSchemaPath(LoginResponseDto) },
+          },
+        },
+      ],
+    },
+  })
+  async login(@Body() loginDto: LoginDto) {
     const allowLegacyDriverIdLogin =
       this.configService.get("ALLOW_LEGACY_DRIVER_ID_LOGIN") === "true";
 
@@ -41,8 +63,8 @@ export class AuthController {
       );
     }
 
-    const driver = await this.authService.validateDriver(body.driverId);
-    return this.authService.login(driver, body.deviceId);
+    const driver = await this.authService.validateDriver(loginDto.driverId);
+    return this.authService.login(driver, loginDto.deviceId);
   }
 
   /**

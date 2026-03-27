@@ -1,6 +1,8 @@
 import { IsNumber, Min, Max, ValidateIf } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
 
 export class UpdateDriverLocationDto {
+  @ApiProperty({ description: "Latitude" })
   @IsNumber()
   @Min(-90)
   @Max(90)
@@ -9,6 +11,7 @@ export class UpdateDriverLocationDto {
   })
   lat!: number;
 
+  @ApiProperty({ description: "Longitude" })
   @IsNumber()
   @Min(-180)
   @Max(180)

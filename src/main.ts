@@ -15,40 +15,46 @@ import { TracingInterceptor } from "./interceptors/tracing.interceptor";
 import { TimeoutInterceptor } from "./interceptors/timeout.interceptor";
 import { ApiResponseInterceptor } from "./interceptors/api-response.interceptor";
 import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
-import { SystemReadinessService, StartupPhase } from "./bootstrap/system-readiness.service";
+import {
+  SystemReadinessService,
+  StartupPhase,
+} from "./bootstrap/system-readiness.service";
 import { PushNotificationService } from "./push/push.service";
+import { setupSwagger } from "./bootstrap/swagger";
 
 async function bootstrap() {
   // Service header
-  console.log('');
-  console.log('═'.repeat(50));
-  console.log('  DRIVER MICROSERVICE');
-  console.log('═'.repeat(50));
+  console.log("");
+  console.log("═".repeat(50));
+  console.log("  DRIVER MICROSERVICE");
+  console.log("═".repeat(50));
   console.log(`  Boot time: ${new Date().toISOString()}`);
-  console.log('');
+  console.log("");
 
   // Custom format to filter NestJS framework noise
   const filterFrameworkLogs = winston.format((info) => {
-    const message = (info.message as string) || '';
-    const context = (info.context as string) || '';
-    
+    const message = (info.message as string) || "";
+    const context = (info.context as string) || "";
+
     const suppressPatterns = [
-      'InstanceLoader',
-      'RoutesResolver', 
-      'RouterExplorer',
-      'NestApplication',
-      'dependencies initialized',
-      'WebSocketsController',
-      'Mapped {',
-      'Route {',
+      "InstanceLoader",
+      "RoutesResolver",
+      "RouterExplorer",
+      "NestApplication",
+      "dependencies initialized",
+      "WebSocketsController",
+      "Mapped {",
+      "Route {",
     ];
-    
-    if (suppressPatterns.some(pattern => 
-      message.includes(pattern) || context.includes(pattern)
-    )) {
+
+    if (
+      suppressPatterns.some(
+        (pattern) => message.includes(pattern) || context.includes(pattern),
+      )
+    ) {
       return false;
     }
-    
+
     return info;
   });
 
@@ -143,9 +149,12 @@ async function bootstrap() {
   // Global exception filter
   app.useGlobalFilters(new GlobalExceptionFilter());
 
+  // Swagger contract
+  setupSwagger(app);
+
   const port = configService.get("PORT", 3001);
   await app.listen(port);
-  
+
   // Complete API phase
   readinessService.completePhase(StartupPhase.API);
 
@@ -160,17 +169,18 @@ async function bootstrap() {
 
   // Check push status
   const pushService = app.get(PushNotificationService);
-  const pushStatus = pushService && pushService.isEnabled() ? 'ENABLED' : 'DISABLED';
+  const pushStatus =
+    pushService && pushService.isEnabled() ? "ENABLED" : "DISABLED";
 
   // Final startup info
-  console.log('');
-  console.log('┌─ 🚀 DRIVER SERVICE ' + '─'.repeat(30));
+  console.log("");
+  console.log("┌─ 🚀 DRIVER SERVICE " + "─".repeat(30));
   console.log(`│  Port: ${port}`);
   console.log(`│  WebSocket: ${configService.get("WEBSOCKET_PORT", 3002)}`);
   console.log(`│  Push: ${pushStatus}`);
-  console.log(`│  Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`│  Version: ${process.env.npm_package_version || '1.0.0'}`);
-  console.log('└' + '─'.repeat(49));
+  console.log(`│  Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`│  Version: ${process.env.npm_package_version || "1.0.0"}`);
+  console.log("└" + "─".repeat(49));
 
   // Handle SIGTERM for graceful shutdown
   process.on("SIGTERM", async () => {
