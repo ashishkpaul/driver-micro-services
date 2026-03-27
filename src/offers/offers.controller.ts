@@ -1,14 +1,36 @@
 import { Controller, Post, Body, Get, Param, Patch } from "@nestjs/common";
+import {
+  ApiTags,
+  ApiOkResponse,
+  ApiExtraModels,
+  getSchemaPath,
+} from "@nestjs/swagger";
+import { ApiResponseDto } from "../common/dto/api-response.dto";
 import { OffersService } from "./offers.service";
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { AcceptOfferDto } from "./dto/accept-offer.dto";
 import { RejectOfferDto } from "./dto/reject-offer.dto";
+import { DriverOffer } from "./entities/driver-offer.entity";
 
+@ApiTags("Offers")
+@ApiExtraModels(ApiResponseDto, DriverOffer)
 @Controller("offers")
 export class OffersController {
   constructor(private readonly offersService: OffersService) {}
 
   @Post()
+  @ApiOkResponse({
+    schema: {
+      allOf: [
+        { $ref: getSchemaPath(ApiResponseDto) },
+        {
+          properties: {
+            data: { $ref: getSchemaPath(DriverOffer) },
+          },
+        },
+      ],
+    },
+  })
   async createOffer(@Body() createOfferDto: CreateOfferDto) {
     return this.offersService.createOfferForDriver(createOfferDto);
   }

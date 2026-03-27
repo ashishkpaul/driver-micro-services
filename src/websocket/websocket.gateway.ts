@@ -1,5 +1,6 @@
 // websocket/websocket.gateway.ts
 
+import { WS_EVENTS } from "../../../packages/ws-contracts";
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -56,12 +57,12 @@ export class WebSocketGatewayHandler
     private readonly jwtService: JwtService,
   ) {
     // Register known subscription event names
-    this.register('LOCATION_UPDATE_V1');
-    this.register('PROOF_UPLOADED_V1');
-    this.register('DRIVER_STATUS_V1');
-    this.register('PING_V1');
-    this.register('DRIVER_HEARTBEAT_V1');
-    this.register('SYNC_STATE_V1');
+    this.register("LOCATION_UPDATE_V1");
+    this.register("PROOF_UPLOADED_V1");
+    this.register("DRIVER_STATUS_V1");
+    this.register("PING_V1");
+    this.register("DRIVER_HEARTBEAT_V1");
+    this.register("SYNC_STATE_V1");
   }
 
   /**
@@ -77,12 +78,12 @@ export class WebSocketGatewayHandler
    * Print registered events
    */
   printEvents(): void {
-    console.log('');
-    console.log('┌─ 🔌 WEBSOCKET EVENTS ' + '─'.repeat(28));
-    this.events.forEach(event => {
+    console.log("");
+    console.log("┌─ 🔌 WEBSOCKET EVENTS " + "─".repeat(28));
+    this.events.forEach((event) => {
       console.log(`│  • ${event}`);
     });
-    console.log('└' + '─'.repeat(49));
+    console.log("└" + "─".repeat(49));
   }
 
   afterInit(server: Server) {

@@ -4,7 +4,7 @@ export class ApiResponseDto {
   @ApiProperty()
   success!: boolean;
 
-  @ApiProperty({ type: "object", nullable: true })
+  @ApiProperty({ type: "object", nullable: true, additionalProperties: true })
   data!: unknown;
 
   @ApiProperty({ required: false })

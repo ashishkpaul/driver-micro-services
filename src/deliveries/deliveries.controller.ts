@@ -13,13 +13,35 @@ import { CreateDeliveryDto } from "./dto/create-delivery.dto";
 import { UpdateDeliveryStatusDto } from "./dto/update-delivery-status.dto";
 import { VerifyDeliveryOtpDto } from "./dto/verify-delivery-otp.dto";
 import { IdempotencyInterceptor } from "../common/interceptors/idempotency.interceptor";
+import {
+  ApiTags,
+  ApiOkResponse,
+  getSchemaPath,
+  ApiExtraModels,
+} from "@nestjs/swagger";
+import { ApiResponseDto } from "../common/dto/api-response.dto";
+import { Delivery } from "./entities/delivery.entity";
 
 @Controller("deliveries")
+@ApiTags("Deliveries")
+@ApiExtraModels(ApiResponseDto, Delivery)
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}
 
   @Post()
   @UseInterceptors(IdempotencyInterceptor)
+  @ApiOkResponse({
+    schema: {
+      allOf: [
+        { $ref: getSchemaPath(ApiResponseDto) },
+        {
+          properties: {
+            data: { $ref: getSchemaPath(Delivery) },
+          },
+        },
+      ],
+    },
+  })
   create(@Body() createDeliveryDto: CreateDeliveryDto) {
     return this.deliveriesService.create(createDeliveryDto);
   }

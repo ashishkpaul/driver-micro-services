@@ -8,6 +8,7 @@ import {
   LocationAckEvent,
 } from "./interfaces/websocket.interface";
 import { WebSocketMetricsService } from "./websocket-metrics.service";
+import { WS_EVENTS } from "../../../packages/ws-contracts";
 
 @Injectable()
 export class WebSocketService {
@@ -25,22 +26,26 @@ export class WebSocketService {
   }
 
   async emitDeliveryAssigned(driverId: string, event: DeliveryAssignedEvent) {
-    this.server.to(this.room(driverId)).emit("DELIVERY_ASSIGNED_V1", event);
+    this.server
+      .to(this.room(driverId))
+      .emit(WS_EVENTS.DELIVERY_ASSIGNED, event);
     this.metrics.messageSent(driverId).catch(() => {});
   }
 
   async emitProofAccepted(driverId: string, event: ProofAcceptedEvent) {
-    this.server.to(this.room(driverId)).emit("PROOF_ACCEPTED_V1", event);
+    this.server.to(this.room(driverId)).emit(WS_EVENTS.PROOF_ACCEPTED, event);
     this.metrics.messageSent(driverId).catch(() => {});
   }
 
   async emitLocationAck(driverId: string, event: LocationAckEvent) {
-    this.server.to(this.room(driverId)).emit("LOCATION_ACK_V1", event);
+    this.server.to(this.room(driverId)).emit(WS_EVENTS.LOCATION_ACK, event);
     this.metrics.messageSent(driverId).catch(() => {});
   }
 
   async emitError(driverId: string, code: string, message: string) {
-    this.server.to(this.room(driverId)).emit("ERROR_V1", { code, message });
+    this.server
+      .to(this.room(driverId))
+      .emit(WS_EVENTS.ERROR, { code, message });
     this.metrics.messageSent(driverId).catch(() => {});
   }
 
