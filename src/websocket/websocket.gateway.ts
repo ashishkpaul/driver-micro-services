@@ -56,13 +56,14 @@ export class WebSocketGatewayHandler
     private readonly metrics: WebSocketMetricsService,
     private readonly jwtService: JwtService,
   ) {
-    // Register known subscription event names
-    this.register("LOCATION_UPDATE_V1");
-    this.register("PROOF_UPLOADED_V1");
-    this.register("DRIVER_STATUS_V1");
+    // Register known subscription event names using WS_EVENTS constants
+    this.register(WS_EVENTS.UPDATE_LOCATION);
+    this.register(WS_EVENTS.PROOF_UPLOADED);
+    this.register(WS_EVENTS.DRIVER_STATUS);
+    this.register(WS_EVENTS.DRIVER_HEARTBEAT);
+    this.register(WS_EVENTS.SYNC_STATE);
+    // PING_V1 is not in WS_EVENTS - keep as raw string for now
     this.register("PING_V1");
-    this.register("DRIVER_HEARTBEAT_V1");
-    this.register("SYNC_STATE_V1");
   }
 
   /**
@@ -154,7 +155,7 @@ export class WebSocketGatewayHandler
     }, 30_000);
   }
 
-  @SubscribeMessage("LOCATION_UPDATE_V1")
+  @SubscribeMessage(WS_EVENTS.UPDATE_LOCATION)
   async handleLocation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: LocationUpdateEvent,
@@ -167,7 +168,7 @@ export class WebSocketGatewayHandler
     return this.driverRealtime.handleLocation(driverId, data);
   }
 
-  @SubscribeMessage("PROOF_UPLOADED_V1")
+  @SubscribeMessage(WS_EVENTS.PROOF_UPLOADED)
   async handleProof(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: ProofUploadedEvent,
@@ -182,7 +183,7 @@ export class WebSocketGatewayHandler
     return handleProofUploaded(client, data, this.deliveriesService);
   }
 
-  @SubscribeMessage("DRIVER_STATUS_V1")
+  @SubscribeMessage(WS_EVENTS.DRIVER_STATUS)
   async handleStatus(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: DriverStatusEvent,
@@ -212,7 +213,7 @@ export class WebSocketGatewayHandler
     };
   }
 
-  @SubscribeMessage("DRIVER_HEARTBEAT_V1")
+  @SubscribeMessage(WS_EVENTS.DRIVER_HEARTBEAT)
   async handleHeartbeat(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: any,
@@ -227,7 +228,7 @@ export class WebSocketGatewayHandler
     return this.driverRealtime.handleHeartbeat(driverId, data);
   }
 
-  @SubscribeMessage("SYNC_STATE_V1")
+  @SubscribeMessage(WS_EVENTS.SYNC_STATE)
   async handleSyncState(@ConnectedSocket() client: Socket) {
     const driverId = client.data.driverId;
     if (driverId) {

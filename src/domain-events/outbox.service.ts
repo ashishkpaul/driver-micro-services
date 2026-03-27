@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, EntityManager } from "typeorm";
-import { OutboxEvent, EventVersion, VersionedEventType } from "./outbox.entity";
+import { OutboxEvent, EventVersion, OutboxEventType } from "./outbox.entity";
 import { OutboxStatus } from "./outbox-status.enum";
 import {
   CircuitBreakerService,
@@ -38,7 +38,7 @@ export class OutboxService {
 
   async publish(
     manager: EntityManager | null,
-    eventType: VersionedEventType,
+    eventType: OutboxEventType,
     payload: any,
     version: EventVersion = 1,
   ): Promise<void> {

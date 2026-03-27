@@ -19,7 +19,8 @@ import { DeliveryEventsNotifier } from "./delivery-events.notifier";
 import { DeliveryStateMachine } from "./delivery-state-machine.service";
 import { AuthorizationActor } from "../authorization/authorization.types";
 import { OutboxService } from "../domain-events/outbox.service";
-import { VersionedEventType } from "../domain-events/outbox.entity";
+import { OutboxEventType } from "../domain-events/outbox.entity";
+import { WS_EVENTS } from "../../../packages/ws-contracts";
 import { WebSocketService } from "../websocket/websocket.service";
 import { DeliveryMetricsService } from "../delivery-intelligence/delivery/delivery-metrics.service";
 import { DriverStatsService } from "../delivery-intelligence/driver/driver-stats.service";
@@ -171,72 +172,79 @@ export class DeliveriesService {
     assignmentId: string,
     actor?: AuthorizationActor,
   ): Promise<Delivery> {
-    return this.dataSource.transaction(async (manager: EntityManager) => {
-      const delivery = await manager.findOne(Delivery, {
-        where: { id: deliveryId },
-        lock: { mode: "pessimistic_write" },
-      });
+    return this.dataSource
+      .transaction(async (manager: EntityManager) => {
+        const delivery = await manager.findOne(Delivery, {
+          where: { id: deliveryId },
+          lock: { mode: "pessimistic_write" },
+        });
 
-      if (!delivery) {
-        throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
-      }
+        if (!delivery) {
+          throw new NotFoundException(
+            `Delivery with ID ${deliveryId} not found`,
+          );
+        }
 
-      delivery.driverId = driverId;
-      delivery.status = DeliveryStatus.ASSIGNED;
-      delivery.assignedAt = new Date();
-      this.resetOtpState(delivery);
-      delivery.deliveryOtp = this.generateOtpCode();
+        delivery.driverId = driverId;
+        delivery.status = DeliveryStatus.ASSIGNED;
+        delivery.assignedAt = new Date();
+        this.resetOtpState(delivery);
+        delivery.deliveryOtp = this.generateOtpCode();
 
-      await manager.save(delivery);
+        await manager.save(delivery);
 
-      const event = await this.createEvent(manager, {
-        deliveryId: delivery.id,
-        sellerOrderId: delivery.sellerOrderId,
-        eventType: DeliveryEventType.ASSIGNED,
-        metadata: { driverId, assignmentId },
-      });
-
-      // 🚀 FIX [B-7]: Fast-Path WebSocket notification
-      // We wrap this in a try/catch so a socket glitch doesn't roll back the DB transaction.
-      try {
-        await this.wsService.emitDeliveryAssigned(driverId, {
+        const event = await this.createEvent(manager, {
           deliveryId: delivery.id,
           sellerOrderId: delivery.sellerOrderId,
+          eventType: DeliveryEventType.ASSIGNED,
+          metadata: { driverId, assignmentId },
+        });
+
+        // 🚀 FIX [B-7]: Fast-Path WebSocket notification
+        // We wrap this in a try/catch so a socket glitch doesn't roll back the DB transaction.
+        try {
+          await this.wsService.emitDeliveryAssigned(driverId, {
+            deliveryId: delivery.id,
+            sellerOrderId: delivery.sellerOrderId,
+            assignmentId,
+            assignedAt: delivery.assignedAt.toISOString(),
+            // Include locations for immediate PWA map rendering
+            pickupLocation: {
+              lat: delivery.pickupLat,
+              lon: delivery.pickupLon,
+            },
+            dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
+          });
+        } catch (wsErr) {
+          this.logger.warn(
+            `Direct WS emit failed for delivery ${delivery.id}: ${wsErr}`,
+          );
+          // No throw here; the Outbox below will eventually sync the state.
+        }
+
+        // 🛡️ Reliable-Path: Outbox publish for Vendure and retry logic
+        // Note: if this delivery was routed via acceptOffer() (V2 path), the
+        // outbox.service idempotency check will deduplicate on sellerOrderId
+        // and this publish will be a no-op. Both paths are intentional owners.
+        await this.outbox.publish(manager, WS_EVENTS.DELIVERY_ASSIGNED, {
+          deliveryId: delivery.id, // added — needed for idempotency fallback
+          sellerOrderId: delivery.sellerOrderId,
+          channelId: delivery.channelId,
+          driverId,
           assignmentId,
-          assignedAt: delivery.assignedAt.toISOString(),
-          // Include locations for immediate PWA map rendering
+          assignedAt:
+            delivery.assignedAt?.toISOString() ?? new Date().toISOString(),
           pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
           dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
         });
-      } catch (wsErr) {
-        this.logger.warn(
-          `Direct WS emit failed for delivery ${delivery.id}: ${wsErr}`,
-        );
-        // No throw here; the Outbox below will eventually sync the state.
-      }
 
-      // 🛡️ Reliable-Path: Outbox publish for Vendure and retry logic
-      // Note: if this delivery was routed via acceptOffer() (V2 path), the
-      // outbox.service idempotency check will deduplicate on sellerOrderId
-      // and this publish will be a no-op. Both paths are intentional owners.
-      await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
-        deliveryId: delivery.id, // added — needed for idempotency fallback
-        sellerOrderId: delivery.sellerOrderId,
-        channelId: delivery.channelId,
-        driverId,
-        assignmentId,
-        assignedAt:
-          delivery.assignedAt?.toISOString() ?? new Date().toISOString(),
-        pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
-        dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
+        return delivery;
+      })
+      .then(async (delivery) => {
+        // Projection hook: Record assignment in delivery metrics
+        await this.deliveryMetricsService.recordAssignment(delivery);
+        return delivery;
       });
-
-      return delivery;
-    }).then(async (delivery) => {
-      // Projection hook: Record assignment in delivery metrics
-      await this.deliveryMetricsService.recordAssignment(delivery);
-      return delivery;
-    });
   }
 
   // ---------------------------------------------------------------------------
@@ -296,104 +304,127 @@ export class DeliveriesService {
     driverLon?: number,
     actor?: AuthorizationActor,
   ): Promise<Delivery> {
-    return this.dataSource.transaction(async (manager: EntityManager) => {
-      const delivery = await manager.findOne(Delivery, {
-        where: { id: deliveryId },
-        lock: { mode: "pessimistic_write" },
-      });
-
-      if (!delivery)
-        throw new NotFoundException(`Delivery ${deliveryId} not found`);
-
-      // Task 3: Add Idempotency Protection on OTP Verification
-      if (delivery.status === DeliveryStatus.DELIVERED) {
-        this.logger.log(
-          `Delivery ${deliveryId} is already DELIVERED. Returning idempotently.`,
-        );
-        return delivery; // Return success instead of throwing
-      }
-
-      if (!delivery.deliveryOtp)
-        throw new BadRequestException("No OTP active for this delivery");
-
-      if (delivery.otpLockedUntil && delivery.otpLockedUntil > new Date()) {
-        throw new BadRequestException(
-          "OTP locked due to failed attempts. Please retry later.",
-        );
-      }
-
-      // --- 🚀 GEOFENCE CHECK (from B-5) ---
-      if (
-        otp !== "BYPASS_GEO" &&
-        typeof driverLat === "number" &&
-        typeof driverLon === "number" &&
-        typeof delivery.dropLat === "number" &&
-        typeof delivery.dropLon === "number"
-      ) {
-        const distKm = this.haversineKm(
-          driverLat,
-          driverLon,
-          delivery.dropLat,
-          delivery.dropLon,
-        );
-        if (distKm > this.MAX_DROPOFF_RADIUS_KM) {
-          throw new BadRequestException(
-            `Driver is ${(distKm * 1000).toFixed(0)}m from drop-off. Must be within 250m.`,
-          );
-        }
-      }
-
-      if (delivery.deliveryOtp !== otp) {
-        delivery.otpAttempts = (delivery.otpAttempts || 0) + 1;
-        if (delivery.otpAttempts >= this.OTP_MAX_ATTEMPTS) {
-          delivery.otpLockedUntil = new Date(
-            Date.now() + this.OTP_LOCK_DURATION_MS,
-          );
-        }
-        await manager.save(delivery);
-        throw new BadRequestException("Invalid OTP");
-      }
-
-      // --- ✅ ATOMIC SUCCESS TRANSITION ---
-      this.resetOtpState(delivery);
-      delivery.deliveryOtp = undefined;
-      delivery.status = DeliveryStatus.DELIVERED;
-      delivery.deliveredAt = new Date();
-      delivery.deliveryProofUrl = proofUrl;
-      delivery.slaBreachAt = undefined;
-      delivery.lastActivityUpdateAt = new Date(); // Activity tracking
-
-      await manager.save(delivery);
-
-      const event = await this.createEvent(manager, {
-        deliveryId: delivery.id,
-        sellerOrderId: delivery.sellerOrderId,
-        eventType: DeliveryEventType.DELIVERED,
-        proofUrl,
-      });
-
-      await this.notifier.notify(event, delivery);
-
-      await this.outbox.publish(manager, "DELIVERY_DROPOFF_CONFIRMED_V1", {
-        sellerOrderId: delivery.sellerOrderId,
-        channelId: delivery.channelId,
-        deliveryProofUrl: proofUrl,
-        deliveredAt: delivery.deliveredAt.toISOString(),
-      });
-
-      return delivery;
-    }).then(async (delivery) => {
-      // Projection hooks: Record OTP delivery completion
-      await this.deliveryMetricsService.recordDelivery(delivery);
-      if (delivery.driverId) {
-        await this.driverStatsService.recordDeliveryCompleted(delivery.driverId, {
-          pickupTimeSeconds: delivery.pickedUpAt ? Math.round((delivery.pickedUpAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
-          totalTimeSeconds: delivery.deliveredAt ? Math.round((delivery.deliveredAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
-          deliveredAt: delivery.deliveredAt,
+    return this.dataSource
+      .transaction(async (manager: EntityManager) => {
+        const delivery = await manager.findOne(Delivery, {
+          where: { id: deliveryId },
+          lock: { mode: "pessimistic_write" },
         });
-      }
-      return delivery;
-    });
+
+        if (!delivery)
+          throw new NotFoundException(`Delivery ${deliveryId} not found`);
+
+        // Task 3: Add Idempotency Protection on OTP Verification
+        if (delivery.status === DeliveryStatus.DELIVERED) {
+          this.logger.log(
+            `Delivery ${deliveryId} is already DELIVERED. Returning idempotently.`,
+          );
+          return delivery; // Return success instead of throwing
+        }
+
+        if (!delivery.deliveryOtp)
+          throw new BadRequestException("No OTP active for this delivery");
+
+        if (delivery.otpLockedUntil && delivery.otpLockedUntil > new Date()) {
+          throw new BadRequestException(
+            "OTP locked due to failed attempts. Please retry later.",
+          );
+        }
+
+        // --- 🚀 GEOFENCE CHECK (from B-5) ---
+        if (
+          otp !== "BYPASS_GEO" &&
+          typeof driverLat === "number" &&
+          typeof driverLon === "number" &&
+          typeof delivery.dropLat === "number" &&
+          typeof delivery.dropLon === "number"
+        ) {
+          const distKm = this.haversineKm(
+            driverLat,
+            driverLon,
+            delivery.dropLat,
+            delivery.dropLon,
+          );
+          if (distKm > this.MAX_DROPOFF_RADIUS_KM) {
+            throw new BadRequestException(
+              `Driver is ${(distKm * 1000).toFixed(0)}m from drop-off. Must be within 250m.`,
+            );
+          }
+        }
+
+        if (delivery.deliveryOtp !== otp) {
+          delivery.otpAttempts = (delivery.otpAttempts || 0) + 1;
+          if (delivery.otpAttempts >= this.OTP_MAX_ATTEMPTS) {
+            delivery.otpLockedUntil = new Date(
+              Date.now() + this.OTP_LOCK_DURATION_MS,
+            );
+          }
+          await manager.save(delivery);
+          throw new BadRequestException("Invalid OTP");
+        }
+
+        // --- ✅ ATOMIC SUCCESS TRANSITION ---
+        this.resetOtpState(delivery);
+        delivery.deliveryOtp = undefined;
+        delivery.status = DeliveryStatus.DELIVERED;
+        delivery.deliveredAt = new Date();
+        delivery.deliveryProofUrl = proofUrl;
+        delivery.slaBreachAt = undefined;
+        delivery.lastActivityUpdateAt = new Date(); // Activity tracking
+
+        await manager.save(delivery);
+
+        const event = await this.createEvent(manager, {
+          deliveryId: delivery.id,
+          sellerOrderId: delivery.sellerOrderId,
+          eventType: DeliveryEventType.DELIVERED,
+          proofUrl,
+        });
+
+        await this.notifier.notify(event, delivery);
+
+        await this.outbox.publish(
+          manager,
+          WS_EVENTS.DELIVERY_DROPOFF_CONFIRMED,
+          {
+            sellerOrderId: delivery.sellerOrderId,
+            channelId: delivery.channelId,
+            deliveryProofUrl: proofUrl,
+            deliveredAt: delivery.deliveredAt.toISOString(),
+          },
+        );
+
+        return delivery;
+      })
+      .then(async (delivery) => {
+        // Projection hooks: Record OTP delivery completion
+        await this.deliveryMetricsService.recordDelivery(delivery);
+        if (delivery.driverId) {
+          await this.driverStatsService.recordDeliveryCompleted(
+            delivery.driverId,
+            {
+              pickupTimeSeconds: delivery.pickedUpAt
+                ? Math.round(
+                    (delivery.pickedUpAt.getTime() -
+                      (delivery.assignedAt?.getTime() ||
+                        delivery.createdAt.getTime())) /
+                      1000,
+                  )
+                : undefined,
+              totalTimeSeconds: delivery.deliveredAt
+                ? Math.round(
+                    (delivery.deliveredAt.getTime() -
+                      (delivery.assignedAt?.getTime() ||
+                        delivery.createdAt.getTime())) /
+                      1000,
+                  )
+                : undefined,
+              deliveredAt: delivery.deliveredAt,
+            },
+          );
+        }
+        return delivery;
+      });
   }
 
   // ---------------------------------------------------------------------------
@@ -405,131 +436,156 @@ export class DeliveriesService {
     updateDto: UpdateDeliveryStatusDto,
     actor: AuthorizationActor | undefined,
   ): Promise<Delivery> {
-    return this.dataSource.transaction(async (manager: EntityManager) => {
-      const delivery = await manager.findOne(Delivery, {
-        where: { id: deliveryId },
-        lock: { mode: "pessimistic_write" },
-      });
+    return this.dataSource
+      .transaction(async (manager: EntityManager) => {
+        const delivery = await manager.findOne(Delivery, {
+          where: { id: deliveryId },
+          lock: { mode: "pessimistic_write" },
+        });
 
-      if (!delivery) {
-        throw new NotFoundException(`Delivery with ID ${deliveryId} not found`);
-      }
+        if (!delivery) {
+          throw new NotFoundException(
+            `Delivery with ID ${deliveryId} not found`,
+          );
+        }
 
-      // Convert string status to enum
-      const statusEnum = this.mapStringToDeliveryStatus(updateDto.status);
+        // Convert string status to enum
+        const statusEnum = this.mapStringToDeliveryStatus(updateDto.status);
 
-      // Task 1: Enforce Strict Delivery State Transitions
-      if (!this.allowedTransitions[delivery.status].includes(statusEnum)) {
-        throw new ConflictException(
-          `Invalid state transition from ${delivery.status} to ${statusEnum}`,
+        // Task 1: Enforce Strict Delivery State Transitions
+        if (!this.allowedTransitions[delivery.status].includes(statusEnum)) {
+          throw new ConflictException(
+            `Invalid state transition from ${delivery.status} to ${statusEnum}`,
+          );
+        }
+
+        delivery.status = statusEnum;
+        delivery.lastActivityUpdateAt = new Date(); // Activity tracking
+
+        switch (statusEnum) {
+          case DeliveryStatus.PICKED_UP:
+            delivery.pickedUpAt = new Date();
+            delivery.pickupProofUrl = updateDto.proofUrl;
+            break;
+
+          case DeliveryStatus.DELIVERED:
+            delivery.deliveredAt = new Date();
+            delivery.deliveryProofUrl = updateDto.proofUrl;
+            delivery.slaBreachAt = undefined;
+            break;
+
+          case DeliveryStatus.FAILED:
+            delivery.failedAt = new Date();
+            delivery.failureCode = updateDto.failureCode;
+            delivery.failureReason = updateDto.failureReason;
+            break;
+
+          case DeliveryStatus.CANCELLED:
+            delivery.status = DeliveryStatus.CANCELLED;
+            delivery.failedAt = new Date();
+            delivery.failureCode = updateDto.failureCode || "CANCELLED";
+            delivery.failureReason = updateDto.failureReason || "Cancelled";
+            break;
+        }
+
+        // 1️⃣ Persist delivery first (source of truth)
+        await manager.save(delivery);
+
+        // 2️⃣ Create domain event (audit + websocket trigger source)
+        const event = await this.createEvent(manager, {
+          deliveryId: delivery.id,
+          sellerOrderId: delivery.sellerOrderId,
+          eventType: this.mapDeliveryStatusToEventType(statusEnum),
+          proofUrl: updateDto.proofUrl,
+          failureCode: updateDto.failureCode,
+          failureReason: updateDto.failureReason,
+        });
+
+        // 🔔 3️⃣ Notify WebSocket layer (THIS WAS MISSING BEFORE)
+        await this.notifier.notify(event, delivery);
+
+        // 4️⃣ Emit to Vendure via Outbox ONLY if the status is allowed
+        if (this.isVendureStatus(updateDto.status)) {
+          await this.outbox.publish(
+            manager,
+            this.getVendureEventType(updateDto.status),
+            {
+              sellerOrderId: delivery.sellerOrderId,
+              channelId: delivery.channelId,
+              pickupProofUrl: delivery.pickupProofUrl,
+              deliveryProofUrl: delivery.deliveryProofUrl,
+              pickedUpAt: delivery.pickedUpAt?.toISOString(),
+              deliveredAt: delivery.deliveredAt?.toISOString(),
+              failure:
+                updateDto.status === "FAILED"
+                  ? {
+                      code: updateDto.failureCode || "UNKNOWN",
+                      reason: updateDto.failureReason || "Unknown failure",
+                      occurredAt: delivery.failedAt?.toISOString(),
+                    }
+                  : undefined,
+            },
+          );
+        }
+
+        this.logger.log(
+          `Delivery ${deliveryId} status updated to ${updateDto.status}`,
         );
-      }
 
-      delivery.status = statusEnum;
-      delivery.lastActivityUpdateAt = new Date(); // Activity tracking
-
-      switch (statusEnum) {
-        case DeliveryStatus.PICKED_UP:
-          delivery.pickedUpAt = new Date();
-          delivery.pickupProofUrl = updateDto.proofUrl;
-          break;
-
-        case DeliveryStatus.DELIVERED:
-          delivery.deliveredAt = new Date();
-          delivery.deliveryProofUrl = updateDto.proofUrl;
-          delivery.slaBreachAt = undefined;
-          break;
-
-        case DeliveryStatus.FAILED:
-          delivery.failedAt = new Date();
-          delivery.failureCode = updateDto.failureCode;
-          delivery.failureReason = updateDto.failureReason;
-          break;
-
-        case DeliveryStatus.CANCELLED:
-          delivery.status = DeliveryStatus.CANCELLED;
-          delivery.failedAt = new Date();
-          delivery.failureCode = updateDto.failureCode || "CANCELLED";
-          delivery.failureReason = updateDto.failureReason || "Cancelled";
-          break;
-      }
-
-      // 1️⃣ Persist delivery first (source of truth)
-      await manager.save(delivery);
-
-      // 2️⃣ Create domain event (audit + websocket trigger source)
-      const event = await this.createEvent(manager, {
-        deliveryId: delivery.id,
-        sellerOrderId: delivery.sellerOrderId,
-        eventType: this.mapDeliveryStatusToEventType(statusEnum),
-        proofUrl: updateDto.proofUrl,
-        failureCode: updateDto.failureCode,
-        failureReason: updateDto.failureReason,
+        return delivery;
+      })
+      .then(async (delivery) => {
+        // Projection hooks: Record status changes in delivery metrics and driver stats
+        switch (delivery.status) {
+          case DeliveryStatus.PICKED_UP:
+            await this.deliveryMetricsService.recordPickup(delivery);
+            break;
+          case DeliveryStatus.DELIVERED:
+            await this.deliveryMetricsService.recordDelivery(delivery);
+            if (delivery.driverId) {
+              await this.driverStatsService.recordDeliveryCompleted(
+                delivery.driverId,
+                {
+                  pickupTimeSeconds: delivery.pickedUpAt
+                    ? Math.round(
+                        (delivery.pickedUpAt.getTime() -
+                          (delivery.assignedAt?.getTime() ||
+                            delivery.createdAt.getTime())) /
+                          1000,
+                      )
+                    : undefined,
+                  totalTimeSeconds: delivery.deliveredAt
+                    ? Math.round(
+                        (delivery.deliveredAt.getTime() -
+                          (delivery.assignedAt?.getTime() ||
+                            delivery.createdAt.getTime())) /
+                          1000,
+                      )
+                    : undefined,
+                  deliveredAt: delivery.deliveredAt,
+                },
+              );
+            }
+            break;
+          case DeliveryStatus.FAILED:
+            await this.deliveryMetricsService.recordFailure(delivery);
+            if (delivery.driverId) {
+              await this.driverStatsService.recordDeliveryFailed(
+                delivery.driverId,
+              );
+            }
+            break;
+          case DeliveryStatus.CANCELLED:
+            await this.deliveryMetricsService.recordCancellation(delivery);
+            if (delivery.driverId) {
+              await this.driverStatsService.recordDeliveryCancelled(
+                delivery.driverId,
+              );
+            }
+            break;
+        }
+        return delivery;
       });
-
-      // 🔔 3️⃣ Notify WebSocket layer (THIS WAS MISSING BEFORE)
-      await this.notifier.notify(event, delivery);
-
-      // 4️⃣ Emit to Vendure via Outbox ONLY if the status is allowed
-      if (this.isVendureStatus(updateDto.status)) {
-        await this.outbox.publish(
-          manager,
-          this.getVendureEventType(updateDto.status),
-          {
-            sellerOrderId: delivery.sellerOrderId,
-            channelId: delivery.channelId,
-            pickupProofUrl: delivery.pickupProofUrl,
-            deliveryProofUrl: delivery.deliveryProofUrl,
-            pickedUpAt: delivery.pickedUpAt?.toISOString(),
-            deliveredAt: delivery.deliveredAt?.toISOString(),
-            failure:
-              updateDto.status === "FAILED"
-                ? {
-                    code: updateDto.failureCode || "UNKNOWN",
-                    reason: updateDto.failureReason || "Unknown failure",
-                    occurredAt: delivery.failedAt?.toISOString(),
-                  }
-                : undefined,
-          },
-        );
-      }
-
-      this.logger.log(
-        `Delivery ${deliveryId} status updated to ${updateDto.status}`,
-      );
-
-      return delivery;
-    }).then(async (delivery) => {
-      // Projection hooks: Record status changes in delivery metrics and driver stats
-      switch (delivery.status) {
-        case DeliveryStatus.PICKED_UP:
-          await this.deliveryMetricsService.recordPickup(delivery);
-          break;
-        case DeliveryStatus.DELIVERED:
-          await this.deliveryMetricsService.recordDelivery(delivery);
-          if (delivery.driverId) {
-            await this.driverStatsService.recordDeliveryCompleted(delivery.driverId, {
-              pickupTimeSeconds: delivery.pickedUpAt ? Math.round((delivery.pickedUpAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
-              totalTimeSeconds: delivery.deliveredAt ? Math.round((delivery.deliveredAt.getTime() - (delivery.assignedAt?.getTime() || delivery.createdAt.getTime())) / 1000) : undefined,
-              deliveredAt: delivery.deliveredAt,
-            });
-          }
-          break;
-        case DeliveryStatus.FAILED:
-          await this.deliveryMetricsService.recordFailure(delivery);
-          if (delivery.driverId) {
-            await this.driverStatsService.recordDeliveryFailed(delivery.driverId);
-          }
-          break;
-        case DeliveryStatus.CANCELLED:
-          await this.deliveryMetricsService.recordCancellation(delivery);
-          if (delivery.driverId) {
-            await this.driverStatsService.recordDeliveryCancelled(delivery.driverId);
-          }
-          break;
-      }
-      return delivery;
-    });
   }
 
   // ---------------------------------------------------------------------------
@@ -585,18 +641,18 @@ export class DeliveriesService {
     );
   }
 
-  private getVendureEventType(status: VendureStatus): VersionedEventType {
+  private getVendureEventType(status: VendureStatus): OutboxEventType {
     switch (status) {
       case "ASSIGNED":
-        return "DELIVERY_ASSIGNED_V1";
+        return WS_EVENTS.DELIVERY_ASSIGNED;
       case "PICKED_UP":
-        return "DELIVERY_PICKUP_CONFIRMED_V1";
+        return WS_EVENTS.DELIVERY_PICKUP_CONFIRMED;
       case "DELIVERED":
-        return "DELIVERY_DROPOFF_CONFIRMED_V1";
+        return WS_EVENTS.DELIVERY_DROPOFF_CONFIRMED;
       case "FAILED":
-        return "DELIVERY_FAILED_V1";
+        return WS_EVENTS.DELIVERY_FAILED;
       case "CANCELLED":
-        return "DELIVERY_CANCELLED_V1";
+        return WS_EVENTS.DELIVERY_CANCELLED;
     }
   }
 

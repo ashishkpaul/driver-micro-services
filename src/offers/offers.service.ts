@@ -25,7 +25,7 @@ import { WebSocketService } from "../websocket/websocket.service"; // ADDED
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { AcceptOfferDto } from "./dto/accept-offer.dto";
 import { RejectOfferDto } from "./dto/reject-offer.dto";
-import { WS_EVENTS } from "../../packages/ws-contracts";
+import { WS_EVENTS } from "../../../packages/ws-contracts";
 
 @Injectable()
 export class OffersService {
@@ -130,7 +130,7 @@ export class OffersService {
     await pipeline.exec();
 
     // Emit offer to driver over WebSocket (real-time offer card in PWA)
-    await this.wsService.emitToDriver(driverId, WS_EVENTS.OFFER_CREATED, {
+    await this.wsService.emitToDriver(driverId, "OFFER_CREATED", {
       offerId: savedOffer.id,
       deliveryId,
       expiresAt: savedOffer.expiresAt.toISOString(),
@@ -243,7 +243,7 @@ export class OffersService {
 
       // 6. Publish outbox event (ADDED)
       // This triggers DeliveryAssignedHandler -> WebSocket + Vendure webhook
-      await this.outbox.publish(manager, "DELIVERY_ASSIGNED_V1", {
+      await this.outbox.publish(manager, WS_EVENTS.DELIVERY_ASSIGNED, {
         deliveryId: offer.deliveryId,
         sellerOrderId: delivery.sellerOrderId,
         channelId: delivery.channelId,

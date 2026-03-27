@@ -902,8 +902,26 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/Delivery"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -1258,8 +1276,26 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponseDto"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DriverOffer"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -2038,6 +2074,10 @@
         "type": "object",
         "properties": {}
       },
+      "Delivery": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateDeliveryDto": {
         "type": "object",
         "properties": {}
@@ -2050,13 +2090,35 @@
         "type": "object",
         "properties": {}
       },
+      "DriverOffer": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateOfferDto": {
         "type": "object",
         "properties": {}
       },
       "AcceptOfferDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "offerId": {
+            "type": "string",
+            "example": "offer-id-123"
+          },
+          "driverId": {
+            "type": "string",
+            "example": "driver-id-123"
+          },
+          "acceptedAt": {
+            "type": "string",
+            "example": "2026-03-27T15:33:04.250Z"
+          }
+        },
+        "required": [
+          "offerId",
+          "driverId",
+          "acceptedAt"
+        ]
       },
       "RejectOfferDto": {
         "type": "object",

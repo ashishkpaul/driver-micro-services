@@ -8,7 +8,7 @@ import {
   LocationAckEvent,
 } from "./interfaces/websocket.interface";
 import { WebSocketMetricsService } from "./websocket-metrics.service";
-import { WS_EVENTS } from "../../../packages/ws-contracts";
+import { WS_EVENTS, WsEvent } from "../../../packages/ws-contracts";
 
 @Injectable()
 export class WebSocketService {
@@ -52,8 +52,8 @@ export class WebSocketService {
   /**
    * Generic method to emit any event to a specific driver
    */
-  async emitToDriver(driverId: string, event: string, data: any) {
-    this.server.to(this.room(driverId)).emit(event, data);
+  async emitToDriver(driverId: string, event: WsEvent, data: any) {
+    this.server.to(this.room(driverId)).emit(WS_EVENTS[event], data);
     this.metrics.messageSent(driverId).catch(() => {});
   }
 
