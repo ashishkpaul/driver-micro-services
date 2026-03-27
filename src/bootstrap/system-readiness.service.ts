@@ -151,21 +151,13 @@ export class SystemReadinessService {
     console.log('─'.repeat(50));
     console.log(`  Startup time: ${duration}ms`);
     console.log('═'.repeat(50));
-
-    this.logger.log(`SYSTEM READY - Startup completed in ${duration}ms`);
   }
 
   /**
-   * Log system ready state
+   * Log system ready state (structured output only)
    */
   private logSystemReady(): void {
-    const timestamp = new Date().toISOString();
-    const environment = process.env.NODE_ENV || 'development';
-    const uptimeStart = this.phaseStartTime ? this.phaseStartTime.toISOString() : 'unknown';
-    
-    this.logger.log(`SYSTEM READY`);
-    this.logger.log(`Environment: ${environment}`);
-    this.logger.log(`Uptime start timestamp: ${uptimeStart}`);
-    this.logger.log(`Ready timestamp: ${timestamp}`);
+    // Structured output handled in completeBoot()
+    // No duplicate logger calls
   }
 }

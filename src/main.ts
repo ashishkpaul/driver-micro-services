@@ -29,20 +29,26 @@ async function bootstrap() {
 
   // Custom format to filter NestJS framework noise
   const filterFrameworkLogs = winston.format((info) => {
-    const message = info.message as string;
-    if (typeof message === 'string') {
-      const suppressPatterns = [
-        'InstanceLoader',
-        'RoutesResolver', 
-        'RouterExplorer',
-        'NestApplication',
-        'dependencies initialized',
-      ];
-      
-      if (suppressPatterns.some(pattern => message.includes(pattern))) {
-        return false;
-      }
+    const message = (info.message as string) || '';
+    const context = (info.context as string) || '';
+    
+    const suppressPatterns = [
+      'InstanceLoader',
+      'RoutesResolver', 
+      'RouterExplorer',
+      'NestApplication',
+      'dependencies initialized',
+      'WebSocketsController',
+      'Mapped {',
+      'Route {',
+    ];
+    
+    if (suppressPatterns.some(pattern => 
+      message.includes(pattern) || context.includes(pattern)
+    )) {
+      return false;
     }
+    
     return info;
   });
 
