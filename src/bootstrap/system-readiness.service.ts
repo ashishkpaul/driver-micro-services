@@ -23,6 +23,8 @@ export class SystemReadinessService {
   private phaseStartTime: Date | null = null;
   private completedPhases: Set<StartupPhase> = new Set();
   private ready: boolean = false;
+  private bootStart = Date.now();
+  private modules: string[] = [];
 
   /**
    * Start a new startup phase
@@ -98,6 +100,53 @@ export class SystemReadinessService {
   private logPhaseTransition(phase: StartupPhase, action: 'START' | 'COMPLETE'): void {
     const timestamp = new Date().toISOString();
     this.logger.log(`BOOT PHASE ${action}: ${phase} - ${timestamp}`);
+  }
+
+  /**
+   * Register a module for tracking
+   */
+  registerModule(name: string): void {
+    if (!this.modules.includes(name)) {
+      this.modules.push(name);
+    }
+  }
+
+  /**
+   * Print registered modules
+   */
+  printModules(): void {
+    if (this.modules.length === 0) {
+      return;
+    }
+    console.log('');
+    console.log('┌─ 📦 MODULES ' + '─'.repeat(36));
+    this.modules.forEach(module => {
+      console.log(`│  • ${module}`);
+    });
+    console.log('└' + '─'.repeat(49));
+  }
+
+  /**
+   * Complete boot and print summary
+   */
+  completeBoot(): void {
+    const duration = Date.now() - this.bootStart;
+    const environment = process.env.NODE_ENV || 'development';
+
+    console.log('');
+    console.log('═'.repeat(50));
+    console.log('  SYSTEM READY');
+    console.log('═'.repeat(50));
+    console.log(`  Infrastructure: READY`);
+    console.log(`  Schema: VERIFIED`);
+    console.log(`  Workers: RUNNING`);
+    console.log(`  API: READY`);
+    console.log(`  Environment: ${environment}`);
+    console.log('─'.repeat(50));
+    console.log(`  Startup time: ${duration}ms`);
+    console.log('═'.repeat(50));
+
+    this.logger.log(`SYSTEM READY - Startup completed in ${duration}ms`);
   }
 
   /**

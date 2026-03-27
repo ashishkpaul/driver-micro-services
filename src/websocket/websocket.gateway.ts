@@ -45,6 +45,7 @@ export class WebSocketGatewayHandler
   server!: Server;
 
   private readonly logger = new Logger(WebSocketGatewayHandler.name);
+  private events: string[] = [];
 
   constructor(
     private readonly wsService: WebSocketService,
@@ -53,10 +54,40 @@ export class WebSocketGatewayHandler
     private readonly deliveriesService: DeliveriesService,
     private readonly metrics: WebSocketMetricsService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) {
+    // Register known subscription event names
+    this.register('LOCATION_UPDATE_V1');
+    this.register('PROOF_UPLOADED_V1');
+    this.register('DRIVER_STATUS_V1');
+    this.register('PING_V1');
+    this.register('DRIVER_HEARTBEAT_V1');
+    this.register('SYNC_STATE_V1');
+  }
+
+  /**
+   * Register an event name
+   */
+  register(event: string): void {
+    if (!this.events.includes(event)) {
+      this.events.push(event);
+    }
+  }
+
+  /**
+   * Print registered events
+   */
+  printEvents(): void {
+    console.log('');
+    console.log('┌─ 🔌 WEBSOCKET EVENTS ' + '─'.repeat(28));
+    this.events.forEach(event => {
+      console.log(`│  • ${event}`);
+    });
+    console.log('└' + '─'.repeat(49));
+  }
 
   afterInit(server: Server) {
     this.wsService.bindServer(server);
+    this.printEvents();
   }
 
   async handleConnection(client: Socket) {

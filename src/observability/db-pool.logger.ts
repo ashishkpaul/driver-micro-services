@@ -104,6 +104,18 @@ export class DbPoolLogger {
   }
 
   /**
+   * Log query duration for observability
+   */
+  logQueryDuration(duration: number, label?: string): void {
+    const labelStr = label ? ` [${label}]` : '';
+    if (duration > 1000) {
+      console.warn(`⚠ SLOW QUERY${labelStr}: ${duration}ms`);
+    } else if (duration > 500) {
+      console.log(`  DB${labelStr}: ${duration}ms`);
+    }
+  }
+
+  /**
    * Get current pool status for health checks
    */
   async getPoolStatus(): Promise<{

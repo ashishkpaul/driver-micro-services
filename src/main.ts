@@ -118,32 +118,25 @@ async function bootstrap() {
   // Start READY phase
   readinessService.startPhase(StartupPhase.READY);
 
-  // Final system ready report
-  logger.info(`SYSTEM READY`);
-  logger.info(`PORT: ${port}`);
-  logger.info(`ENV: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`VERSION: ${process.env.npm_package_version || '1.0.0'}`);
-
   // Complete READY phase
   readinessService.completePhase(StartupPhase.READY);
 
-  // Final system readiness report
-  logger.info(`SYSTEM READINESS REPORT`);
-  logger.info(`Database: READY`);
-  logger.info(`Schema: VERIFIED`);
-  logger.info(`Workers: RUNNING`);
-  logger.info(`Redis: READY`);
-  logger.info(`Realtime: READY`);
-  
+  // Use the new completeBoot method for formatted summary
+  readinessService.completeBoot();
+
   // Check push status
   const pushService = app.get(PushNotificationService);
   const pushStatus = pushService && pushService.isEnabled() ? 'ENABLED' : 'DISABLED';
-  logger.info(`Push: ${pushStatus}`);
 
-  logger.info(`Driver Service running on port ${port}`);
-  logger.info(
-    `WebSocket server running on port ${configService.get("WEBSOCKET_PORT", 3002)}`,
-  );
+  // Final startup info
+  console.log('');
+  console.log('┌─ 🚀 DRIVER SERVICE ' + '─'.repeat(30));
+  console.log(`│  Port: ${port}`);
+  console.log(`│  WebSocket: ${configService.get("WEBSOCKET_PORT", 3002)}`);
+  console.log(`│  Push: ${pushStatus}`);
+  console.log(`│  Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`│  Version: ${process.env.npm_package_version || '1.0.0'}`);
+  console.log('└' + '─'.repeat(49));
 
   // Handle SIGTERM for graceful shutdown
   process.on("SIGTERM", async () => {

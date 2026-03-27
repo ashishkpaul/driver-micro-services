@@ -53,6 +53,12 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     private janitorService: OutboxJanitorService,
     private adaptiveBatchService: AdaptiveBatchService,
   ) {
+    console.log('');
+    console.log('┌─ ⚙ OUTBOX WORKER ' + '─'.repeat(31));
+    console.log(`│  Worker id: ${this.workerId.substring(0, 8)}`);
+    console.log(`│  Database: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
+    console.log('│  Status: RUNNING');
+    console.log('└' + '─'.repeat(49));
     this.logger.log(`Outbox worker started: ${this.workerId}`);
     this.logger.log(
       `Database connection info: host=${process.env.DB_HOST}, port=${process.env.DB_PORT}, db=${process.env.DB_NAME}`,

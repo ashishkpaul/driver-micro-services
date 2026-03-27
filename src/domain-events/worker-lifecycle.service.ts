@@ -19,6 +19,12 @@ export class WorkerLifecycleService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly readinessService: SystemReadinessService) {}
 
   onModuleInit(): void {
+    console.log('');
+    console.log('┌─ ⚙️  WORKERS ' + '─'.repeat(36));
+    console.log('│  WorkerLifecycleService: RUNNING');
+    console.log('│  Graceful shutdown: ENABLED');
+    console.log(`│  Shutdown timeout: ${this.shutdownTimeout}ms`);
+    console.log('└' + '─'.repeat(49));
     this.logger.log("Worker lifecycle service initialized");
   }
 

@@ -23,6 +23,7 @@ export class TracingInterceptor implements NestInterceptor {
   ): Observable<any> {
     const request = executionContext.switchToHttp().getRequest();
     const response = executionContext.switchToHttp().getResponse();
+    const startTime = Date.now();
 
     // Create a span for the HTTP request
     const span = this.tracer.startSpan(
@@ -40,11 +41,13 @@ export class TracingInterceptor implements NestInterceptor {
 
     // Set trace context
     const ctx = trace.setSpan(otelContext.active(), span);
+    const traceId = span.spanContext().traceId;
 
     return otelContext.with(ctx, () =>
       next.handle().pipe(
         tap({
           next: (data) => {
+            const duration = Date.now() - startTime;
             span.setAttributes({
               "http.status_code": response.statusCode,
               "http.response_size": data
@@ -53,14 +56,25 @@ export class TracingInterceptor implements NestInterceptor {
             });
             span.setStatus({ code: SpanStatusCode.OK });
             span.end();
+
+            // Log request completion with short trace id
+            console.log(
+              `← ${request.method} ${request.url} ${response.statusCode} ${duration}ms [${traceId.substring(0, 8)}]`
+            );
           },
           error: (error) => {
+            const duration = Date.now() - startTime;
             span.recordException(error);
             span.setStatus({
               code: SpanStatusCode.ERROR,
               message: error?.message,
             });
             span.end();
+
+            // Log request error with short trace id
+            console.log(
+              `← ${request.method} ${request.url} ERROR ${duration}ms [${traceId.substring(0, 8)}]`
+            );
           },
         }),
       ),

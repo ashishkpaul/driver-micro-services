@@ -4,14 +4,40 @@ export class BootPhaseLogger {
   private readonly logger = new Logger(BootPhaseLogger.name);
 
   /**
-   * Log start of a boot phase
+   * Print a section header for console output
+   */
+  private printSection(title: string): void {
+    console.log('');
+    console.log('═'.repeat(50));
+    console.log(`  ${title.toUpperCase()}`);
+    console.log('═'.repeat(50));
+  }
+
+  /**
+   * Log start of a boot phase with formatted output
+   */
+  phaseStart(name: string): void {
+    this.printSection(`BOOT PHASE: ${name}`);
+    this.logger.log(`BOOT PHASE: ${name}`);
+  }
+
+  /**
+   * Log completion of a boot phase with formatted output
+   */
+  phaseComplete(name: string): void {
+    console.log(`✓ BOOT PHASE COMPLETE: ${name}`);
+    this.logger.log(`BOOT PHASE COMPLETE: ${name}`);
+  }
+
+  /**
+   * Log start of a boot phase (legacy method)
    */
   startPhase(name: string): void {
     this.logger.log(`BOOT PHASE: ${name}`);
   }
 
   /**
-   * Log completion of a boot phase
+   * Log completion of a boot phase (legacy method)
    */
   completePhase(name: string): void {
     this.logger.log(`BOOT PHASE COMPLETE: ${name}`);

@@ -57,6 +57,15 @@ export class AuditLoggingInterceptor implements NestInterceptor {
               resourceId || "unknown",
               changes,
             );
+
+            // Print structured audit log to console
+            console.log('');
+            console.log('┌─ 📋 AUDIT EVENT ' + '─'.repeat(33));
+            console.log(`│  Actor: ${request.ip || 'unknown'}`);
+            console.log(`│  Action: ${action}`);
+            console.log(`│  Resource: ${resourceType}${resourceId ? `/${resourceId}` : ''}`);
+            console.log(`│  Trace: ${request.headers['x-correlation-id'] || 'N/A'}`);
+            console.log('└' + '─'.repeat(49));
           }
         } catch (error) {
           // Don't throw errors for audit logging failures
