@@ -26,9 +26,6 @@ export class PushNotificationService {
       console.log('│  Firebase not configured');
       console.log('│  Push notifications disabled');
       console.log('└' + '─'.repeat(49));
-      this.logger.warn(
-        `Firebase not configured — push notifications disabled. Error: ${error.message}`,
-      );
       this.firebaseApp = null;
     }
   }

@@ -59,10 +59,6 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     console.log(`│  Database: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
     console.log('│  Status: RUNNING');
     console.log('└' + '─'.repeat(49));
-    this.logger.log(`Outbox worker started: ${this.workerId}`);
-    this.logger.log(
-      `Database connection info: host=${process.env.DB_HOST}, port=${process.env.DB_PORT}, db=${process.env.DB_NAME}`,
-    );
   }
 
   @Cron("*/5 * * * * *")

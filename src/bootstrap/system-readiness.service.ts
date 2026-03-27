@@ -95,11 +95,17 @@ export class SystemReadinessService {
   }
 
   /**
-   * Log phase transition
+   * Log phase transition with structured output
    */
   private logPhaseTransition(phase: StartupPhase, action: 'START' | 'COMPLETE'): void {
-    const timestamp = new Date().toISOString();
-    this.logger.log(`BOOT PHASE ${action}: ${phase} - ${timestamp}`);
+    if (action === 'START') {
+      console.log('');
+      console.log('═'.repeat(50));
+      console.log(`  ${phase}`);
+      console.log('═'.repeat(50));
+    } else {
+      console.log(`✓ ${phase} COMPLETE`);
+    }
   }
 
   /**

@@ -19,10 +19,38 @@ import { SystemReadinessService, StartupPhase } from "./bootstrap/system-readine
 import { PushNotificationService } from "./push/push.service";
 
 async function bootstrap() {
+  // Service header
+  console.log('');
+  console.log('═'.repeat(50));
+  console.log('  DRIVER MICROSERVICE');
+  console.log('═'.repeat(50));
+  console.log(`  Boot time: ${new Date().toISOString()}`);
+  console.log('');
+
+  // Custom format to filter NestJS framework noise
+  const filterFrameworkLogs = winston.format((info) => {
+    const message = info.message as string;
+    if (typeof message === 'string') {
+      const suppressPatterns = [
+        'InstanceLoader',
+        'RoutesResolver', 
+        'RouterExplorer',
+        'NestApplication',
+        'dependencies initialized',
+      ];
+      
+      if (suppressPatterns.some(pattern => message.includes(pattern))) {
+        return false;
+      }
+    }
+    return info;
+  });
+
   // Logger setup
   const logger: Logger = winston.createLogger({
     level: "info",
     format: winston.format.combine(
+      filterFrameworkLogs(),
       winston.format.timestamp(),
       winston.format.json(),
     ),
