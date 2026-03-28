@@ -12,6 +12,7 @@ import { PolicyGuard } from "./policy.guard";
 import { PermissionInjectionMiddleware } from "./permission-injection.middleware";
 import { AuthorizationAuditService } from "./authorization-audit.service";
 import { AuthorizationModule } from "../authorization/authorization.module";
+import { MailerService } from "../services/mailer.service";
 
 @Module({
   imports: [
@@ -33,8 +34,14 @@ import { AuthorizationModule } from "../authorization/authorization.module";
     PolicyGuard,
     PermissionInjectionMiddleware,
     AuthorizationAuditService,
+    MailerService,
   ],
-  exports: [AuthService, PolicyGuard, PermissionInjectionMiddleware],
+  exports: [
+    AuthService,
+    PolicyGuard,
+    PermissionInjectionMiddleware,
+    MailerService,
+  ],
 })
 export class AuthModule {
   configure(consumer: MiddlewareConsumer) {

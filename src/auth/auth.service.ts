@@ -16,6 +16,7 @@ import { RolePermissions } from "./permissions";
 import { RedisService } from "../redis/redis.service";
 import { JwtPayload } from "./jwt-payload.types";
 import { randomInt } from "crypto";
+import { MailerService } from "../services/mailer.service";
 
 @Injectable()
 export class AuthService {
@@ -25,6 +26,7 @@ export class AuthService {
     public readonly adminService: AdminService,
     private readonly googleAuthService: GoogleAuthService,
     private readonly redisService: RedisService,
+    private readonly mailerService: MailerService,
   ) {}
 
   /**
@@ -222,9 +224,8 @@ export class AuthService {
       .getClient()
       .setex(`auth:otp:${email.toLowerCase()}`, 300, otp);
 
-    // TODO: Integrate actual email provider (SendGrid/AWS SES) here.
-    // Never log OTP in production
-    // console.log(`[DEV MODE] OTP for ${email} is ${otp}`);
+    // Send OTP via email (BuyLitsRiders branded template)
+    await this.mailerService.sendOtpEmail(email, otp);
   }
 
   /**
