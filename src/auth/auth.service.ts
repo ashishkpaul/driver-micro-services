@@ -17,6 +17,7 @@ import { RedisService } from "../redis/redis.service";
 import { JwtPayload } from "./jwt-payload.types";
 import { randomInt } from "crypto";
 import { MailerService } from "../services/mailer.service";
+import { RegisterDriverDto } from "./dto/register-driver.dto";
 
 @Injectable()
 export class AuthService {
@@ -244,7 +245,7 @@ export class AuthService {
     // Clean up OTP to prevent reuse
     await this.redisService.getClient().del(`auth:otp:${normalizedEmail}`);
 
-    let driver = await this.driversService.findByGoogleSub(normalizedEmail); // Assuming you add findByEmail
+    let driver = await this.driversService.findByEmail(normalizedEmail);
 
     if (!driver) {
       // Create pending driver if they don't exist
@@ -255,13 +256,63 @@ export class AuthService {
       });
     }
 
+    const profileComplete = !!(driver.name && driver.phone && driver.cityId);
+
     if (!driver.isActive) {
       return {
         status: "PENDING_APPROVAL",
         driver: { id: driver.id, email: driver.email },
+        profileComplete,
+        isApproved: false,
       };
     }
 
-    return this.login(driver);
+    const loginResult = await this.login(driver);
+    return {
+      ...loginResult,
+      profileComplete,
+      isApproved: true,
+    };
+  }
+
+  /**
+   * Register driver profile after OTP verification
+   */
+  async registerDriver(email: string, dto: RegisterDriverDto) {
+    const normalizedEmail = email.toLowerCase();
+    const driver = await this.driversService.findByEmail(normalizedEmail);
+
+    if (!driver) {
+      throw new UnauthorizedException(
+        "Please verify OTP first before registering",
+      );
+    }
+
+    // Update driver profile
+    driver.name = dto.name;
+    driver.phone = dto.phone;
+    driver.cityId = dto.cityId;
+    driver.vehicleType = dto.vehicleType;
+    driver.vehicleNumber = dto.vehicleNumber;
+    driver.authProvider = "email";
+
+    const savedDriver = await this.driversService.save(driver);
+
+    return {
+      driver: {
+        id: savedDriver.id,
+        name: savedDriver.name,
+        email: savedDriver.email,
+        phone: savedDriver.phone,
+        cityId: savedDriver.cityId,
+        vehicleType: savedDriver.vehicleType,
+        vehicleNumber: savedDriver.vehicleNumber,
+        isActive: savedDriver.isActive,
+        status: savedDriver.status,
+      },
+      profileComplete: true,
+      isApproved: savedDriver.isActive,
+      status: savedDriver.isActive ? savedDriver.status : "PENDING_APPROVAL",
+    };
   }
 }

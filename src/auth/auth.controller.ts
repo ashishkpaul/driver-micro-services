@@ -21,6 +21,7 @@ import { Request } from "express";
 import { ConfigService } from "@nestjs/config";
 import { ApiResponseDto } from "../common/dto/api-response.dto";
 import { LoginDto, LoginResponseDto } from "./dto/login.dto";
+import { RegisterDriverDto } from "./dto/register-driver.dto";
 
 @ApiTags("Auth")
 @ApiExtraModels(ApiResponseDto, LoginResponseDto)
@@ -194,6 +195,49 @@ export class AuthController {
         },
       );
     }
+
+    return result;
+  }
+
+  /**
+   * POST /auth/register
+   *
+   * Register driver profile after OTP verification:
+   * {
+   *   "email": "driver@example.com",
+   *   "name": "John Doe",
+   *   "phone": "+911234567890",
+   *   "cityId": "uuid",
+   *   "vehicleType": "Bike",
+   *   "vehicleNumber": "MH01AB1234"
+   * }
+   */
+  @UseGuards(ThrottlerGuard)
+  @Post("register")
+  async register(
+    @Body() body: { email: string } & RegisterDriverDto,
+    @Req() request: Request,
+  ) {
+    if (!body.email) {
+      throw new BadRequestException("Email is required");
+    }
+
+    const { email, ...dto } = body;
+    const result = await this.authService.registerDriver(email, dto);
+
+    // Audit log
+    await this.auditService.logFromRequest(
+      request,
+      "DRIVER_REGISTER",
+      "DRIVER",
+      result.driver.id,
+      {
+        email: result.driver.email,
+        name: result.driver.name,
+        phone: result.driver.phone,
+        cityId: result.driver.cityId,
+      },
+    );
 
     return result;
   }

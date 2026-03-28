@@ -1,5 +1,10 @@
 // src/drivers/drivers.service.ts
-import { Injectable, NotFoundException, Logger, ForbiddenException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  ForbiddenException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Driver } from "./entities/driver.entity";
@@ -35,6 +40,10 @@ export class DriversService {
 
   async create(dto: CreateDriverDto): Promise<Driver> {
     const driver = this.driverRepository.create(dto);
+    return this.driverRepository.save(driver);
+  }
+
+  async save(driver: Driver): Promise<Driver> {
     return this.driverRepository.save(driver);
   }
 
@@ -115,7 +124,9 @@ export class DriversService {
       try {
         await this.redisService.markDriverOffline(id);
         // Force invalidation in Redis for 24 hours (or your JWT TTL)
-        await this.redisService.getClient().set(`revoked_token:${id}`, 'true', 'EX', 86400);
+        await this.redisService
+          .getClient()
+          .set(`revoked_token:${id}`, "true", "EX", 86400);
       } catch (e) {
         this.logger.error(`Redis offline failed for ${id}`, e);
       }
@@ -125,16 +136,20 @@ export class DriversService {
   }
 
   async setActiveWithCityIsolation(
-    id: string, 
-    isActive: boolean, 
-    actor: { role: string; cityId?: string }
+    id: string,
+    isActive: boolean,
+    actor: { role: string; cityId?: string },
   ): Promise<Driver> {
     const driver = await this.findOne(id);
 
     // STAGE 3: City Isolation Check
-    if (actor.role !== 'SUPER_ADMIN' && actor.cityId !== driver.cityId) {
-      this.logger.warn(`City mismatch: Admin ${actor.cityId} attempted to modify Driver in ${driver.cityId}`);
-      throw new ForbiddenException('You do not have permission to manage drivers outside your city.');
+    if (actor.role !== "SUPER_ADMIN" && actor.cityId !== driver.cityId) {
+      this.logger.warn(
+        `City mismatch: Admin ${actor.cityId} attempted to modify Driver in ${driver.cityId}`,
+      );
+      throw new ForbiddenException(
+        "You do not have permission to manage drivers outside your city.",
+      );
     }
 
     driver.isActive = isActive;
@@ -146,7 +161,9 @@ export class DriversService {
       try {
         await this.redisService.markDriverOffline(id);
         // Force invalidation in Redis for 24 hours (or your JWT TTL)
-        await this.redisService.getClient().set(`revoked_token:${id}`, 'true', 'EX', 86400);
+        await this.redisService
+          .getClient()
+          .set(`revoked_token:${id}`, "true", "EX", 86400);
       } catch (e) {
         this.logger.error(`Redis offline failed for ${id}`, e);
       }
@@ -184,6 +201,10 @@ export class DriversService {
 
   async findByGoogleSub(googleSub: string): Promise<Driver | null> {
     return this.driverRepository.findOne({ where: { googleSub } });
+  }
+
+  async findByEmail(email: string): Promise<Driver | null> {
+    return this.driverRepository.findOne({ where: { email } });
   }
 
   async createGooglePendingDriver(data: {
@@ -265,12 +286,14 @@ export class DriversService {
   async getDriverScore(driverId: string) {
     // 1. Verify driver exists
     await this.findOne(driverId);
-    
+
     // 2. Get current aggregate score
-    const totalScore = await this.dispatchScoringService.getCurrentScore(driverId);
-    
+    const totalScore =
+      await this.dispatchScoringService.getCurrentScore(driverId);
+
     // 3. Get eligibility status (context for ops)
-    const isEligible = await this.dispatchScoringService.isDriverEligible(driverId);
+    const isEligible =
+      await this.dispatchScoringService.isDriverEligible(driverId);
 
     return {
       driverId,
