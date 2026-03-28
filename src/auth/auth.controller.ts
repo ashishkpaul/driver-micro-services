@@ -40,6 +40,7 @@ export class AuthController {
    *   "driverId": "driver-uuid"
    * }
    */
+  @UseGuards(ThrottlerGuard)
   @Post("login")
   @ApiOkResponse({
     schema: {
