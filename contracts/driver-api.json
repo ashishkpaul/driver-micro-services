@@ -2111,7 +2111,7 @@
           },
           "acceptedAt": {
             "type": "string",
-            "example": "2026-03-27T15:33:04.250Z"
+            "example": "2026-03-28T05:58:04.216Z"
           }
         },
         "required": [
