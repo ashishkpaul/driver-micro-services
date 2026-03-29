@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   Req,
   ForbiddenException,
@@ -22,6 +23,9 @@ import { ConfigService } from "@nestjs/config";
 import { ApiResponseDto } from "../common/dto/api-response.dto";
 import { LoginDto, LoginResponseDto } from "./dto/login.dto";
 import { RegisterDriverDto } from "./dto/register-driver.dto";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { City } from "../entities/city.entity";
 
 @ApiTags("Auth")
 @ApiExtraModels(ApiResponseDto, LoginResponseDto)
@@ -31,7 +35,23 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
+    @InjectRepository(City)
+    private readonly cityRepository: Repository<City>,
   ) {}
+
+  /**
+   * GET /auth/cities
+   *
+   * Get all available cities for driver registration
+   */
+  @Get("cities")
+  async getCities() {
+    const cities = await this.cityRepository.find({
+      select: ["id", "name"],
+      order: { name: "ASC" },
+    });
+    return cities;
+  }
 
   /**
    * POST /auth/login
