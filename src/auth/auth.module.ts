@@ -1,4 +1,5 @@
 import { Module, MiddlewareConsumer } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { RedisModule } from "../redis/redis.module";
@@ -12,10 +13,11 @@ import { PolicyGuard } from "./policy.guard";
 import { PermissionInjectionMiddleware } from "./permission-injection.middleware";
 import { AuthorizationAuditService } from "./authorization-audit.service";
 import { AuthorizationModule } from "../authorization/authorization.module";
-import { MailerService } from "../services/mailer.service";
+import { ServicesModule } from "../services/services.module";
 
 @Module({
   imports: [
+    ConfigModule,
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || "driver-service-secret",
@@ -25,6 +27,7 @@ import { MailerService } from "../services/mailer.service";
     DriversModule,
     AdminModule,
     AuthorizationModule,
+    ServicesModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -34,14 +37,8 @@ import { MailerService } from "../services/mailer.service";
     PolicyGuard,
     PermissionInjectionMiddleware,
     AuthorizationAuditService,
-    MailerService,
   ],
-  exports: [
-    AuthService,
-    PolicyGuard,
-    PermissionInjectionMiddleware,
-    MailerService,
-  ],
+  exports: [AuthService, PolicyGuard, PermissionInjectionMiddleware],
 })
 export class AuthModule {
   configure(consumer: MiddlewareConsumer) {

@@ -8,9 +8,18 @@ export class MailerService {
   private transporter: nodemailer.Transporter;
 
   constructor(private configService: ConfigService) {
+    console.log("DEBUG MAILER CONSTRUCTOR HIT");
+
+    const smtpHost = this.configService.get("SMTP_HOST", "localhost");
+    const smtpPort = this.configService.get("SMTP_PORT", 2525);
+
+    console.log("📧 [MailerService] Initializing SMTP transporter");
+    console.log("📧 [MailerService] SMTP_HOST:", smtpHost);
+    console.log("📧 [MailerService] SMTP_PORT:", smtpPort);
+
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get("SMTP_HOST", "localhost"),
-      port: this.configService.get("SMTP_PORT", 2525),
+      host: smtpHost,
+      port: Number(smtpPort),
       secure: false, // smtp4dev doesn't use TLS
       tls: { rejectUnauthorized: false },
     });
@@ -19,18 +28,35 @@ export class MailerService {
   async sendOtpEmail(to: string, otp: string): Promise<void> {
     const from = this.configService.get("SMTP_FROM", "system@zapride.local");
 
+    console.log("📧 [MailerService] Attempting to send OTP email");
+    console.log("📧 [MailerService] From:", from);
+    console.log("📧 [MailerService] To:", to);
+    console.log("📧 [MailerService] OTP:", otp);
+
     const htmlTemplate = this.getOtpHtmlTemplate(otp);
 
     try {
-      await this.transporter.sendMail({
+      console.log("📧 [MailerService] Calling transporter.sendMail...");
+
+      const result = await this.transporter.sendMail({
         from,
         to,
         subject: `🔐 ${otp} is your ZapRide verification code`,
         html: htmlTemplate,
         text: `Your ZapRide verification code is: ${otp}. It expires in 5 minutes.`,
       });
+
+      console.log("📧 [MailerService] ✅ Email sent successfully!");
+      console.log("📧 [MailerService] Message ID:", result.messageId);
+      console.log("📧 [MailerService] Response:", result.response);
+
       this.logger.log(`OTP email sent to ${to}`);
     } catch (error) {
+      console.error("📧 [MailerService] ❌ Failed to send email!");
+      console.error("📧 [MailerService] Error:", error);
+      console.error("📧 [MailerService] Error message:", error.message);
+      console.error("📧 [MailerService] Error code:", error.code);
+
       this.logger.error(`Failed to send OTP email to ${to}:`, error.message);
     }
   }

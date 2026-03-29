@@ -218,6 +218,9 @@ export class AuthService {
    * Request Email OTP
    */
   async requestEmailOtp(email: string): Promise<void> {
+    console.log("DEBUG STEP 1 - requestEmailOtp called");
+    console.log("DEBUG STEP 2 - mailerService:", this.mailerService);
+
     const otp = randomInt(100000, 1000000).toString(); // 6 digit OTP - cryptographically secure
 
     // Store in Redis with a 5-minute TTL
@@ -225,8 +228,12 @@ export class AuthService {
       .getClient()
       .setex(`auth:otp:${email.toLowerCase()}`, 300, otp);
 
+    console.log("DEBUG STEP 3 - calling mailer");
+
     // Send OTP via email (BuyLitsRiders branded template)
     await this.mailerService.sendOtpEmail(email, otp);
+
+    console.log("DEBUG STEP 4 - mailer finished");
   }
 
   /**
