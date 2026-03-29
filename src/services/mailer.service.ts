@@ -17,10 +17,7 @@ export class MailerService {
   }
 
   async sendOtpEmail(to: string, otp: string): Promise<void> {
-    const from = this.configService.get(
-      "SMTP_FROM",
-      "system@bulitsrider.local",
-    );
+    const from = this.configService.get("SMTP_FROM", "system@zapride.local");
 
     const htmlTemplate = this.getOtpHtmlTemplate(otp);
 
@@ -28,9 +25,9 @@ export class MailerService {
       await this.transporter.sendMail({
         from,
         to,
-        subject: `🔐 ${otp} is your BuyLitsRiders verification code`,
+        subject: `🔐 ${otp} is your ZapRide verification code`,
         html: htmlTemplate,
-        text: `Your BuyLitsRiders verification code is: ${otp}. It expires in 5 minutes.`,
+        text: `Your ZapRide verification code is: ${otp}. It expires in 5 minutes.`,
       });
       this.logger.log(`OTP email sent to ${to}`);
     } catch (error) {
@@ -44,7 +41,7 @@ export class MailerService {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BuyLitsRiders Verification</title>
+  <title>ZapRide Verification</title>
   <style>
     body { font-family: 'Inter', -apple-system, sans-serif; margin: 0; padding: 0; background-color: #f4f4f7; }
     .wrapper { width: 100%; table-layout: fixed; background-color: #f4f4f7; padding: 40px 0; }
@@ -67,7 +64,7 @@ export class MailerService {
     <table class="main">
       <tr>
         <td class="header">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">⚡ BuyLitsRiders</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">⚡ ZapRide</h1>
         </td>
       </tr>
       <tr>
@@ -86,7 +83,7 @@ export class MailerService {
       </tr>
       <tr>
         <td class="footer">
-          &copy; 2026 BuyLitsRiders Logistics System<br>
+          &copy; 2026 ZapRide Logistics System<br>
           Automated System Message - Do Not Reply
         </td>
       </tr>

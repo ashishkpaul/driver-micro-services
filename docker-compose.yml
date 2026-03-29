@@ -18,6 +18,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+      - SMTP_HOST=smtp4dev
+      - SMTP_PORT=2525
     depends_on:
       - postgres
       - redis
