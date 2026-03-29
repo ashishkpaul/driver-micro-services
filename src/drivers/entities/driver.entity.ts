@@ -31,8 +31,8 @@ export class Driver {
   @Column({ type: "varchar" })
   name!: string;
 
-  @Column({ type: "varchar", unique: true })
-  phone!: string;
+  @Column({ type: "varchar", unique: true, nullable: true })
+  phone?: string;
 
   @Index("idx_drivers_is_active")
   @Column({ name: "is_active", type: "boolean", default: true })
@@ -86,8 +86,9 @@ export class Driver {
   @Column({
     name: "city_id",
     type: "uuid",
+    nullable: true,
   })
-  cityId!: string;
+  cityId?: string;
 
   @Column({
     name: "zone_id",

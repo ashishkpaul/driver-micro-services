@@ -249,19 +249,27 @@ export class AuthService {
       throw new UnauthorizedException("Invalid or expired OTP");
     }
 
-    // Clean up OTP to prevent reuse
-    await this.redisService.getClient().del(`auth:otp:${normalizedEmail}`);
-
     let driver = await this.driversService.findByEmail(normalizedEmail);
 
     if (!driver) {
       // Create pending driver if they don't exist
-      driver = await this.driversService.createGooglePendingDriver({
-        name: "Driver",
-        email: normalizedEmail,
-        googleSub: normalizedEmail,
-      });
+      // Wrap in try-catch to preserve OTP if creation fails
+      try {
+        driver = await this.driversService.createGooglePendingDriver({
+          name: "Driver",
+          email: normalizedEmail,
+          googleSub: normalizedEmail,
+        });
+      } catch (error) {
+        // Keep OTP in Redis for retry if driver creation fails
+        throw new BadRequestException(
+          "Failed to create driver account. Please try again.",
+        );
+      }
     }
+
+    // Clean up OTP only after successful verification/creation
+    await this.redisService.getClient().del(`auth:otp:${normalizedEmail}`);
 
     const profileComplete = !!(driver.name && driver.phone && driver.cityId);
 
