@@ -2,6 +2,7 @@ import { Module, MiddlewareConsumer } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
+import { TypeOrmModule } from "@nestjs/typeorm";
 import { RedisModule } from "../redis/redis.module";
 import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
@@ -14,6 +15,7 @@ import { PermissionInjectionMiddleware } from "./permission-injection.middleware
 import { AuthorizationAuditService } from "./authorization-audit.service";
 import { AuthorizationModule } from "../authorization/authorization.module";
 import { ServicesModule } from "../services/services.module";
+import { City } from "../entities/city.entity";
 
 @Module({
   imports: [
@@ -23,6 +25,7 @@ import { ServicesModule } from "../services/services.module";
       secret: process.env.JWT_SECRET || "driver-service-secret",
       signOptions: { expiresIn: "24h" },
     }),
+    TypeOrmModule.forFeature([City]),
     RedisModule,
     DriversModule,
     AdminModule,
