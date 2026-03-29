@@ -258,13 +258,18 @@ export class AuthService {
         driver = await this.driversService.createGooglePendingDriver({
           name: "Driver",
           email: normalizedEmail,
-          googleSub: normalizedEmail,
+          googleSub: "", // Empty string for email OTP auth (not Google)
         });
       } catch (error) {
-        // Keep OTP in Redis for retry if driver creation fails
-        throw new BadRequestException(
-          "Failed to create driver account. Please try again.",
-        );
+        // If duplicate email created by concurrent request, fetch the existing driver
+        driver = await this.driversService.findByEmail(normalizedEmail);
+
+        if (!driver) {
+          // Keep OTP in Redis for retry if driver creation fails
+          throw new BadRequestException(
+            "Failed to create driver account. Please try again.",
+          );
+        }
       }
     }
 
