@@ -1,7 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
-import { SchemaSnapshotService } from "./schema-snapshot.service";
 import { SchemaDiffService } from "./schema-diff.service";
 import { SchemaClassificationService } from "./schema-classification.service";
 import { SchemaLockService } from "./schema-lock.service";
