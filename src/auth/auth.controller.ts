@@ -27,8 +27,6 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { City } from "../entities/city.entity";
 import { AuthGuard } from "@nestjs/passport";
-import { Inject } from "@nestjs/common";
-import { REQUEST } from "@nestjs/core";
 
 @ApiTags("Auth")
 @ApiExtraModels(ApiResponseDto, LoginResponseDto)

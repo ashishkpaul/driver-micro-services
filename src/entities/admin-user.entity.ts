@@ -17,7 +17,6 @@ import {
   IsString,
   MinLength,
 } from "class-validator";
-import { Role } from "../auth/roles.enum";
 
 export enum AdminRole {
   DRIVER = "DRIVER",
