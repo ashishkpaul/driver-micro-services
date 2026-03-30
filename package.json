@@ -54,6 +54,7 @@
     "migration:run": "npm run project:check && npm run typeorm -- migration:run -d src/config/data-source.ts",
     "migration:revert": "npm run project:check && npm run typeorm -- migration:revert -d src/config/data-source.ts",
     "init:superadmin": "ts-node scripts/init-superadmin.ts",
+    "db:seed:dev": "ts-node scripts/seed-dev-data.ts",
     "prepare": "husky install",
     "docker:build": "docker build -t driver-micro-services .",
     "docker:run": "docker run -p 3001:3001 driver-micro-services"

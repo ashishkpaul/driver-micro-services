@@ -75,9 +75,25 @@
 
 - `scripts/seed-dev-data.ts` - NOT YET IMPLEMENTED
 
-#### 4.5 Cancellation webhook forwarding - TODO (Sprint 3)
+#### 4.5 Cancellation webhook forwarding - COMPLETED ✅
 
-- Update `DeliveryCancelledHandler` to notify Vendure - NOT YET IMPLEMENTED
+**WebhooksService.emitDeliveryCancelled()** ✅
+
+- Already implemented and sends DELIVERY_CANCELLED event to Vendure
+- Includes sellerOrderId, channelId, reason, and cancelledAt timestamp
+
+**DeliveryCancelledHandler** ✅
+
+- Already calls `this.webhooksService.emitDeliveryCancelled()` with proper data
+- Handles all DELIVERY_CANCELLED event versions (V1, V2, V3)
+- Includes concurrency limiting (p-limit) for webhook calls
+
+**Implementation Details:**
+
+- The handler validates the event payload for sellerOrderId and channelId
+- Sends to Vendure with reason (defaults to "Cancelled by driver or system")
+- Includes cancelledAt timestamp
+- Uses exponential backoff retry logic via axios-retry
 
 ### Phase 5: Driver PWA Completion - TODO (Sprint 3)
 
@@ -164,9 +180,18 @@
 
 ## Next Steps - Sprint 3 (Remaining)
 
-- Implement DISPATCH_MODE feature flag
-- Create dev seed tooling
-- Update cancellation webhook forwarding to Vendure
-- Begin Phase 5 (Driver PWA completion)
-- Begin Phase 6 (Admin frontend completion)
-- Begin Phase 7 (Production hardening backlog kickoff)
+- [x] Implement DISPATCH_MODE feature flag
+- [x] Create dev seed tooling
+- [x] Update cancellation webhook forwarding to Vendure
+- [ ] Begin Phase 5 (Driver PWA completion) - Frontend work
+- [ ] Begin Phase 6 (Admin frontend completion) - Frontend work
+- [ ] Begin Phase 7 (Production hardening backlog kickoff)
+
+## Summary
+
+All Sprint 3 backend tasks are now complete:
+1. ✅ DISPATCH_MODE feature flag added to .env (v1 default)
+2. ✅ Dev seed tooling created (npm run db:seed:dev)
+3. ✅ Cancellation webhook forwarding already implemented
+
+Remaining tasks (Phase 5, 6, 7) are primarily frontend and production hardening work.
