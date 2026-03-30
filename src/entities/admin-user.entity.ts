@@ -110,6 +110,20 @@ export class AdminUser {
   })
   lastLoginAt?: Date;
 
+  @Column({
+    name: "failed_login_attempts",
+    type: "int",
+    default: 0,
+  })
+  failedLoginAttempts!: number;
+
+  @Column({
+    name: "locked_until",
+    type: "timestamp",
+    nullable: true,
+  })
+  lockedUntil?: Date;
+
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
 
@@ -145,6 +159,38 @@ export class AdminUser {
 
     // Admin can only access their assigned city
     return this.cityId === cityId;
+  }
+
+  /**
+   * Check if account is currently locked
+   */
+  isLocked(): boolean {
+    if (!this.lockedUntil) {
+      return false;
+    }
+    return this.lockedUntil > new Date();
+  }
+
+  /**
+   * Increment failed login attempts and lock if threshold exceeded
+   */
+  recordFailedLogin(
+    maxAttempts: number = 5,
+    lockDurationMs: number = 15 * 60 * 1000,
+  ): void {
+    this.failedLoginAttempts += 1;
+
+    if (this.failedLoginAttempts >= maxAttempts) {
+      this.lockedUntil = new Date(Date.now() + lockDurationMs);
+    }
+  }
+
+  /**
+   * Reset failed login attempts on successful login
+   */
+  resetFailedLoginAttempts(): void {
+    this.failedLoginAttempts = 0;
+    this.lockedUntil = undefined;
   }
 
   /**

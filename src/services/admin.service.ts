@@ -100,15 +100,29 @@ export class AdminService {
       throw new BadRequestException("Admin account is disabled");
     }
 
+    // Check if account is locked
+    if (admin.isLocked()) {
+      const lockedUntil = admin.lockedUntil?.toISOString();
+      throw new BadRequestException(
+        `Account is locked. Try again after ${lockedUntil}`,
+      );
+    }
+
     const isPasswordValid = await this.passwordService.compare(
       password,
       admin.passwordHash,
     );
+
     if (!isPasswordValid) {
+      // Record failed login attempt
+      admin.recordFailedLogin(5, 15 * 60 * 1000); // 5 attempts, 15 minute lockout
+      await this.adminRepository.save(admin);
+
       throw new BadRequestException("Invalid credentials");
     }
 
-    // Update last login
+    // Reset failed login attempts on successful login
+    admin.resetFailedLoginAttempts();
     admin.lastLoginAt = new Date();
     await this.adminRepository.save(admin);
 

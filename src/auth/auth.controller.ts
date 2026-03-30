@@ -292,4 +292,27 @@ export class AuthController {
       ...admin,
     };
   }
+
+  /**
+   * POST /auth/refresh
+   *
+   * Refresh JWT token using a refresh token
+   */
+  @Post("refresh")
+  @UseGuards(AuthGuard("jwt"))
+  async refreshToken(@Req() request: Request & { user: any }) {
+    return this.authService.refreshToken(request.user);
+  }
+
+  /**
+   * POST /auth/logout
+   *
+   * Logout and revoke refresh token
+   */
+  @Post("logout")
+  @UseGuards(AuthGuard("jwt"))
+  async logout(@Req() request: Request & { user: any }) {
+    await this.authService.logout(request.user);
+    return { message: "Logged out successfully" };
+  }
 }

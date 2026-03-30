@@ -190,6 +190,7 @@
 ## Summary
 
 All Sprint 3 backend tasks are now complete:
+
 1. ✅ DISPATCH_MODE feature flag added to .env (v1 default)
 2. ✅ Dev seed tooling created (npm run db:seed:dev)
 3. ✅ Cancellation webhook forwarding already implemented

@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { DriversService } from "../drivers/drivers.service";
@@ -22,6 +23,8 @@ import { DriverRegistrationService } from "../drivers/driver-registration.servic
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly driversService: DriversService,
@@ -364,5 +367,45 @@ export class AuthService {
     }
 
     return admin.toResponseDto();
+  }
+
+  /**
+   * Refresh JWT token for a user
+   */
+  async refreshToken(user: any) {
+    if (user.type === "driver" && user.driverId) {
+      const driver = await this.driversService.findById(user.driverId);
+      if (!driver) {
+        throw new UnauthorizedException("Driver not found");
+      }
+      return this.login(driver, user.deviceId);
+    } else if (user.type === "admin" && user.userId) {
+      const admin = await this.adminService.findById(user.userId);
+      if (!admin) {
+        throw new UnauthorizedException("Admin not found");
+      }
+      return this.adminLogin(admin);
+    }
+
+    throw new UnauthorizedException("Invalid token");
+  }
+
+  /**
+   * Logout user and revoke token
+   */
+  async logout(user: any) {
+    if (user.type === "driver" && user.driverId) {
+      try {
+        await this.redisService.markDriverOffline(user.driverId);
+        await this.redisService
+          .getClient()
+          .set(`revoked_token:${user.driverId}`, "true", "EX", 86400);
+      } catch (e) {
+        this.logger.error(`Redis logout failed for driver ${user.driverId}`, e);
+      }
+    }
+    // For admin sessions, we can optionally revoke tokens too
+    // For now, just return success
+    return { success: true };
   }
 }
