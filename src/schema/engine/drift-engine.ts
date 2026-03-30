@@ -10,7 +10,11 @@ import { InjectDataSource } from "@nestjs/typeorm";
 import { Cron } from "@nestjs/schedule";
 import { DataSource } from "typeorm";
 import { SchemaSnapshot } from "./types";
-import { SchemaDiffService, DetailedSchemaDiff, SchemaDifference } from "../services/schema-diff.service";
+import {
+  SchemaDiffService,
+  DetailedSchemaDiff,
+  SchemaDifference,
+} from "../services/schema-diff.service";
 import { DriftCacheService } from "../services/drift-cache.service";
 
 export interface DriftReport {
@@ -64,40 +68,43 @@ export class DriftEngine {
   public async checkFullDrift(): Promise<DriftReport> {
     console.log("🔍 Checking full drift status...");
 
-    const entityDrift = await this.checkEntityDrift();
     const migrationDrift = await this.checkMigrationDrift();
-    const schemaDrift = await this.checkSchemaDrift();
 
     const driftDetails: DriftDetail[] = [];
     const recommendations: string[] = [];
 
-    // Get detailed schema differences for better explanations
+    // Get detailed schema differences - this is the SOURCE OF TRUTH
     let detailedDiff: DetailedSchemaDiff | undefined;
-    
+
     try {
       detailedDiff = await this.schemaDiffService.getDetailedSchemaDiff();
     } catch (error) {
       console.warn("Failed to get detailed schema diff:", error);
     }
 
+    // Derive entity and schema drift from detailed diff, not from coarse checks
+    const entityDifferences =
+      detailedDiff?.differences.filter((d) => d.table) || [];
+    const schemaDifferences =
+      detailedDiff?.differences.filter((d) => d.table) || [];
+
+    // Only set drift flags to true if there are actual differences in detailed diff
+    const entityDrift = entityDifferences.length > 0;
+    const schemaDrift = schemaDifferences.length > 0;
+
     if (entityDrift) {
-      const entityDifferences = detailedDiff?.differences.filter(d => d.table) || [];
-      if (entityDifferences.length > 0) {
-        driftDetails.push({
-          type: "ENTITY",
-          description: "Entity definitions differ from database schema",
-          severity: "HIGH",
-          suggestedAction: "Run schema synchronization or generate new migrations",
-          affectedTables: entityDifferences.map(d => d.table),
-          differences: entityDifferences,
-        });
-        recommendations.push(
-          "Review entity changes and generate appropriate migrations",
-        );
-      } else {
-        // If entityDrift is true but no differences, it might be a false positive
-        this.logger.warn("Entity drift detected but no differences found - possible false positive");
-      }
+      driftDetails.push({
+        type: "ENTITY",
+        description: "Entity definitions differ from database schema",
+        severity: "HIGH",
+        suggestedAction:
+          "Run schema synchronization or generate new migrations",
+        affectedTables: entityDifferences.map((d) => d.table),
+        differences: entityDifferences,
+      });
+      recommendations.push(
+        "Review entity changes and generate appropriate migrations",
+      );
     }
 
     if (migrationDrift) {
@@ -113,23 +120,17 @@ export class DriftEngine {
     }
 
     if (schemaDrift) {
-      const schemaDifferences = detailedDiff?.differences.filter(d => d.table) || [];
-      if (schemaDifferences.length > 0) {
-        driftDetails.push({
-          type: "SCHEMA",
-          description: "Database schema differs from expected state",
-          severity: "HIGH",
-          suggestedAction: "Compare schema snapshots and resolve discrepancies",
-          affectedTables: schemaDifferences.map(d => d.table),
-          differences: schemaDifferences,
-        });
-        recommendations.push(
-          "Investigate manual schema changes and update entity definitions",
-        );
-      } else {
-        // If schemaDrift is true but no differences, it might be a false positive
-        this.logger.warn("Schema drift detected but no differences found - possible false positive");
-      }
+      driftDetails.push({
+        type: "SCHEMA",
+        description: "Database schema differs from expected state",
+        severity: "HIGH",
+        suggestedAction: "Compare schema snapshots and resolve discrepancies",
+        affectedTables: schemaDifferences.map((d) => d.table),
+        differences: schemaDifferences,
+      });
+      recommendations.push(
+        "Investigate manual schema changes and update entity definitions",
+      );
     }
 
     return {
@@ -159,8 +160,11 @@ export class DriftEngine {
       const expectedSchema = await this.buildEntitySnapshot();
 
       // If schemas match, no entity drift
-      const hasSchemaChanges = this.compareSchemas(currentSchema, expectedSchema);
-      
+      const hasSchemaChanges = this.compareSchemas(
+        currentSchema,
+        expectedSchema,
+      );
+
       return hasSchemaChanges;
     } catch (error) {
       console.warn("  Entity drift check failed:", error);
@@ -415,7 +419,9 @@ export class DriftEngine {
   async runBackgroundDriftAnalysis(): Promise<void> {
     // Prevent overlapping runs
     if (this.running) {
-      this.logger.debug("Background drift analysis already running, skipping...");
+      this.logger.debug(
+        "Background drift analysis already running, skipping...",
+      );
       return;
     }
 
@@ -431,11 +437,16 @@ export class DriftEngine {
       // Cache the result
       await this.driftCacheService.update(driftReport, durationMs);
 
-      this.logger.log(`✅ Background drift analysis completed (${durationMs}ms)`);
+      this.logger.log(
+        `✅ Background drift analysis completed (${durationMs}ms)`,
+      );
     } catch (error) {
       const durationMs = Date.now() - startTime;
-      this.logger.error(`❌ Background drift analysis failed after ${durationMs}ms`, error);
-      
+      this.logger.error(
+        `❌ Background drift analysis failed after ${durationMs}ms`,
+        error,
+      );
+
       // Mark as failed in cache
       this.driftCacheService.markFailed(error as Error);
     } finally {

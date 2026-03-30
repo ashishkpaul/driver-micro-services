@@ -7,17 +7,8 @@ import { SchemaClassificationService } from "./schema-classification.service";
 import { SchemaLockService } from "./schema-lock.service";
 import { DriftEngine } from "../engine/drift-engine";
 import { ExecutionPlanner } from "../engine/execution-planner";
-import { BackfillJob, BackfillJobStatus } from "../entities/backfill-job.entity";
-import {
-  SchemaSnapshot,
-  SchemaDiff,
-  MigrationPlan,
-  RiskReport,
-  CompatibilityReport,
-  SqlCategory,
-} from "../engine/types";
+import { SchemaDiff, RiskReport, CompatibilityReport } from "../engine/types";
 import { trace } from "@opentelemetry/api";
-import { SCHEMA_TELEMETRY_METRICS } from "../schema.constants";
 
 @Injectable()
 export class SchemaOrchestratorService {
@@ -25,7 +16,6 @@ export class SchemaOrchestratorService {
 
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly schemaSnapshotService: SchemaSnapshotService,
     private readonly schemaDiffService: SchemaDiffService,
     private readonly schemaClassificationService: SchemaClassificationService,
     private readonly schemaLockService: SchemaLockService,
@@ -36,9 +26,9 @@ export class SchemaOrchestratorService {
    * Main orchestration method - converges schema to desired state
    */
   async converge(): Promise<void> {
-    const tracer = trace.getTracer('schema-orchestrator');
-    
-    await tracer.startActiveSpan('schema.convergence', async (span) => {
+    const tracer = trace.getTracer("schema-orchestrator");
+
+    await tracer.startActiveSpan("schema.convergence", async (span) => {
       try {
         this.logger.log("Starting schema convergence...");
 
@@ -46,15 +36,17 @@ export class SchemaOrchestratorService {
         const lockStartTime = Date.now();
         const acquired = await this.schemaLockService.acquireLock();
         const lockDuration = Date.now() - lockStartTime;
-        
+
         span.setAttributes({
-          'schema.lock.acquired': acquired,
-          'schema.lock.duration_ms': lockDuration,
+          "schema.lock.acquired": acquired,
+          "schema.lock.duration_ms": lockDuration,
         });
 
         if (!acquired) {
-          this.logger.warn("Schema lock not available - another pod is migrating");
-          span.setStatus({ code: 1, message: 'Lock not acquired' });
+          this.logger.warn(
+            "Schema lock not available - another pod is migrating",
+          );
+          span.setStatus({ code: 1, message: "Lock not acquired" });
           span.end();
           return;
         }
@@ -69,15 +61,17 @@ export class SchemaOrchestratorService {
           const diffDuration = Date.now() - diffStartTime;
 
           span.setAttributes({
-            'schema.diff.operations_count': diff.up.length,
-            'schema.diff.duration_ms': diffDuration,
+            "schema.diff.operations_count": diff.up.length,
+            "schema.diff.duration_ms": diffDuration,
           });
 
           // If no differences, we're done
           if (diff.up.length === 0) {
-            this.logger.log("✅ No schema differences detected - schema is up to date");
+            this.logger.log(
+              "✅ No schema differences detected - schema is up to date",
+            );
             span.setAttributes({
-              'schema.convergence.status': 'no_changes',
+              "schema.convergence.status": "no_changes",
             });
             span.end();
             return;
@@ -85,48 +79,65 @@ export class SchemaOrchestratorService {
 
           // Step 4: Classify operations by risk and type
           const classificationStartTime = Date.now();
-          const classified = await this.schemaClassificationService.classifyOperations(diff.up);
+          const classified =
+            await this.schemaClassificationService.classifyOperations(diff.up);
           const classificationDuration = Date.now() - classificationStartTime;
 
           const categoryCounts = this.getCategoryCounts(classified);
           span.setAttributes({
-            'schema.classification.safe_count': categoryCounts.SAFE || 0,
-            'schema.classification.data_count': categoryCounts.DATA || 0,
-            'schema.classification.breaking_count': categoryCounts.BREAKING || 0,
-            'schema.classification.fix_count': categoryCounts.FIX || 0,
-            'schema.classification.duration_ms': classificationDuration,
+            "schema.classification.safe_count": categoryCounts.SAFE || 0,
+            "schema.classification.data_count": categoryCounts.DATA || 0,
+            "schema.classification.breaking_count":
+              categoryCounts.BREAKING || 0,
+            "schema.classification.fix_count": categoryCounts.FIX || 0,
+            "schema.classification.duration_ms": classificationDuration,
           });
 
           // Step 5: Analyze risks and compatibility
           const risks = this.analyzeRisks(classified);
           const compatibility = this.checkCompatibility(classified);
 
-          const criticalRisks = risks.filter(r => r.severity === "CRITICAL").length;
+          const criticalRisks = risks.filter(
+            (r) => r.severity === "CRITICAL",
+          ).length;
           const breakingChanges = compatibility.breakingChanges.length;
 
           span.setAttributes({
-            'schema.risks.critical_count': criticalRisks,
-            'schema.compatibility.breaking_count': breakingChanges,
+            "schema.risks.critical_count": criticalRisks,
+            "schema.compatibility.breaking_count": breakingChanges,
           });
 
           // Step 6: Validate migration plan
           const validationStartTime = Date.now();
-          const validation = this.validateMigrationPlan(classified, risks, compatibility);
+          const validation = this.validateMigrationPlan(
+            classified,
+            risks,
+            compatibility,
+          );
           const validationDuration = Date.now() - validationStartTime;
 
           span.setAttributes({
-            'schema.validation.valid': validation.isValid,
-            'schema.validation.errors_count': validation.errors.length,
-            'schema.validation.warnings_count': validation.warnings.length,
-            'schema.validation.duration_ms': validationDuration,
+            "schema.validation.valid": validation.isValid,
+            "schema.validation.errors_count": validation.errors.length,
+            "schema.validation.warnings_count": validation.warnings.length,
+            "schema.validation.duration_ms": validationDuration,
           });
 
           if (!validation.isValid) {
-            this.logger.error("Migration plan validation failed", validation.errors);
-            span.recordException(new Error(`Migration validation failed: ${validation.errors.join(", ")}`));
-            span.setStatus({ code: 2, message: 'Validation failed' });
+            this.logger.error(
+              "Migration plan validation failed",
+              validation.errors,
+            );
+            span.recordException(
+              new Error(
+                `Migration validation failed: ${validation.errors.join(", ")}`,
+              ),
+            );
+            span.setStatus({ code: 2, message: "Validation failed" });
             span.end();
-            throw new Error(`Migration validation failed: ${validation.errors.join(", ")}`);
+            throw new Error(
+              `Migration validation failed: ${validation.errors.join(", ")}`,
+            );
           }
 
           // Step 7: Execute migration if needed
@@ -135,25 +146,23 @@ export class SchemaOrchestratorService {
           const executionDuration = Date.now() - executionStartTime;
 
           span.setAttributes({
-            'schema.execution.duration_ms': executionDuration,
+            "schema.execution.duration_ms": executionDuration,
           });
 
           this.logger.log("✅ Schema convergence completed successfully");
 
           span.setAttributes({
-            'schema.convergence.status': 'completed',
-            'schema.convergence.duration_ms': Date.now() - lockStartTime,
+            "schema.convergence.status": "completed",
+            "schema.convergence.duration_ms": Date.now() - lockStartTime,
           });
-
         } finally {
           // Always release the lock
           await this.schemaLockService.releaseLock();
         }
-
       } catch (error) {
         this.logger.error("Schema convergence failed", error);
         span.recordException(error);
-        span.setStatus({ code: 2, message: 'Convergence failed' });
+        span.setStatus({ code: 2, message: "Convergence failed" });
         throw error;
       } finally {
         span.end();
@@ -180,19 +189,24 @@ export class SchemaOrchestratorService {
     try {
       const driftReport = await this.driftEngine.checkFullDrift();
 
-      if (driftReport.entityDrift || driftReport.migrationDrift || driftReport.schemaDrift) {
+      // Only log warnings if there are actual differences in detailed diff
+      const hasActualDrift = driftReport.driftDetails.length > 0;
+
+      if (hasActualDrift) {
         this.logger.warn("Drift detected", driftReport.driftDetails);
-        
-        // For now, we'll log the drift but not auto-repair
-        // In a future implementation, we could add auto-repair logic here
-        // based on the drift details and recommendations
-        
+
         // Log recommendations
-        driftReport.recommendations.forEach(rec => {
+        driftReport.recommendations.forEach((rec) => {
           this.logger.log(`Recommendation: ${rec}`);
         });
       } else {
-        this.logger.log("✅ No drift detected");
+        // If coarse checks flagged drift but detailed diff found none, log as debug info
+        if (driftReport.entityDrift || driftReport.schemaDrift) {
+          this.logger.debug(
+            "Drift heuristics reported changes, but detailed diff found no actionable differences; suppressing warning",
+          );
+        }
+        this.logger.log("✅ No actionable drift detected");
       }
     } catch (error) {
       this.logger.error("Failed to check drift", error);
@@ -206,9 +220,10 @@ export class SchemaOrchestratorService {
   private analyzeRisks(classified: any[]): RiskReport[] {
     const risks: RiskReport[] = [];
 
-    classified.forEach(stmt => {
+    classified.forEach((stmt) => {
       let severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" = "LOW";
-      let category: "PERFORMANCE" | "DATA_LOSS" | "BLOCKING" | "COMPATIBILITY" = "PERFORMANCE";
+      let category: "PERFORMANCE" | "DATA_LOSS" | "BLOCKING" | "COMPATIBILITY" =
+        "PERFORMANCE";
       let requiresApproval = false;
 
       switch (stmt.category) {
@@ -253,10 +268,12 @@ export class SchemaOrchestratorService {
     const breakingChanges: string[] = [];
     const recommendations: string[] = [];
 
-    classified.forEach(stmt => {
+    classified.forEach((stmt) => {
       if (stmt.category === "BREAKING") {
         breakingChanges.push(stmt.sql);
-        recommendations.push(`Review application code for references to affected schema elements in: ${stmt.sql}`);
+        recommendations.push(
+          `Review application code for references to affected schema elements in: ${stmt.sql}`,
+        );
       }
     });
 
@@ -275,27 +292,34 @@ export class SchemaOrchestratorService {
   private validateMigrationPlan(
     classified: any[],
     risks: RiskReport[],
-    compatibility: CompatibilityReport
+    compatibility: CompatibilityReport,
   ): { isValid: boolean; errors: string[]; warnings: string[] } {
     const errors: string[] = [];
     const warnings: string[] = [];
 
     // Check for critical risks
-    const criticalRisks = risks.filter(r => r.severity === "CRITICAL");
+    const criticalRisks = risks.filter((r) => r.severity === "CRITICAL");
     if (criticalRisks.length > 0) {
-      errors.push(`Critical risks detected: ${criticalRisks.map(r => r.operation).join(", ")}`);
+      errors.push(
+        `Critical risks detected: ${criticalRisks.map((r) => r.operation).join(", ")}`,
+      );
     }
 
     // Check for breaking compatibility
     if (compatibility.breakingChanges.length > 0) {
-      errors.push(`Breaking compatibility changes detected: ${compatibility.breakingChanges.join(", ")}`);
+      errors.push(
+        `Breaking compatibility changes detected: ${compatibility.breakingChanges.join(", ")}`,
+      );
     }
 
     // Check for mixed phases in single migration
-    const categories = new Set(classified.map(s => s.category));
-    const needsPhaseDecomposition = this.schemaClassificationService.needsPhaseDecomposition(classified);
+    const categories = new Set(classified.map((s) => s.category));
+    const needsPhaseDecomposition =
+      this.schemaClassificationService.needsPhaseDecomposition(classified);
     if (needsPhaseDecomposition) {
-      warnings.push("Mixed operation types detected - consider splitting into separate migrations");
+      warnings.push(
+        "Mixed operation types detected - consider splitting into separate migrations",
+      );
     }
 
     return {
@@ -312,7 +336,7 @@ export class SchemaOrchestratorService {
     diff: SchemaDiff,
     classified: any[],
     risks: RiskReport[],
-    compatibility: CompatibilityReport
+    compatibility: CompatibilityReport,
   ): Promise<void> {
     this.logger.log(`Executing migration with ${diff.up.length} operations...`);
 
@@ -326,23 +350,29 @@ export class SchemaOrchestratorService {
     const migrationPlan = {
       phases: [
         {
-          phase: 'EXPAND' as const,
-          operations: classified.filter(c => c.category === 'SAFE'),
-          order: classified.filter(c => c.category === 'SAFE').map(c => c.sql),
+          phase: "EXPAND" as const,
+          operations: classified.filter((c) => c.category === "SAFE"),
+          order: classified
+            .filter((c) => c.category === "SAFE")
+            .map((c) => c.sql),
         },
         {
-          phase: 'DATA' as const,
-          operations: classified.filter(c => c.category === 'DATA'),
-          order: classified.filter(c => c.category === 'DATA').map(c => c.sql),
+          phase: "DATA" as const,
+          operations: classified.filter((c) => c.category === "DATA"),
+          order: classified
+            .filter((c) => c.category === "DATA")
+            .map((c) => c.sql),
         },
         {
-          phase: 'CONTRACT' as const,
-          operations: classified.filter(c => c.category === 'BREAKING'),
-          order: classified.filter(c => c.category === 'BREAKING').map(c => c.sql),
+          phase: "CONTRACT" as const,
+          operations: classified.filter((c) => c.category === "BREAKING"),
+          order: classified
+            .filter((c) => c.category === "BREAKING")
+            .map((c) => c.sql),
         },
       ],
       operations: classified,
-      executionOrder: classified.map(c => c.sql),
+      executionOrder: classified.map((c) => c.sql),
       dependencies: new Map(), // Simplified for runtime execution
       risks,
       compatibility,
@@ -351,36 +381,53 @@ export class SchemaOrchestratorService {
         databaseSnapshot: {} as any, // Simplified for runtime execution
         diff,
         createdAt: new Date().toISOString(),
-        version: '1.0.0',
+        version: "1.0.0",
         planHash: this.generatePlanHash(classified),
       },
     };
 
     try {
       // Execute fast phases synchronously (SAFE and BREAKING)
-      const { executedPhases, skippedPhases } = await executionPlanner.executeFastPhases(migrationPlan, this.dataSource);
-      
-      this.logger.log(`✅ Executed phases synchronously: ${executedPhases.join(', ')}`);
-      
+      const { executedPhases, skippedPhases } =
+        await executionPlanner.executeFastPhases(
+          migrationPlan,
+          this.dataSource,
+        );
+
+      this.logger.log(
+        `✅ Executed phases synchronously: ${executedPhases.join(", ")}`,
+      );
+
       if (skippedPhases.length > 0) {
-        this.logger.log(`⏳ Deferred phases to background: ${skippedPhases.join(', ')}`);
-        
+        this.logger.log(
+          `⏳ Deferred phases to background: ${skippedPhases.join(", ")}`,
+        );
+
         // Create backfill jobs for DATA phases
         const migrationId = `runtime_${Date.now()}`;
-        const backfillJobs = await executionPlanner.createBackfillJobs(migrationPlan, migrationId, this.dataSource);
-        
+        const backfillJobs = await executionPlanner.createBackfillJobs(
+          migrationPlan,
+          migrationId,
+          this.dataSource,
+        );
+
         if (backfillJobs.length > 0) {
-          this.logger.log(`📋 Created ${backfillJobs.length} background backfill job(s)`);
-          
+          this.logger.log(
+            `📋 Created ${backfillJobs.length} background backfill job(s)`,
+          );
+
           // Log job details for monitoring
           for (const job of backfillJobs) {
-            this.logger.log(`  - Job ${job.id}: ${job.tableName} (${job.totalRows} rows, batch size: ${job.batchSize})`);
+            this.logger.log(
+              `  - Job ${job.id}: ${job.tableName} (${job.totalRows} rows, batch size: ${job.batchSize})`,
+            );
           }
         }
       }
 
-      this.logger.log("✅ Migration execution completed with zero-downtime strategy");
-
+      this.logger.log(
+        "✅ Migration execution completed with zero-downtime strategy",
+      );
     } catch (error) {
       this.logger.error("Migration execution failed", error);
       throw error;
@@ -391,8 +438,14 @@ export class SchemaOrchestratorService {
    * Generate plan hash for tracking
    */
   private generatePlanHash(classified: any[]): string {
-    const crypto = require('crypto');
-    const planData = JSON.stringify(classified.map(c => ({ sql: c.sql, category: c.category })));
-    return crypto.createHash('sha256').update(planData).digest('hex').substring(0, 16);
+    const crypto = require("crypto");
+    const planData = JSON.stringify(
+      classified.map((c) => ({ sql: c.sql, category: c.category })),
+    );
+    return crypto
+      .createHash("sha256")
+      .update(planData)
+      .digest("hex")
+      .substring(0, 16);
   }
 }

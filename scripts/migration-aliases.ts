@@ -26,4 +26,10 @@ export const MIGRATION_ALIASES: Record<string, string[]> = {
   BREAKING_ValidateEventTypeConstraint1773735000009: [
     "BREAKING_ValidateEventTypeConstraint1773735000009",
   ],
+  REPAIRRegistrationStatusColumnName1774800000001: [
+    "FIXRegistrationStatusColumnName1774800000001",
+  ],
+  FIXRegistrationStatusColumnName1774800000001: [
+    "REPAIRRegistrationStatusColumnName1774800000001",
+  ],
 };
