@@ -7,6 +7,9 @@ import {
   Param,
   ParseUUIDPipe,
   UseInterceptors,
+  UseGuards,
+  Req,
+  ForbiddenException,
 } from "@nestjs/common";
 import { DeliveriesService } from "./deliveries.service";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
@@ -21,10 +24,14 @@ import {
 } from "@nestjs/swagger";
 import { ApiResponseDto } from "../common/dto/api-response.dto";
 import { Delivery } from "./entities/delivery.entity";
+import { AuthGuard } from "@nestjs/passport";
+import { PolicyGuard } from "../auth/policy.guard";
+import { Request } from "express";
 
 @Controller("deliveries")
 @ApiTags("Deliveries")
 @ApiExtraModels(ApiResponseDto, Delivery)
+@UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}
 
@@ -51,11 +58,6 @@ export class DeliveriesController {
     return this.deliveriesService.findAll();
   }
 
-  @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.deliveriesService.findOne(id);
-  }
-
   @Get("seller-order/:sellerOrderId")
   findBySellerOrderId(@Param("sellerOrderId") sellerOrderId: string) {
     return this.deliveriesService.findBySellerOrderId(sellerOrderId);
@@ -67,11 +69,26 @@ export class DeliveriesController {
   }
 
   @Get("drivers/:driverId/active")
-  async findActiveForDriver(@Param("driverId") driverId: string) {
+  async findActiveForDriver(
+    @Param("driverId") driverId: string,
+    @Req() request: Request & { user: any },
+  ) {
+    // Ownership check: drivers can only query their own active delivery
+    if (request.user.type === "driver" && request.user.driverId !== driverId) {
+      throw new ForbiddenException(
+        "You can only query your own active delivery",
+      );
+    }
+
     const delivery = await this.deliveriesService.findActiveForDriver(driverId);
     return {
       delivery: delivery || null,
     };
+  }
+
+  @Get(":id")
+  findOne(@Param("id") id: string) {
+    return this.deliveriesService.findOne(id);
   }
 
   @Patch(":id/assign")
@@ -100,10 +117,21 @@ export class DeliveriesController {
   }
 
   @Post(":id/otp/verify")
-  verifyOtp(
+  async verifyOtp(
     @Param("id", ParseUUIDPipe) id: string,
     @Body() verifyDeliveryOtpDto: VerifyDeliveryOtpDto,
+    @Req() request: Request & { user: any },
   ) {
+    // Ownership check: drivers can only verify OTP for their own active/assigned delivery
+    if (request.user.type === "driver") {
+      const delivery = await this.deliveriesService.findOne(id);
+      if (delivery.driverId !== request.user.driverId) {
+        throw new ForbiddenException(
+          "You can only verify OTP for your own assigned delivery",
+        );
+      }
+    }
+
     return this.deliveriesService.verifyOtp(
       id,
       verifyDeliveryOtpDto.otp,

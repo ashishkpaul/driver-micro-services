@@ -12,14 +12,17 @@ import { AuditService } from "../services/audit.service";
 import { AdminController } from "../controllers/admin.controller";
 import { AuditController } from "../controllers/audit.controller";
 import { DriverStatusController } from "../controllers/driver-status.controller";
+import { AdminDeliveriesController } from "../controllers/admin-deliveries.controller";
+import { ZoneController } from "../controllers/zone.controller";
 import { DriverAdminApplicationService } from "../application/driver-admin.application";
 import { AuditLoggingInterceptor } from "../interceptors/audit-logging.interceptor";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { DriversModule } from "../drivers/drivers.module";
+import { Delivery } from "../deliveries/entities/delivery.entity";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AdminUser, City, Zone, AuditLog]),
+    TypeOrmModule.forFeature([AdminUser, City, Zone, AuditLog, Delivery]),
     RedisModule,
     DriversModule,
   ],
@@ -33,7 +36,13 @@ import { DriversModule } from "../drivers/drivers.module";
       useClass: AuditLoggingInterceptor,
     },
   ],
-  controllers: [AdminController, AuditController, DriverStatusController],
+  controllers: [
+    AdminController,
+    AuditController,
+    DriverStatusController,
+    AdminDeliveriesController,
+    ZoneController,
+  ],
   exports: [AdminService, PasswordService, AuditService],
 })
 export class AdminModule {}

@@ -6,13 +6,22 @@ import {
   ForbiddenException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, Between } from "typeorm";
 import { Driver } from "./entities/driver.entity";
 import { DriverStats } from "../delivery-intelligence/driver/driver-stats.entity";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { RedisService } from "../redis/redis.service";
 import { DriverStatus } from "./enums/driver-status.enum";
 import { DispatchScoringService } from "../dispatch-scoring/dispatch-scoring.service";
+import {
+  EarningsPeriod,
+  DriverEarningsResponse,
+  DailyEarningsHistory,
+} from "./dto/driver-earnings.dto";
+import {
+  Delivery,
+  DeliveryStatus,
+} from "../deliveries/entities/delivery.entity";
 
 @Injectable()
 export class DriversService {
@@ -30,6 +39,8 @@ export class DriversService {
     private readonly driverRepository: Repository<Driver>,
     @InjectRepository(DriverStats)
     private readonly driverStatsRepo: Repository<DriverStats>,
+    @InjectRepository(Delivery)
+    private readonly deliveryRepository: Repository<Delivery>,
     private readonly redisService: RedisService,
     private readonly dispatchScoringService: DispatchScoringService,
   ) {}
@@ -258,6 +269,9 @@ export class DriversService {
           .andWhere("driver.status = :status", {
             status: DriverStatus.AVAILABLE,
           })
+          .andWhere("driver.registrationStatus = :registrationStatus", {
+            registrationStatus: "APPROVED",
+          })
           .getMany();
 
         const map = new Map(drivers.map((d) => [d.id, d]));
@@ -273,6 +287,7 @@ export class DriversService {
       where: {
         isActive: true,
         status: DriverStatus.AVAILABLE,
+        registrationStatus: "APPROVED" as any,
       },
       order: { lastActiveAt: "DESC" },
       take: limit,
@@ -373,5 +388,134 @@ export class DriversService {
     }
 
     return savedDriver;
+  }
+
+  /**
+   * Get driver earnings for a specified period
+   */
+  async getDriverEarnings(
+    driverId: string,
+    period: EarningsPeriod,
+  ): Promise<DriverEarningsResponse> {
+    // Verify driver exists
+    await this.findOne(driverId);
+
+    const now = new Date();
+    let startDate: Date;
+    let periodLabel: string;
+
+    // Calculate date range based on period
+    switch (period) {
+      case EarningsPeriod.TODAY:
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        periodLabel = "Today";
+        break;
+      case EarningsPeriod.WEEK:
+        const dayOfWeek = now.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - daysToMonday);
+        startDate.setHours(0, 0, 0, 0);
+        periodLabel = "This Week";
+        break;
+      case EarningsPeriod.MONTH:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodLabel = "This Month";
+        break;
+    }
+
+    // Query deliveries for this driver in the date range
+    const deliveries = await this.deliveryRepository.find({
+      where: {
+        driverId,
+        createdAt: Between(startDate, now),
+      },
+      order: { createdAt: "ASC" },
+    });
+
+    // Calculate statistics
+    const totalDeliveries = deliveries.length;
+    const completedDeliveries = deliveries.filter(
+      (d) => d.status === DeliveryStatus.DELIVERED,
+    ).length;
+    const failedDeliveries = deliveries.filter(
+      (d) =>
+        d.status === DeliveryStatus.FAILED ||
+        d.status === DeliveryStatus.CANCELLED,
+    ).length;
+
+    // Calculate total earnings (assuming a base rate per delivery)
+    // In a real system, this would come from a pricing/earnings table
+    const baseRatePerDelivery = 50; // Example: ₹50 per delivery
+    const totalEarnings = completedDeliveries * baseRatePerDelivery;
+
+    // Calculate average delivery time for completed deliveries
+    const completedDeliveriesWithTime = deliveries.filter(
+      (d) =>
+        d.status === DeliveryStatus.DELIVERED && d.deliveredAt && d.assignedAt,
+    );
+
+    let avgDeliveryTimeMinutes = 0;
+    if (completedDeliveriesWithTime.length > 0) {
+      const totalTime = completedDeliveriesWithTime.reduce((sum, d) => {
+        const deliveryTime =
+          (d.deliveredAt!.getTime() - d.assignedAt!.getTime()) / (1000 * 60);
+        return sum + deliveryTime;
+      }, 0);
+      avgDeliveryTimeMinutes = Math.round(
+        totalTime / completedDeliveriesWithTime.length,
+      );
+    }
+
+    // Build daily history
+    const dailyHistory: DailyEarningsHistory[] = [];
+    const historyMap = new Map<string, DailyEarningsHistory>();
+
+    // Initialize all days in the period with zero values
+    const currentDate = new Date(startDate);
+    while (currentDate <= now) {
+      const dateKey = currentDate.toISOString().split("T")[0];
+      historyMap.set(dateKey, {
+        date: dateKey,
+        totalDeliveries: 0,
+        completedDeliveries: 0,
+        failedDeliveries: 0,
+        earnings: 0,
+      });
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Populate with actual data
+    for (const delivery of deliveries) {
+      const dateKey = delivery.createdAt.toISOString().split("T")[0];
+      const dayStats = historyMap.get(dateKey);
+      if (dayStats) {
+        dayStats.totalDeliveries++;
+        if (delivery.status === DeliveryStatus.DELIVERED) {
+          dayStats.completedDeliveries++;
+          dayStats.earnings += baseRatePerDelivery;
+        } else if (
+          delivery.status === DeliveryStatus.FAILED ||
+          delivery.status === DeliveryStatus.CANCELLED
+        ) {
+          dayStats.failedDeliveries++;
+        }
+      }
+    }
+
+    // Convert map to array and sort by date
+    const sortedHistory = Array.from(historyMap.values()).sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
+
+    return {
+      period: periodLabel,
+      totalDeliveries,
+      completedDeliveries,
+      failedDeliveries,
+      totalEarnings,
+      avgDeliveryTimeMinutes,
+      history: sortedHistory,
+    };
   }
 }

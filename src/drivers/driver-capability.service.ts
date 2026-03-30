@@ -5,6 +5,7 @@ import { Repository } from "typeorm";
 import { Driver } from "./entities/driver.entity";
 import { RedisService } from "../redis/redis.service";
 import { DriverStatus } from "./enums/driver-status.enum";
+import { DriverRegistrationStatus } from "./enums/driver-registration-status.enum";
 
 export interface CapabilityCheck {
   canAccept: boolean;
@@ -45,6 +46,7 @@ export class DriverCapabilityService {
     const checks = await Promise.all([
       this.checkActiveStatus(driver),
       this.checkCurrentStatus(driver),
+      this.checkRegistrationStatus(driver),
       this.checkVehicleVerification(driver, constraints),
       this.checkConcurrentDeliveryLimit(driverId, constraints),
       this.checkZoneAvailability(driver),
@@ -96,6 +98,19 @@ export class DriverCapabilityService {
       return {
         passed: false,
         reason: `DRIVER_STATUS_${driver.status}`,
+      };
+    }
+    return { passed: true };
+  }
+
+  private checkRegistrationStatus(driver: Driver): {
+    passed: boolean;
+    reason?: string;
+  } {
+    if (driver.registrationStatus !== DriverRegistrationStatus.APPROVED) {
+      return {
+        passed: false,
+        reason: `DRIVER_REGISTRATION_${driver.registrationStatus}`,
       };
     }
     return { passed: true };

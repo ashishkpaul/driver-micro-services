@@ -327,4 +327,42 @@ export class AuthService {
       status: savedDriver.isActive ? savedDriver.status : "PENDING_APPROVAL",
     };
   }
+
+  /**
+   * Get driver profile for session introspection (/auth/me)
+   */
+  async getDriverProfile(driverId: string) {
+    const driver = await this.driversService.findById(driverId);
+
+    if (!driver) {
+      throw new NotFoundException("Driver not found");
+    }
+
+    return {
+      id: driver.id,
+      name: driver.name,
+      email: driver.email,
+      phone: driver.phone,
+      cityId: driver.cityId,
+      zoneId: driver.zoneId,
+      vehicleType: driver.vehicleType,
+      vehicleNumber: driver.vehicleNumber,
+      isActive: driver.isActive,
+      status: driver.status,
+      registrationStatus: driver.registrationStatus,
+    };
+  }
+
+  /**
+   * Get admin profile for session introspection (/auth/me)
+   */
+  async getAdminProfile(userId: string) {
+    const admin = await this.adminService.findById(userId);
+
+    if (!admin) {
+      throw new NotFoundException("Admin not found");
+    }
+
+    return admin.toResponseDto();
+  }
 }

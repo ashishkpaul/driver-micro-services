@@ -26,6 +26,9 @@ import { RegisterDriverDto } from "./dto/register-driver.dto";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { City } from "../entities/city.entity";
+import { AuthGuard } from "@nestjs/passport";
+import { Inject } from "@nestjs/common";
+import { REQUEST } from "@nestjs/core";
 
 @ApiTags("Auth")
 @ApiExtraModels(ApiResponseDto, LoginResponseDto)
@@ -260,5 +263,33 @@ export class AuthController {
     );
 
     return result;
+  }
+
+  /**
+   * GET /auth/me
+   *
+   * JWT-guarded session introspection endpoint for both driver and admin sessions.
+   * Returns driver session profile for driver users, admin response DTO for admin users.
+   */
+  @Get("me")
+  @UseGuards(AuthGuard("jwt"))
+  async getMe(@Req() request: Request & { user: any }) {
+    const user = request.user;
+
+    // If user has driverId, it's a driver session
+    if (user.driverId) {
+      const driver = await this.authService.getDriverProfile(user.driverId);
+      return {
+        type: "driver",
+        ...driver,
+      };
+    }
+
+    // Otherwise, it's an admin session
+    const admin = await this.authService.getAdminProfile(user.userId);
+    return {
+      type: "admin",
+      ...admin,
+    };
   }
 }

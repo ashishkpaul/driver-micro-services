@@ -21,6 +21,10 @@ import { DriversService } from "./drivers.service";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { UpdateDriverLocationDto } from "./dto/update-driver-location.dto";
 import { UpdateDriverStatusDto } from "./dto/update-driver-status.dto";
+import {
+  DriverEarningsQueryDto,
+  EarningsPeriod,
+} from "./dto/driver-earnings.dto";
 import { AuthGuard } from "@nestjs/passport";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
@@ -94,11 +98,13 @@ export class DriversController {
   }
 
   @Get(":id")
+  @UseGuards(AuthGuard("jwt"))
   findOne(@Param("id", ParseUUIDPipe) id: string) {
     return this.driversService.findOne(id);
   }
 
   @Get(":id/stats")
+  @UseGuards(AuthGuard("jwt"))
   async getDriverStats(@Param("id", ParseUUIDPipe) id: string) {
     const stats = await this.driversService.getStats(id);
     if (!stats) {
@@ -108,6 +114,7 @@ export class DriversController {
   }
 
   @Get(":id/score")
+  @UseGuards(AuthGuard("jwt"))
   async getDriverScore(@Param("id", ParseUUIDPipe) id: string) {
     return await this.driversService.getDriverScore(id);
   }
@@ -130,5 +137,23 @@ export class DriversController {
     @Body() dto: UpdateDriverStatusDto,
   ) {
     return this.driversService.updateStatus(id, dto.status);
+  }
+
+  /**
+   * GET /drivers/me/earnings?period=today|week|month
+   *
+   * Get driver earnings for the specified period
+   */
+  @Get("me/earnings")
+  @UseGuards(AuthGuard("jwt"))
+  @RequirePermissions(Permission.DRIVER_READ_OWN_EARNINGS)
+  async getMyEarnings(
+    @Req() req: Request & { user: any },
+    @Query() query: DriverEarningsQueryDto,
+  ) {
+    return this.driversService.getDriverEarnings(
+      req.user.driverId,
+      query.period || EarningsPeriod.TODAY,
+    );
   }
 }
