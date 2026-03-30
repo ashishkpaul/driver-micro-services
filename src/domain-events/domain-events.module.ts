@@ -5,8 +5,9 @@
 // DomainEventsModule and DomainEventsApiModule.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { OutboxWorker } from "./outbox.worker";
+import { OutboxService } from "./outbox.service";
 import { HandlerRegistry } from "./handlers/handler.registry";
 import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
 import { DeliveryCancelledHandler } from "./handlers/delivery-cancelled.handler";
@@ -22,11 +23,11 @@ import { DomainEventsCoreModule } from "./domain-events-core.module";
 
 @Module({
   imports: [
-    DomainEventsCoreModule, 
-    WebhooksModule, 
-    PushModule, 
+    DomainEventsCoreModule,
+    WebhooksModule,
+    PushModule,
     RedisModule, // ADDED
-    DriversModule // ADDED (prevents potential next error)
+    forwardRef(() => DriversModule), // ADDED (prevents potential next error)
   ],
   providers: [
     OutboxWorker,
@@ -35,28 +36,26 @@ import { DomainEventsCoreModule } from "./domain-events-core.module";
     DeliveryAssignedHandler,
     DeliveryCancelledHandler,
     DeliveryStatusForwardingHandler,
-    DriverLocationUpdatedHandler
+    DriverLocationUpdatedHandler,
   ],
-  exports: [
-    DomainEventsCoreModule, 
-  ],
+  exports: [DomainEventsCoreModule],
 })
 export class DomainEventsModule {}
 
 @Module({
   imports: [
-    DomainEventsCoreModule, 
-    WebhooksModule, 
-    PushModule, 
+    DomainEventsCoreModule,
+    WebhooksModule,
+    PushModule,
     RedisModule, // ADDED
-    DriversModule // ADDED
+    forwardRef(() => DriversModule), // ADDED
   ],
   providers: [
     HandlerRegistry,
     DeliveryAssignedHandler,
     DeliveryCancelledHandler,
     DeliveryStatusForwardingHandler,
-    DriverLocationUpdatedHandler
+    DriverLocationUpdatedHandler,
   ],
   exports: [DomainEventsCoreModule],
 })

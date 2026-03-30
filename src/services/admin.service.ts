@@ -88,32 +88,23 @@ export class AdminService {
    * Validate admin credentials for login
    */
   async validateAdmin(email: string, password: string): Promise<AdminUser> {
-    console.log("🔍 Validating admin:", email);
-
     const admin = await this.adminRepository.findOne({
       where: { email },
     });
 
-    console.log("🔍 Admin found:", !!admin);
     if (!admin) {
-      console.log("❌ Admin not found");
       throw new NotFoundException("Invalid credentials");
     }
 
-    console.log("🔍 Admin active:", admin.isActive);
     if (!admin.isActive) {
-      console.log("❌ Admin disabled");
       throw new BadRequestException("Admin account is disabled");
     }
 
-    console.log("🔍 Comparing password...");
     const isPasswordValid = await this.passwordService.compare(
       password,
       admin.passwordHash,
     );
-    console.log("🔍 Password valid:", isPasswordValid);
     if (!isPasswordValid) {
-      console.log("❌ Invalid password");
       throw new BadRequestException("Invalid credentials");
     }
 
@@ -121,7 +112,6 @@ export class AdminService {
     admin.lastLoginAt = new Date();
     await this.adminRepository.save(admin);
 
-    console.log("✅ Admin validation successful");
     return admin;
   }
 
@@ -155,6 +145,17 @@ export class AdminService {
     }
 
     return admin;
+  }
+
+  /**
+   * Find admin by email (safe - returns null if not found)
+   * Used for checking if an email belongs to an admin without throwing
+   */
+  async findByEmailSafe(email: string): Promise<AdminUser | null> {
+    return this.adminRepository.findOne({
+      where: { email },
+      relations: ["city"],
+    });
   }
 
   /**
@@ -198,11 +199,15 @@ export class AdminService {
     // STAGE 3: Admin-to-Admin Isolation
     if (updatedBy.role !== AdminRole.SUPER_ADMIN) {
       if (updatedBy.cityId !== admin.cityId) {
-        throw new BadRequestException('Cannot modify admin users from other cities.');
+        throw new BadRequestException(
+          "Cannot modify admin users from other cities.",
+        );
       }
       // Prevent City Admins from changing roles to SUPER_ADMIN
       if (updateAdminDto.role === AdminRole.SUPER_ADMIN) {
-        throw new BadRequestException('Only Super Admins can grant Super Admin privileges.');
+        throw new BadRequestException(
+          "Only Super Admins can grant Super Admin privileges.",
+        );
       }
     }
 
@@ -231,10 +236,10 @@ export class AdminService {
     }
 
     // If role or city changes, the old JWT claims are dangerous/stale
-    const needsInvalidation = 
+    const needsInvalidation =
       (updateAdminDto.role && updateAdminDto.role !== admin.role) ||
       (updateAdminDto.cityId && updateAdminDto.cityId !== admin.cityId) ||
-      (updateAdminDto.isActive === false);
+      updateAdminDto.isActive === false;
 
     // Update admin
     Object.assign(admin, updateAdminDto);
@@ -244,7 +249,9 @@ export class AdminService {
 
     if (needsInvalidation) {
       // Use the same key pattern as the JwtStrategy
-      await this.redisService.getClient().set(`revoked_token:${id}`, 'true', 'EX', 86400);
+      await this.redisService
+        .getClient()
+        .set(`revoked_token:${id}`, "true", "EX", 86400);
     }
 
     return updated;

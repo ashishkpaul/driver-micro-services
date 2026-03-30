@@ -20,12 +20,14 @@ import {
   CreateAdminDto,
   UpdateAdminDto,
   AdminListQueryDto,
+  AdminDriverListQueryDto,
 } from "../dto/admin.dto";
 import { AuditService } from "../services/audit.service";
 import { Request } from "express";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
 import { AdminRole } from "../entities/admin-user.entity";
+import { DriverAdminApplicationService } from "../application/driver-admin.application";
 
 @Controller("admin/users")
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
@@ -34,6 +36,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly passwordService: PasswordService,
     private readonly auditService: AuditService,
+    private readonly driverAdminApplicationService: DriverAdminApplicationService,
   ) {}
 
   /**
@@ -246,5 +249,75 @@ export class AdminController {
     );
 
     return { message: "Password changed successfully" };
+  }
+
+  /**
+   * Get current admin user info
+   */
+  @Get("me")
+  @RequirePermissions(Permission.ADMIN_READ_ADMIN_ANY)
+  async getMe(@Req() request: Request & { user: any }) {
+    const admin = await this.adminService.findById(request.user.userId);
+    return admin.toResponseDto();
+  }
+
+  /**
+   * Get admin statistics overview
+   */
+  @Get("stats/overview")
+  @RequirePermissions(Permission.SUPER_ADMIN_READ_SYSTEM_STATS)
+  async getStatsOverview(@Req() request: Request & { user: any }) {
+    return this.adminService.getStats();
+  }
+
+  /**
+   * Get pending drivers (for admin approval)
+   */
+  @Get("pending-drivers")
+  @RequirePermissions(Permission.ADMIN_READ_DRIVER_ANY)
+  async getPendingDrivers(
+    @Req() request: Request & { user: any },
+    @Query() query: AdminDriverListQueryDto,
+  ) {
+    const { cityId, search, skip = 0, take = 20 } = query;
+
+    // SUPER_ADMIN can see all, ADMIN can only see their city
+    let filterCityId = cityId;
+    if (request.user.role !== AdminRole.SUPER_ADMIN && !filterCityId) {
+      filterCityId = request.user.cityId;
+    }
+
+    const result = await this.driverAdminApplicationService.listDrivers({
+      cityId: filterCityId,
+      registrationStatus: "PENDING_APPROVAL",
+      search,
+      skip,
+      take,
+    });
+
+    return {
+      drivers: result.drivers,
+      total: result.total,
+      skip,
+      take,
+    };
+  }
+
+  /**
+   * Get driver statistics for admin dashboard
+   */
+  @Get("driver-stats")
+  @RequirePermissions(Permission.ADMIN_READ_DRIVER_ANY)
+  async getDriverStats(
+    @Req() request: Request & { user: any },
+    @Query("cityId") cityId?: string,
+  ) {
+    // SUPER_ADMIN can see all, ADMIN can only see their city
+    let filterCityId = cityId;
+    if (request.user.role !== AdminRole.SUPER_ADMIN && !filterCityId) {
+      filterCityId = request.user.cityId;
+    }
+
+    return this.driverAdminApplicationService.getDriverStats(filterCityId);
   }
 }

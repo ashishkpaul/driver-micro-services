@@ -90,3 +90,48 @@ export class AdminListQueryDto {
   @Transform(({ value }) => (value === undefined ? value : Number(value)))
   take?: number;
 }
+
+export class AdminDriverListQueryDto {
+  @IsOptional()
+  @IsUUID()
+  cityId?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsEnum(["PROFILE_INCOMPLETE", "PENDING_APPROVAL", "APPROVED", "REJECTED"])
+  registrationStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsEnum(["AVAILABLE", "BUSY", "OFFLINE"])
+  status?: string;
+
+  @IsOptional()
+  isActive?: boolean;
+
+  @IsOptional()
+  @Min(0)
+  @Transform(({ value }) => (value === undefined ? value : Number(value)))
+  skip?: number;
+
+  @IsOptional()
+  @Min(1)
+  @Max(100)
+  @Transform(({ value }) => (value === undefined ? value : Number(value)))
+  take?: number;
+}
+
+export class AdminDriverStatsDto {
+  total!: number;
+  active!: number;
+  pendingApproval!: number;
+  profileIncomplete!: number;
+  rejected!: number;
+  byCity!: { cityId: string; count: number }[];
+  byStatus!: { status: string; count: number }[];
+  byRegistrationStatus!: { status: string; count: number }[];
+}

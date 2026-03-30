@@ -18,6 +18,7 @@ import { JwtPayload } from "./jwt-payload.types";
 import { randomInt } from "crypto";
 import { MailerService } from "../services/mailer.service";
 import { RegisterDriverDto } from "./dto/register-driver.dto";
+import { DriverRegistrationService } from "../drivers/driver-registration.service";
 
 @Injectable()
 export class AuthService {
@@ -28,6 +29,7 @@ export class AuthService {
     private readonly googleAuthService: GoogleAuthService,
     private readonly redisService: RedisService,
     private readonly mailerService: MailerService,
+    private readonly driverRegistrationService: DriverRegistrationService,
   ) {}
 
   /**
@@ -218,22 +220,25 @@ export class AuthService {
    * Request Email OTP
    */
   async requestEmailOtp(email: string): Promise<void> {
-    console.log("DEBUG STEP 1 - requestEmailOtp called");
-    console.log("DEBUG STEP 2 - mailerService:", this.mailerService);
+    const normalizedEmail = email.toLowerCase();
+
+    // Check if this email belongs to an admin - admins must use password login
+    const adminUser = await this.adminService.findByEmailSafe(normalizedEmail);
+    if (adminUser) {
+      throw new BadRequestException(
+        "Admin accounts must use password login. Please use the admin login page.",
+      );
+    }
 
     const otp = randomInt(100000, 1000000).toString(); // 6 digit OTP - cryptographically secure
 
     // Store in Redis with a 5-minute TTL
     await this.redisService
       .getClient()
-      .setex(`auth:otp:${email.toLowerCase()}`, 300, otp);
-
-    console.log("DEBUG STEP 3 - calling mailer");
+      .setex(`auth:otp:${normalizedEmail}`, 300, otp);
 
     // Send OTP via email (BuyLitsRiders branded template)
     await this.mailerService.sendOtpEmail(email, otp);
-
-    console.log("DEBUG STEP 4 - mailer finished");
   }
 
   /**
@@ -249,29 +254,11 @@ export class AuthService {
       throw new UnauthorizedException("Invalid or expired OTP");
     }
 
-    let driver = await this.driversService.findByEmail(normalizedEmail);
-
-    if (!driver) {
-      // Create pending driver if they don't exist
-      // Wrap in try-catch to preserve OTP if creation fails
-      try {
-        driver = await this.driversService.createGooglePendingDriver({
-          name: "Driver",
-          email: normalizedEmail,
-          googleSub: "", // Empty string for email OTP auth (not Google)
-        });
-      } catch (error) {
-        // If duplicate email created by concurrent request, fetch the existing driver
-        driver = await this.driversService.findByEmail(normalizedEmail);
-
-        if (!driver) {
-          // Keep OTP in Redis for retry if driver creation fails
-          throw new BadRequestException(
-            "Failed to create driver account. Please try again.",
-          );
-        }
-      }
-    }
+    // Use DriverRegistrationService to create or find driver
+    let driver =
+      await this.driverRegistrationService.createDriverFromAuth(
+        normalizedEmail,
+      );
 
     // Clean up OTP only after successful verification/creation
     await this.redisService.getClient().del(`auth:otp:${normalizedEmail}`);
@@ -308,15 +295,20 @@ export class AuthService {
       );
     }
 
-    // Update driver profile
-    driver.name = dto.name;
-    driver.phone = dto.phone;
-    driver.cityId = dto.cityId;
-    driver.vehicleType = dto.vehicleType;
-    driver.vehicleNumber = dto.vehicleNumber;
-    driver.authProvider = "email";
+    // Use DriverRegistrationService to complete profile
+    const savedDriver = await this.driverRegistrationService.completeProfile(
+      driver.id,
+      {
+        name: dto.name,
+        phone: dto.phone,
+        cityId: dto.cityId,
+        vehicleType: dto.vehicleType,
+        vehicleNumber: dto.vehicleNumber,
+      },
+    );
 
-    const savedDriver = await this.driversService.save(driver);
+    const profileComplete =
+      await this.driverRegistrationService.isProfileComplete(savedDriver.id);
 
     return {
       driver: {
@@ -330,7 +322,7 @@ export class AuthService {
         isActive: savedDriver.isActive,
         status: savedDriver.status,
       },
-      profileComplete: true,
+      profileComplete,
       isApproved: savedDriver.isActive,
       status: savedDriver.isActive ? savedDriver.status : "PENDING_APPROVAL",
     };

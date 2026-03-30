@@ -57,6 +57,7 @@ export class DriversService {
     cityId?: string;
     zoneId?: string;
     status?: DriverStatus;
+    registrationStatus?: string;
     isActive?: boolean;
     authProvider?: string;
     search?: string;
@@ -67,6 +68,7 @@ export class DriversService {
       cityId,
       zoneId,
       status,
+      registrationStatus,
       isActive,
       authProvider,
       search,
@@ -90,6 +92,12 @@ export class DriversService {
 
     if (status) {
       query.andWhere("driver.status = :status", { status });
+    }
+
+    if (registrationStatus) {
+      query.andWhere("driver.registrationStatus = :registrationStatus", {
+        registrationStatus,
+      });
     }
 
     if (isActive !== undefined) {

@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   ParseUUIDPipe,
+  BadRequestException,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
@@ -21,12 +22,14 @@ import { RequirePermissions, PolicyGuard } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
 import { DriverAdminApplicationService } from "../application/driver-admin.application";
 import { AuthenticatedUser } from "../auth/auth.types";
+import { DriverRegistrationService } from "../drivers/driver-registration.service";
 
 @Controller("admin/drivers")
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class DriverStatusController {
   constructor(
     private readonly driverAdminAppService: DriverAdminApplicationService,
+    private readonly driverRegistrationService: DriverRegistrationService,
   ) {}
 
   /**
@@ -168,6 +171,95 @@ export class DriverStatusController {
     return {
       message: `Bulk ${isActive ? "enable" : "disable"} completed`,
       ...result,
+    };
+  }
+
+  /**
+   * Approve driver registration
+   */
+  @Patch(":id/approve")
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
+  async approveDriver(
+    @Param("id", ParseUUIDPipe) driverId: string,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ) {
+    const adminUser = request.user;
+    const adminId = adminUser.userId || adminUser.driverId || "system";
+
+    const updatedDriver = await this.driverRegistrationService.approveDriver(
+      driverId,
+      adminId,
+    );
+
+    return {
+      message: "Driver approved successfully",
+      driver: updatedDriver,
+    };
+  }
+
+  /**
+   * Reject driver registration
+   */
+  @Patch(":id/reject")
+  @RequirePermissions(Permission.ADMIN_UPDATE_DRIVER_STATUS)
+  async rejectDriver(
+    @Param("id", ParseUUIDPipe) driverId: string,
+    @Body() body: { reason: string },
+    @Req() request: Request & { user: AuthenticatedUser },
+  ) {
+    if (!body.reason) {
+      throw new BadRequestException("Rejection reason is required");
+    }
+
+    const adminUser = request.user;
+    const adminId = adminUser.userId || adminUser.driverId || "system";
+
+    const updatedDriver = await this.driverRegistrationService.rejectDriver(
+      driverId,
+      adminId,
+      body.reason,
+    );
+
+    return {
+      message: "Driver rejected successfully",
+      driver: updatedDriver,
+    };
+  }
+
+  /**
+   * List drivers pending approval
+   */
+  @Get("pending")
+  @RequirePermissions(Permission.ADMIN_READ_DRIVER_ANY)
+  async listPendingDrivers(
+    @Req() request: Request & { user: AuthenticatedUser },
+    @Query() query: AdminDriverListQueryDto,
+  ) {
+    const { cityId, zoneId, skip = 0, take = 50 } = query;
+
+    // Enforce city scope for ADMIN users (SUPER_ADMIN can query any city)
+    let scopedCityId = cityId;
+    if (request.user.role === "ADMIN" && !scopedCityId) {
+      scopedCityId = request.user.cityId;
+    }
+
+    const result = await this.driverAdminAppService.listDrivers({
+      cityId: scopedCityId,
+      zoneId,
+      skip,
+      take,
+    });
+
+    // Filter to only pending approval drivers
+    const pendingDrivers = result.drivers.filter(
+      (driver) => driver.registrationStatus === "PENDING_APPROVAL",
+    );
+
+    return {
+      drivers: pendingDrivers,
+      total: pendingDrivers.length,
+      skip,
+      take,
     };
   }
 }

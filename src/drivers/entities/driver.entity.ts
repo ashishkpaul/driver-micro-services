@@ -17,6 +17,7 @@ import {
   Max,
 } from "class-validator";
 import { DriverStatus } from "../enums/driver-status.enum";
+import { DriverRegistrationStatus } from "../enums/driver-registration-status.enum";
 
 @Entity("drivers")
 @Index("idx_drivers_status", ["status"])
@@ -159,4 +160,32 @@ export class Driver {
     nullable: true,
   })
   lastStatusUpdateAt?: Date;
+
+  @Column({
+    type: "enum",
+    enum: DriverRegistrationStatus,
+    default: DriverRegistrationStatus.PROFILE_INCOMPLETE,
+  })
+  registrationStatus!: DriverRegistrationStatus;
+
+  @Column({
+    name: "approved_at",
+    type: "timestamp",
+    nullable: true,
+  })
+  approvedAt?: Date;
+
+  @Column({
+    name: "approved_by_id",
+    type: "uuid",
+    nullable: true,
+  })
+  approvedById?: string;
+
+  @Column({
+    name: "rejection_reason",
+    type: "varchar",
+    nullable: true,
+  })
+  rejectionReason?: string;
 }

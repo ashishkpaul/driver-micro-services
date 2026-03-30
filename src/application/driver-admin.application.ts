@@ -3,6 +3,7 @@ import { DriversService } from "../drivers/drivers.service";
 import { AuditService, CreateAuditLogDto } from "../services/audit.service";
 import { Driver } from "../drivers/entities/driver.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
+import { DriverRegistrationStatus } from "../drivers/enums/driver-registration-status.enum";
 import { AuthenticatedUser } from "../auth/auth.types";
 
 @Injectable()
@@ -181,7 +182,10 @@ export class DriverAdminApplicationService {
 
         // STAGE 3: City Isolation Check for Bulk Operations
         // Check if actor has permission to modify this driver
-        if (actor.role !== 'SUPER_ADMIN' && actor.cityId !== currentDriver.cityId) {
+        if (
+          actor.role !== "SUPER_ADMIN" &&
+          actor.cityId !== currentDriver.cityId
+        ) {
           errors.push({
             driverId,
             status: "error" as const,
@@ -191,11 +195,12 @@ export class DriverAdminApplicationService {
         }
 
         // Update driver status with city isolation
-        const updatedDriver = await this.driversService.setActiveWithCityIsolation(
-          driverId,
-          isActive,
-          { role: actor.role, cityId: actor.cityId }
-        );
+        const updatedDriver =
+          await this.driversService.setActiveWithCityIsolation(
+            driverId,
+            isActive,
+            { role: actor.role, cityId: actor.cityId },
+          );
 
         // Audit log
         await this.auditService.log({
@@ -266,6 +271,7 @@ export class DriverAdminApplicationService {
     cityId?: string;
     zoneId?: string;
     status?: DriverStatus;
+    registrationStatus?: string;
     isActive?: boolean;
     authProvider?: string;
     search?: string;
@@ -273,5 +279,91 @@ export class DriverAdminApplicationService {
     take?: number;
   }): Promise<{ drivers: Driver[]; total: number }> {
     return this.driversService.findAllWithFilters(options);
+  }
+
+  /**
+   * Get driver statistics for admin dashboard
+   */
+  async getDriverStats(cityId?: string): Promise<{
+    total: number;
+    active: number;
+    pendingApproval: number;
+    profileIncomplete: number;
+    rejected: number;
+    byCity: { cityId: string; count: number }[];
+    byStatus: { status: string; count: number }[];
+    byRegistrationStatus: { status: string; count: number }[];
+  }> {
+    // Get all drivers for counting
+    const { drivers } = await this.driversService.findAllWithFilters({
+      cityId,
+      skip: 0,
+      take: 10000, // Large limit to get all for stats
+    });
+
+    const total = drivers.length;
+    const active = drivers.filter((d) => d.isActive).length;
+    const pendingApproval = drivers.filter(
+      (d) => d.registrationStatus === DriverRegistrationStatus.PENDING_APPROVAL,
+    ).length;
+    const profileIncomplete = drivers.filter(
+      (d) =>
+        d.registrationStatus === DriverRegistrationStatus.PROFILE_INCOMPLETE,
+    ).length;
+    const rejected = drivers.filter(
+      (d) => d.registrationStatus === DriverRegistrationStatus.REJECTED,
+    ).length;
+
+    // Group by city
+    const cityMap = new Map<string, number>();
+    drivers.forEach((d) => {
+      if (d.cityId) {
+        cityMap.set(d.cityId, (cityMap.get(d.cityId) || 0) + 1);
+      }
+    });
+    const byCity = Array.from(cityMap.entries()).map(([cityId, count]) => ({
+      cityId,
+      count,
+    }));
+
+    // Group by status
+    const statusMap = new Map<string, number>();
+    drivers.forEach((d) => {
+      if (d.status) {
+        statusMap.set(d.status, (statusMap.get(d.status) || 0) + 1);
+      }
+    });
+    const byStatus = Array.from(statusMap.entries()).map(([status, count]) => ({
+      status,
+      count,
+    }));
+
+    // Group by registration status
+    const regStatusMap = new Map<string, number>();
+    drivers.forEach((d) => {
+      if (d.registrationStatus) {
+        regStatusMap.set(
+          d.registrationStatus,
+          (regStatusMap.get(d.registrationStatus) || 0) + 1,
+        );
+      }
+    });
+    const byRegistrationStatus = Array.from(regStatusMap.entries()).map(
+      ([status, count]) => ({
+        status,
+        count,
+      }),
+    );
+
+    return {
+      total,
+      active,
+      pendingApproval,
+      profileIncomplete,
+      rejected,
+      byCity,
+      byStatus,
+      byRegistrationStatus,
+    };
   }
 }
