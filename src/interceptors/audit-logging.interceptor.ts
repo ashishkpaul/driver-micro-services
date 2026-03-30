@@ -5,10 +5,15 @@ import {
   ExecutionContext,
   CallHandler,
 } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { Observable } from "rxjs";
 import { tap } from "rxjs/operators";
 import { AuditService } from "../services/audit.service";
 import { Request } from "express";
+import {
+  AUDIT_RESOURCE_KEY,
+  AuditResourceOptions,
+} from "./audit-resource.decorator";
 
 export interface AuditMetadata {
   action: string;
@@ -19,7 +24,10 @@ export interface AuditMetadata {
 
 @Injectable()
 export class AuditLoggingInterceptor implements NestInterceptor {
-  constructor(private auditService: AuditService) {}
+  constructor(
+    private auditService: AuditService,
+    private reflector: Reflector,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest<Request>();
@@ -37,14 +45,37 @@ export class AuditLoggingInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    // Get @AuditResource decorator metadata from handler
+    const auditResourceOptions = this.reflector.get<AuditResourceOptions>(
+      AUDIT_RESOURCE_KEY,
+      context.getHandler(),
+    );
+
     return next.handle().pipe(
       tap(async (data) => {
         try {
-          // Determine action based on HTTP method
-          const action = this.getActionName(request.method, request.url);
+          // Determine action based on HTTP method or decorator override
+          let action =
+            auditResourceOptions?.action ||
+            this.getActionName(request.method, request.url);
 
           // Determine resource type and ID
-          const { resourceType, resourceId } = this.getResourceInfo(request);
+          let resourceType: string;
+          let resourceId: string | undefined;
+
+          if (auditResourceOptions) {
+            // Use decorator metadata for reliable resource extraction
+            resourceType = auditResourceOptions.resourceType;
+            resourceId = this.extractResourceIdFromParams(
+              request,
+              auditResourceOptions.resourceIdParam,
+            );
+          } else {
+            // Fallback to URL-based extraction
+            const info = this.getResourceInfo(request);
+            resourceType = info.resourceType;
+            resourceId = info.resourceId;
+          }
 
           // Only log if we have the required information
           if (action && resourceType) {
@@ -59,13 +90,17 @@ export class AuditLoggingInterceptor implements NestInterceptor {
             );
 
             // Print structured audit log to console
-            console.log('');
-            console.log('┌─ 📋 AUDIT EVENT ' + '─'.repeat(33));
-            console.log(`│  Actor: ${request.ip || 'unknown'}`);
+            console.log("");
+            console.log("┌─ 📋 AUDIT EVENT " + "─".repeat(33));
+            console.log(`│  Actor: ${request.ip || "unknown"}`);
             console.log(`│  Action: ${action}`);
-            console.log(`│  Resource: ${resourceType}${resourceId ? `/${resourceId}` : ''}`);
-            console.log(`│  Trace: ${request.headers['x-correlation-id'] || 'N/A'}`);
-            console.log('└' + '─'.repeat(49));
+            console.log(
+              `│  Resource: ${resourceType}${resourceId ? `/${resourceId}` : ""}`,
+            );
+            console.log(
+              `│  Trace: ${request.headers["x-correlation-id"] || "N/A"}`,
+            );
+            console.log("└" + "─".repeat(49));
           }
         } catch (error) {
           // Don't throw errors for audit logging failures
@@ -73,6 +108,21 @@ export class AuditLoggingInterceptor implements NestInterceptor {
         }
       }),
     );
+  }
+
+  /**
+   * Extract resource ID from request parameters using the specified param name
+   */
+  private extractResourceIdFromParams(
+    request: Request,
+    paramName?: string,
+  ): string | undefined {
+    if (!paramName) {
+      return undefined;
+    }
+
+    const params = request.params;
+    return params[paramName] || params.id || undefined;
   }
 
   private getActionName(method: string, url: string): string {

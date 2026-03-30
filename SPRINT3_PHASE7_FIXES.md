@@ -4,13 +4,13 @@
 
 ### Phase 7.1: Refresh Tokens ✅
 
-**POST /auth/refresh**
+#### POST /auth/refresh
 
 - JWT-guarded endpoint for refreshing access tokens
 - Works for both driver and admin sessions
 - Returns new access token with same user context
 
-**POST /auth/logout**
+#### POST /auth/logout
 
 - JWT-guarded endpoint for logging out
 - Revokes refresh tokens for drivers
@@ -19,7 +19,7 @@
 
 ### Phase 7.2: Rate Limiting and Lockout ✅
 
-**AdminUser Entity Updates**
+#### AdminUser Entity Updates
 
 - Added `failedLoginAttempts` column (int, default 0)
 - Added `lockedUntil` column (timestamp, nullable)
@@ -27,7 +27,7 @@
 - Added `recordFailedLogin()` method to increment attempts and lock if threshold exceeded
 - Added `resetFailedLoginAttempts()` method to reset on successful login
 
-**AdminService.validateAdmin() Updates**
+#### AdminService.validateAdmin() Updates
 
 - Checks if account is locked before password validation
 - Records failed login attempt on invalid password (5 attempts, 15 minute lockout)
@@ -48,13 +48,13 @@
 
 ## API Endpoints Added
 
-### POST /auth/refresh
+### POST /auth/refresh (Endpoint Details)
 
 - **Auth:** JWT required
 - **Returns:** New access token with same user context
 - **Use:** Refresh expired access tokens without re-login
 
-### POST /auth/logout
+### POST /auth/logout (Endpoint Details)
 
 - **Auth:** JWT required
 - **Returns:** { message: "Logged out successfully" }
@@ -75,8 +75,25 @@
 - **Admin Update:** Sets token revocation flag when role/city/isActive changes
 - **TTL:** 24 hours (matches JWT expiry)
 
+## Files Modified (Phase 7.3)
+
+1. `/src/interceptors/audit-resource.decorator.ts` - NEW FILE (@AuditResource decorator)
+2. `/src/interceptors/audit-logging.interceptor.ts` - Updated to use @AuditResource decorator
+
+## Usage Example
+
+```typescript
+@AuditResource({ resourceType: 'DRIVER', resourceIdParam: 'id' })
+@Patch(':id')
+updateDriver(@Param('id') id: string, @Body() dto: UpdateDriverDto) { ... }
+
+@AuditResource({ resourceType: 'DELIVERY', resourceIdParam: 'id', action: 'ASSIGN_DRIVER' })
+@Patch(':id/assign')
+assignDriver(@Param('id') id: string, @Body() body: { driverId: string }) { ... }
+```
+
 ## Remaining Tasks
 
-- [ ] Phase 7.3: Audit log completeness with @AuditResource decorator
+- [x] Phase 7.3: Audit log completeness with @AuditResource decorator
 - [ ] Phase 5: Driver PWA completion (frontend work)
 - [ ] Phase 6: Admin frontend completion (frontend work)
