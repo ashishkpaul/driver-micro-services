@@ -8,7 +8,12 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, DataSource } from "typeorm";
 import { DispatchScoringService } from "../dispatch-scoring/dispatch-scoring.service";
 import { DispatchConfigService } from "../dispatch-scoring/dispatch-config.service";
-import { DispatchDecision, DispatchCohort, DispatchMethod, DispatchStatus } from "./entities/dispatch-decision.entity";
+import {
+  DispatchDecision,
+  DispatchCohort,
+  DispatchMethod,
+  DispatchStatus,
+} from "./entities/dispatch-decision.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 import { DriversService } from "../drivers/drivers.service";
 
@@ -45,7 +50,9 @@ export class SafeDispatchService {
    */
   async isScoringEnabled(): Promise<boolean> {
     try {
-      const config = await this.dispatchConfigService.getConfig("ROLLOUT_SETTINGS" as any);
+      const config = await this.dispatchConfigService.getConfig(
+        "ROLLOUT_SETTINGS" as any,
+      );
       return config?.scoringEnabled || false;
     } catch (error) {
       this.logger.error("Failed to check scoring enabled status:", error);
@@ -58,7 +65,9 @@ export class SafeDispatchService {
    */
   async getRolloutPercentage(): Promise<number> {
     try {
-      const config = await this.dispatchConfigService.getConfig("ROLLOUT_SETTINGS" as any);
+      const config = await this.dispatchConfigService.getConfig(
+        "ROLLOUT_SETTINGS" as any,
+      );
       return config?.rolloutPercentage || 0;
     } catch (error) {
       this.logger.error("Failed to get rollout percentage:", error);
@@ -72,7 +81,7 @@ export class SafeDispatchService {
   async assignToCohort(deliveryId: string): Promise<DispatchCohort> {
     try {
       const rolloutPercentage = await this.getRolloutPercentage();
-      
+
       // Use delivery ID as seed for consistent assignment
       const seed = this.hashString(deliveryId);
       const randomValue = seed % 100;
@@ -83,7 +92,10 @@ export class SafeDispatchService {
         return DispatchCohort.CONTROL;
       }
     } catch (error) {
-      this.logger.error(`Failed to assign delivery ${deliveryId} to cohort:`, error);
+      this.logger.error(
+        `Failed to assign delivery ${deliveryId} to cohort:`,
+        error,
+      );
       return DispatchCohort.CONTROL; // Default to control on error
     }
   }
@@ -139,7 +151,9 @@ export class SafeDispatchService {
     reason: string,
     metadata?: Record<string, any>,
   ): Promise<DispatchDecision> {
-    this.logger.warn(`Falling back to legacy dispatch for delivery ${deliveryId}: ${reason}`);
+    this.logger.warn(
+      `Falling back to legacy dispatch for delivery ${deliveryId}: ${reason}`,
+    );
 
     const decision = await this.createDispatchDecision(
       deliveryId,
@@ -157,10 +171,16 @@ export class SafeDispatchService {
   /**
    * Check if fallback is needed based on health metrics
    */
-  async shouldFallback(deliveryId: string): Promise<{ shouldFallback: boolean; reason?: string }> {
+  async shouldFallback(
+    deliveryId: string,
+  ): Promise<{ shouldFallback: boolean; reason?: string }> {
     try {
-      const config = await this.dispatchConfigService.getConfig("ROLLOUT_SETTINGS" as any);
-      const thresholds = config?.fallbackThresholds || this.DEFAULT_ROLLOUT_CONFIG.fallbackThresholds;
+      const config = await this.dispatchConfigService.getConfig(
+        "ROLLOUT_SETTINGS" as any,
+      );
+      const thresholds =
+        config?.fallbackThresholds ||
+        this.DEFAULT_ROLLOUT_CONFIG.fallbackThresholds;
 
       // Check recent failure rate
       const recentFailures = await this.getRecentFailureRate();
@@ -191,7 +211,10 @@ export class SafeDispatchService {
 
       return { shouldFallback: false };
     } catch (error) {
-      this.logger.error(`Error checking fallback conditions for delivery ${deliveryId}:`, error);
+      this.logger.error(
+        `Error checking fallback conditions for delivery ${deliveryId}:`,
+        error,
+      );
       return {
         shouldFallback: true,
         reason: "Error checking fallback conditions",
@@ -201,6 +224,9 @@ export class SafeDispatchService {
 
   /**
    * Execute safe dispatch with fallback mechanism
+   *
+   * CRITICAL: Uses transactional consistency + idempotent side effects
+   * rather than wrapping everything in one large transaction.
    */
   async executeSafeDispatch(
     deliveryId: string,
@@ -208,39 +234,73 @@ export class SafeDispatchService {
     fallbackCallback: (deliveryId: string, reason: string) => Promise<any>,
   ): Promise<any> {
     const startTime = Date.now();
-    const cohort = await this.assignToCohort(deliveryId);
-    const decision = await this.createDispatchDecision(
-      deliveryId,
-      cohort,
-      cohort === DispatchCohort.SCORING ? DispatchMethod.SCORING_BASED : DispatchMethod.LEGACY,
-    );
+
+    // Step 1: Transactionally persist the dispatch decision + state transition intent
+    const { decision, cohort, shouldUseScoring } =
+      await this.dataSource.transaction(async (manager) => {
+        const cohort = await this.assignToCohort(deliveryId);
+        const shouldUseScoring = cohort === DispatchCohort.SCORING;
+
+        // Create decision within transaction
+        const decision = manager.getRepository(DispatchDecision).create({
+          deliveryId,
+          cohort,
+          dispatchMethod: shouldUseScoring
+            ? DispatchMethod.SCORING_BASED
+            : DispatchMethod.LEGACY,
+          dispatchStatus: DispatchStatus.PENDING,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        const savedDecision = await manager
+          .getRepository(DispatchDecision)
+          .save(decision);
+
+        return { decision: savedDecision, cohort, shouldUseScoring };
+      });
 
     try {
-      // Check if fallback is needed before attempting scoring
-      if (cohort === DispatchCohort.SCORING) {
+      // Step 2: Check if fallback is needed before attempting scoring
+      if (shouldUseScoring) {
         const fallbackCheck = await this.shouldFallback(deliveryId);
         if (fallbackCheck.shouldFallback) {
+          // Update decision status atomically
           await this.updateDispatchDecision(decision.id, {
             dispatchStatus: DispatchStatus.FAILED,
             fallbackReason: fallbackCheck.reason,
             processingTimeMs: Date.now() - startTime,
           });
 
-          return await fallbackCallback(deliveryId, fallbackCheck.reason!);
+          // Make fallback dispatch idempotent
+          return await this.executeIdempotentFallback(
+            deliveryId,
+            fallbackCheck.reason!,
+            fallbackCallback,
+          );
         }
       }
 
-      // Execute dispatch based on cohort
+      // Step 3: Execute dispatch based on cohort
       let result;
-      if (cohort === DispatchCohort.SCORING) {
+      if (shouldUseScoring) {
         result = await this.executeScoringDispatch(deliveryId, eligibleDrivers);
+
+        // Update decision status atomically
         await this.updateDispatchDecision(decision.id, {
           dispatchStatus: DispatchStatus.ASSIGNED,
           processingTimeMs: Date.now() - startTime,
           scoreUsed: eligibleDrivers[0]?.score,
         });
       } else {
-        result = await fallbackCallback(deliveryId, "Control group");
+        // Make fallback dispatch idempotent
+        result = await this.executeIdempotentFallback(
+          deliveryId,
+          "Control group",
+          fallbackCallback,
+        );
+
+        // Update decision status atomically
         await this.updateDispatchDecision(decision.id, {
           dispatchStatus: DispatchStatus.ASSIGNED,
           processingTimeMs: Date.now() - startTime,
@@ -252,14 +312,168 @@ export class SafeDispatchService {
     } catch (error) {
       this.logger.error(`Dispatch failed for delivery ${deliveryId}:`, error);
 
+      // Update decision status atomically
       await this.updateDispatchDecision(decision.id, {
         dispatchStatus: DispatchStatus.FAILED,
         fallbackReason: error.message,
         processingTimeMs: Date.now() - startTime,
       });
 
-      // Fallback to legacy dispatch on error
-      return await fallbackCallback(deliveryId, `Dispatch error: ${error.message}`);
+      // Make fallback dispatch idempotent
+      return await this.executeIdempotentFallback(
+        deliveryId,
+        `Dispatch error: ${error.message}`,
+        fallbackCallback,
+      );
+    }
+  }
+
+  /**
+   * Execute idempotent fallback dispatch
+   * Ensures that fallback dispatch can be safely retried without side effects
+   *
+   * CRITICAL: Uses database-level locking to prevent concurrent execution
+   * of fallback side effects for the same delivery.
+   */
+  private async executeIdempotentFallback(
+    deliveryId: string,
+    reason: string,
+    fallbackCallback: (deliveryId: string, reason: string) => Promise<any>,
+  ): Promise<any> {
+    // Use a transaction with row-level locking to prevent concurrent fallback execution
+    const claimResult = await this.dataSource.transaction(async (manager) => {
+      // Check if fallback was already executed for this delivery
+      // Use FOR UPDATE to lock the row and prevent concurrent modifications
+      const existingDecision = await manager
+        .getRepository(DispatchDecision)
+        .createQueryBuilder("decision")
+        .where("decision.deliveryId = :deliveryId", { deliveryId })
+        .andWhere("decision.dispatchStatus = :status", {
+          status: DispatchStatus.ASSIGNED,
+        })
+        .andWhere("decision.dispatchMethod = :method", {
+          method: DispatchMethod.LEGACY,
+        })
+        .setLock("pessimistic_write")
+        .getOne();
+
+      if (existingDecision) {
+        // Fallback already executed - return existing result
+        return {
+          alreadyExecuted: true,
+          deliveryId,
+          method: "LEGACY",
+          idempotent: true,
+          reason,
+        };
+      }
+
+      // Check for a pending fallback claim (to prevent concurrent execution)
+      const pendingFallback = await manager
+        .getRepository(DispatchDecision)
+        .createQueryBuilder("decision")
+        .where("decision.deliveryId = :deliveryId", { deliveryId })
+        .andWhere("decision.dispatchStatus = :status", {
+          status: DispatchStatus.PENDING,
+        })
+        .andWhere("decision.dispatchMethod = :method", {
+          method: DispatchMethod.LEGACY,
+        })
+        .andWhere("decision.metadata ->> 'fallbackClaim' = 'true'")
+        .setLock("pessimistic_write")
+        .getOne();
+
+      if (pendingFallback) {
+        // Another concurrent call is already executing the fallback
+        this.logger.log(
+          `Fallback already in progress for delivery ${deliveryId}, skipping`,
+        );
+        return {
+          alreadyExecuted: false,
+          inProgress: true,
+          deliveryId,
+          method: "LEGACY",
+          reason,
+        };
+      }
+
+      // Claim the fallback execution by creating a pending decision
+      const claimDecision = manager.getRepository(DispatchDecision).create({
+        deliveryId,
+        cohort: DispatchCohort.CONTROL,
+        dispatchMethod: DispatchMethod.LEGACY,
+        dispatchStatus: DispatchStatus.PENDING,
+        metadata: {
+          fallbackClaim: true,
+          fallbackReason: reason,
+          claimedAt: new Date().toISOString(),
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await manager.getRepository(DispatchDecision).save(claimDecision);
+
+      return {
+        alreadyExecuted: false,
+        inProgress: false,
+        claimed: true,
+        claimId: claimDecision.id,
+        deliveryId,
+        reason,
+      };
+    });
+
+    // If already executed or in progress, return early
+    if (claimResult.alreadyExecuted) {
+      this.logger.log(
+        `Fallback already executed for delivery ${deliveryId}, returning existing result`,
+      );
+      return claimResult;
+    }
+
+    if (claimResult.inProgress) {
+      this.logger.log(
+        `Fallback already in progress for delivery ${deliveryId}, returning`,
+      );
+      return claimResult;
+    }
+
+    // We claimed the fallback - execute the callback
+    try {
+      const result = await fallbackCallback(deliveryId, claimResult.reason!);
+
+      // Update the claim to ASSIGNED status
+      await this.updateDispatchDecision(claimResult.claimId!, {
+        dispatchStatus: DispatchStatus.ASSIGNED,
+        metadata: {
+          fallbackClaim: true,
+          fallbackReason: claimResult.reason,
+          executedAt: new Date().toISOString(),
+        },
+      });
+
+      return {
+        deliveryId,
+        method: "LEGACY",
+        idempotent: false,
+        reason: claimResult.reason,
+        result,
+      };
+    } catch (error) {
+      // Update the claim to FAILED status
+      await this.updateDispatchDecision(claimResult.claimId!, {
+        dispatchStatus: DispatchStatus.FAILED,
+        fallbackReason: error.message,
+        metadata: {
+          fallbackClaim: true,
+          fallbackReason: claimResult.reason,
+          failedAt: new Date().toISOString(),
+          error: error.message,
+        },
+      });
+
+      throw error;
     }
   }
 
@@ -274,13 +488,17 @@ export class SafeDispatchService {
     const sortedDrivers = eligibleDrivers.sort((a, b) => b.score - a.score);
 
     if (sortedDrivers.length === 0) {
-      throw new BadRequestException("No eligible drivers found for scoring dispatch");
+      throw new BadRequestException(
+        "No eligible drivers found for scoring dispatch",
+      );
     }
 
     // Select top driver
     const selectedDriver = sortedDrivers[0];
 
-    this.logger.log(`Selected driver ${selectedDriver.driverId} with score ${selectedDriver.score} for delivery ${deliveryId}`);
+    this.logger.log(
+      `Selected driver ${selectedDriver.driverId} with score ${selectedDriver.score} for delivery ${deliveryId}`,
+    );
 
     // Here you would integrate with the actual dispatch logic
     // For now, return the selected driver information
@@ -298,7 +516,7 @@ export class SafeDispatchService {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash);
@@ -306,7 +524,7 @@ export class SafeDispatchService {
 
   private async getRecentFailureRate(): Promise<number> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    
+
     const totalDecisions = await this.dispatchDecisionRepository.count({
       where: {
         createdAt: oneHourAgo,
@@ -330,7 +548,9 @@ export class SafeDispatchService {
       .createQueryBuilder("decision")
       .select("AVG(decision.processingTimeMs)", "avgTime")
       .where("decision.processingTimeMs IS NOT NULL")
-      .andWhere("decision.createdAt >= :oneHourAgo", { oneHourAgo: new Date(Date.now() - 60 * 60 * 1000) })
+      .andWhere("decision.createdAt >= :oneHourAgo", {
+        oneHourAgo: new Date(Date.now() - 60 * 60 * 1000),
+      })
       .getRawOne();
 
     return result?.avgTime || 0;
@@ -338,7 +558,7 @@ export class SafeDispatchService {
 
   private async getRecentAcceptanceRate(): Promise<number> {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    
+
     const totalDecisions = await this.dispatchDecisionRepository.count({
       where: {
         createdAt: oneHourAgo,
@@ -378,32 +598,47 @@ export class SafeDispatchService {
       );
 
       if (availableDrivers.length === 0) {
-        this.logger.debug(`No available drivers found for delivery ${deliveryId}`);
+        this.logger.debug(
+          `No available drivers found for delivery ${deliveryId}`,
+        );
         return [];
       }
 
       // Filter eligible drivers and get their scores
-      const eligibleDrivers: Array<{ driverId: string; score: number; driver: Driver }> = [];
-      
+      const eligibleDrivers: Array<{
+        driverId: string;
+        score: number;
+        driver: Driver;
+      }> = [];
+
       for (const driver of availableDrivers) {
         try {
           // Check if driver is eligible for scoring
-          const isEligible = await this.dispatchScoringService.isDriverEligible(driver.id);
-          
+          const isEligible = await this.dispatchScoringService.isDriverEligible(
+            driver.id,
+          );
+
           if (isEligible) {
             // Get driver's current score
-            const score = await this.dispatchScoringService.getCurrentScore(driver.id);
-            
+            const score = await this.dispatchScoringService.getCurrentScore(
+              driver.id,
+            );
+
             eligibleDrivers.push({
               driverId: driver.id,
               score,
               driver,
             });
           } else {
-            this.logger.debug(`Driver ${driver.id} not eligible for scoring dispatch`);
+            this.logger.debug(
+              `Driver ${driver.id} not eligible for scoring dispatch`,
+            );
           }
         } catch (error) {
-          this.logger.warn(`Error checking eligibility for driver ${driver.id}:`, error);
+          this.logger.warn(
+            `Error checking eligibility for driver ${driver.id}:`,
+            error,
+          );
           // Skip this driver and continue with others
         }
       }
@@ -412,7 +647,10 @@ export class SafeDispatchService {
       eligibleDrivers.sort((a, b) => b.score - a.score);
       return eligibleDrivers.slice(0, limit);
     } catch (error) {
-      this.logger.error(`Failed to get eligible drivers for delivery ${deliveryId}:`, error);
+      this.logger.error(
+        `Failed to get eligible drivers for delivery ${deliveryId}:`,
+        error,
+      );
       return [];
     }
   }
@@ -443,11 +681,15 @@ export class SafeDispatchService {
       rolloutPercentage: await this.getRolloutPercentage(),
       recentMetrics: {
         lastHour: {
-          successRate: await this.getSuccessRate(new Date(Date.now() - 60 * 60 * 1000)),
+          successRate: await this.getSuccessRate(
+            new Date(Date.now() - 60 * 60 * 1000),
+          ),
           avgProcessingTime: await this.getAverageProcessingTime(),
         },
         lastDay: {
-          successRate: await this.getSuccessRate(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+          successRate: await this.getSuccessRate(
+            new Date(Date.now() - 24 * 60 * 60 * 1000),
+          ),
           avgProcessingTime: await this.getAverageProcessingTime(),
         },
       },
@@ -458,7 +700,10 @@ export class SafeDispatchService {
     const query = this.dispatchDecisionRepository
       .createQueryBuilder("decision")
       .select("COUNT(*)", "total")
-      .addSelect("SUM(CASE WHEN decision.dispatchStatus = :assigned THEN 1 ELSE 0 END)", "successes");
+      .addSelect(
+        "SUM(CASE WHEN decision.dispatchStatus = :assigned THEN 1 ELSE 0 END)",
+        "successes",
+      );
 
     if (since) {
       query.where("decision.createdAt >= :since", { since });

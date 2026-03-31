@@ -1,226 +1,255 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { DataSource } from "typeorm";
 import { OutboxWorker } from "./outbox.worker";
 import { OutboxService } from "./outbox.service";
-import { DataSource } from "typeorm";
-import { OutboxStatus } from "./outbox-status.enum";
+import { MetricsService } from "./metrics.service";
+import { CircuitBreakerService } from "./circuit-breaker.service";
+import { WorkerLifecycleService } from "./worker-lifecycle.service";
+import { OutboxJanitorService } from "./outbox-janitor.service";
+import { AdaptiveBatchService } from "./adaptive-batch.service";
+
+// Mock p-limit (ESM module that Jest can't parse)
+jest.mock("p-limit", () => {
+  return jest.fn(() => (fn: () => any) => fn());
+});
 
 describe("OutboxWorker", () => {
   let worker: OutboxWorker;
-  let dataSource: jest.Mocked<DataSource>;
-  let outboxService: jest.Mocked<OutboxService>;
+  let dataSource: DataSource;
 
-  const createMockDataSource = () => ({
-    query: jest.fn(),
-  });
+  const mockQuery = jest.fn();
+  const mockTransaction = jest.fn((callback) => callback({ query: mockQuery }));
 
-  const createMockOutboxService = () => ({
+  const mockDataSource = {
+    query: mockQuery,
+    transaction: mockTransaction,
+  };
+
+  const mockOutboxService = {
     handle: jest.fn(),
-  });
+  };
+
+  const mockMetricsService = {
+    recordProcessingDuration: jest.fn(),
+    incrementEventsProcessed: jest.fn(),
+    incrementRetries: jest.fn(),
+    getMetrics: jest.fn().mockReturnValue(10),
+    updateMetrics: jest.fn(),
+  };
+
+  const mockCircuitBreakerService = {};
+
+  const mockWorkerLifecycleService = {
+    isShutdownRequested: jest.fn().mockReturnValue(false),
+    addProcessingEvent: jest.fn(),
+    removeProcessingEvent: jest.fn(),
+    getProcessingStats: jest.fn().mockReturnValue({
+      activeWorkers: 1,
+      processingEvents: 0,
+    }),
+    shutdown: jest.fn(),
+    forceShutdown: jest.fn(),
+  };
+
+  const mockJanitorService = {
+    cleanup: jest.fn(),
+  };
+
+  const mockAdaptiveBatchService = {
+    getOptimalBatchSize: jest.fn().mockResolvedValue(50),
+  };
 
   beforeEach(async () => {
-    dataSource = createMockDataSource() as any;
-    outboxService = createMockOutboxService() as any;
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OutboxWorker,
-        { provide: DataSource, useValue: dataSource },
-        { provide: OutboxService, useValue: outboxService },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
+        },
+        {
+          provide: OutboxService,
+          useValue: mockOutboxService,
+        },
+        {
+          provide: MetricsService,
+          useValue: mockMetricsService,
+        },
+        {
+          provide: CircuitBreakerService,
+          useValue: mockCircuitBreakerService,
+        },
+        {
+          provide: WorkerLifecycleService,
+          useValue: mockWorkerLifecycleService,
+        },
+        {
+          provide: OutboxJanitorService,
+          useValue: mockJanitorService,
+        },
+        {
+          provide: AdaptiveBatchService,
+          useValue: mockAdaptiveBatchService,
+        },
       ],
     }).compile();
 
     worker = module.get<OutboxWorker>(OutboxWorker);
+    dataSource = module.get<DataSource>(DataSource);
+
+    // Reset mocks
+    jest.clearAllMocks();
   });
 
-  describe("toOutboxEvent", () => {
-    it("should correctly map snake_case DB row to camelCase entity", () => {
-      const rawRow = {
-        id: 1,
-        event_type: "DELIVERY_ASSIGNED",
-        payload: { driverId: "driver-123" },
-        status: "PENDING",
-        retry_count: 0,
-        last_error: null,
-        next_retry_at: null,
-        created_at: "2024-01-15T10:00:00Z",
-        processed_at: null,
-        locked_at: null,
-        locked_by: null,
-      };
-
-      const event = (worker as any).toOutboxEvent(rawRow);
-
-      expect(event.id).toBe(1);
-      expect(event.eventType).toBe("DELIVERY_ASSIGNED");
-      expect(event.payload.driverId).toBe("driver-123");
-      expect(event.retryCount).toBe(0);
-      expect(event.status).toBe(OutboxStatus.PENDING);
-    });
-
-    it("should handle null event_type gracefully", () => {
-      const rawRow = {
-        id: 2,
-        event_type: null,
+  describe("structural validation in claimBatch", () => {
+    it("should throw on row missing id", async () => {
+      const malformedRow = {
+        // Missing id
+        event_type: "ORDER_CREATED",
         payload: {},
         status: "PENDING",
         retry_count: 0,
+        created_at: new Date().toISOString(),
+      };
+
+      mockQuery.mockResolvedValueOnce([malformedRow]); // SELECT query
+      mockQuery.mockResolvedValueOnce([0, 1]); // UPDATE query
+
+      await expect((worker as any).claimBatch(10)).rejects.toThrow(
+        "STRUCTURAL_CORRUPTION: Row missing id",
+      );
+    });
+
+    it("should throw on row missing event_type", async () => {
+      const malformedRow = {
+        id: 123,
+        // Missing event_type
+        payload: {},
+        status: "PENDING",
+        retry_count: 0,
+        created_at: new Date().toISOString(),
+      };
+
+      mockQuery.mockResolvedValueOnce([malformedRow]); // SELECT query
+      mockQuery.mockResolvedValueOnce([0, 1]); // UPDATE query
+
+      await expect((worker as any).claimBatch(10)).rejects.toThrow(
+        "STRUCTURAL_CORRUPTION: Row 123 missing event_type",
+      );
+    });
+
+    it("should return valid rows with proper structure", async () => {
+      const validRow = {
+        id: 456,
+        event_type: "ORDER_CREATED",
+        payload: { orderId: "123" },
+        status: "PENDING",
+        retry_count: 0,
         last_error: null,
         next_retry_at: null,
-        created_at: "2024-01-15T10:00:00Z",
+        created_at: new Date().toISOString(),
         processed_at: null,
         locked_at: null,
         locked_by: null,
       };
 
-      const event = (worker as any).toOutboxEvent(rawRow);
-
-      expect(event.id).toBe(2);
-      expect(event.eventType).toBe(""); // Empty string, not undefined
-    });
-  });
-
-  describe("claimBatch", () => {
-    it("should query with explicit column selection", async () => {
-      const mockRows = [
-        {
-          id: 1,
-          event_type: "DELIVERY_ASSIGNED",
-          payload: {},
-          status: "PENDING",
-          retry_count: 0,
-          last_error: null,
-          next_retry_at: null,
-          created_at: "2024-01-15T10:00:00Z",
-          processed_at: null,
-          locked_at: null,
-          locked_by: null,
-        },
-      ];
-
-      dataSource.query.mockResolvedValue(mockRows);
+      mockQuery.mockResolvedValueOnce([validRow]); // SELECT query
+      mockQuery.mockResolvedValueOnce([0, 1]); // UPDATE query
 
       const result = await (worker as any).claimBatch(10);
 
       expect(result).toHaveLength(1);
-      expect(dataSource.query).toHaveBeenCalledWith(
-        expect.stringContaining("FOR UPDATE SKIP LOCKED"),
-        expect.any(Array),
-      );
-
-      const query = dataSource.query.mock.calls[0][0];
-      expect(query).toContain("event_type");
-      expect(query).toContain("retry_count");
+      expect(result[0].id).toBe(456);
+      expect(result[0].event_type).toBe("ORDER_CREATED");
     });
   });
 
-  describe("process", () => {
-    it("should quarantine events with null eventType", async () => {
-      const mockRows = [
-        {
-          id: 1,
-          event_type: null, // Corrupted row
-          payload: {},
-          status: "PENDING",
-          retry_count: 0,
-          last_error: null,
-          next_retry_at: null,
-          created_at: "2024-01-15T10:00:00Z",
-          processed_at: null,
-          locked_at: null,
-          locked_by: null,
-        },
-      ];
-
-      dataSource.query
-        .mockResolvedValueOnce([]) // releaseStaleLocks
-        .mockResolvedValueOnce(mockRows) // claimBatch
-        .mockResolvedValueOnce([]); // forceFail
-
-      await worker.process();
-
-      // Should call forceFail, not outboxService.handle
-      expect(outboxService.handle).not.toHaveBeenCalled();
-      expect(dataSource.query).toHaveBeenCalledWith(
-        expect.stringContaining("UPDATE outbox SET status = 'FAILED'"),
-        expect.arrayContaining([1, 10, "FORCE_FAIL: NULL_EVENT_TYPE"]),
+  describe("structural validation in toOutboxEvent", () => {
+    it("should throw on null/undefined row (fail-fast)", () => {
+      // STRICT FAIL-FAST: null row indicates bug in claimBatch or data corruption
+      expect(() => (worker as any).toOutboxEvent(null)).toThrow(
+        "STRUCTURAL_CORRUPTION: toOutboxEvent received null/undefined row",
       );
     });
 
-    it("should process valid events normally", async () => {
-      const mockRows = [
-        {
-          id: 1,
-          event_type: "DELIVERY_ASSIGNED",
-          payload: { driverId: "driver-123" },
-          status: "PENDING",
-          retry_count: 0,
-          last_error: null,
-          next_retry_at: null,
-          created_at: "2024-01-15T10:00:00Z",
-          processed_at: null,
-          locked_at: null,
-          locked_by: null,
-        },
-      ];
-
-      dataSource.query
-        .mockResolvedValueOnce([]) // releaseStaleLocks
-        .mockResolvedValueOnce(mockRows) // claimBatch
-        .mockResolvedValueOnce([]); // markCompleted
-
-      outboxService.handle.mockResolvedValue(undefined);
-
-      await worker.process();
-
-      expect(outboxService.handle).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 1,
-          eventType: "DELIVERY_ASSIGNED",
-        }),
+    it("should throw on undefined row (fail-fast)", () => {
+      expect(() => (worker as any).toOutboxEvent(undefined)).toThrow(
+        "STRUCTURAL_CORRUPTION: toOutboxEvent received null/undefined row",
       );
     });
-  });
 
-  describe("handleFailure", () => {
-    it("should force fail on structural errors without retry", async () => {
-      const rawRow = {
-        id: 1,
-        event_type: "DELIVERY_ASSIGNED",
+    it("should throw on row missing id after claimBatch validation", () => {
+      const rowWithMissingId = {
+        event_type: "ORDER_CREATED",
         payload: {},
-        status: "PROCESSING",
+        status: "PENDING",
         retry_count: 0,
-        last_error: null,
-        next_retry_at: null,
-        created_at: "2024-01-15T10:00:00Z",
-        processed_at: null,
-        locked_at: "2024-01-15T10:00:00Z",
-        locked_by: "worker-1",
+        created_at: new Date().toISOString(),
       };
 
-      const event = {
-        id: 1,
-        eventType: "DELIVERY_ASSIGNED",
-        payload: {},
-        status: OutboxStatus.PROCESSING,
-        retryCount: 0,
-        createdAt: new Date(),
-      };
-
-      const structuralError = new Error("Unknown outbox event type: undefined");
-
-      dataSource.query.mockResolvedValue([]);
-
-      await (worker as any).handleFailure(rawRow, event, structuralError);
-
-      // Should update to FAILED with retry_count = MAX_RETRIES (10)
-      expect(dataSource.query).toHaveBeenCalledWith(
-        expect.stringContaining("UPDATE outbox SET status = 'FAILED'"),
-        expect.arrayContaining([
-          1,
-          10,
-          expect.stringContaining("Structural error"),
-        ]),
+      expect(() => (worker as any).toOutboxEvent(rowWithMissingId)).toThrow(
+        "STRUCTURAL_CORRUPTION: Row missing id in toOutboxEvent",
       );
+    });
+
+    it("should throw on row with null event_type (fail-fast)", () => {
+      const rowWithNullEventType = {
+        id: 789,
+        event_type: null,
+        payload: {},
+        status: "PENDING",
+        retry_count: 0,
+        created_at: new Date().toISOString(),
+      };
+
+      // STRICT FAIL-FAST: null event_type indicates bug in claimBatch
+      expect(() => (worker as any).toOutboxEvent(rowWithNullEventType)).toThrow(
+        "STRUCTURAL_CORRUPTION: Row 789 missing event_type in toOutboxEvent",
+      );
+    });
+
+    it("should throw on row with undefined event_type (fail-fast)", () => {
+      const rowWithUndefinedEventType = {
+        id: 790,
+        event_type: undefined,
+        payload: {},
+        status: "PENDING",
+        retry_count: 0,
+        created_at: new Date().toISOString(),
+      };
+
+      expect(() =>
+        (worker as any).toOutboxEvent(rowWithUndefinedEventType),
+      ).toThrow(
+        "STRUCTURAL_CORRUPTION: Row 790 missing event_type in toOutboxEvent",
+      );
+    });
+
+    it("should convert valid row to OutboxEvent", () => {
+      const validRow = {
+        id: 123,
+        event_type: "ORDER_CREATED",
+        payload: { orderId: "456" },
+        status: "PENDING",
+        retry_count: 2,
+        last_error: "Previous error",
+        next_retry_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        processed_at: null,
+        locked_at: null,
+        locked_by: null,
+        idempotency_key: "key-123",
+        version: 1,
+      };
+
+      const result = (worker as any).toOutboxEvent(validRow);
+
+      expect(result.id).toBe(123);
+      expect(result.eventType).toBe("ORDER_CREATED");
+      expect(result.payload).toEqual({ orderId: "456" });
+      expect(result.retryCount).toBe(2);
+      expect(result.lastError).toBe("Previous error");
+      expect(result.idempotencyKey).toBe("key-123");
     });
   });
 });

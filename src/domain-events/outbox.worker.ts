@@ -53,12 +53,14 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
     private janitorService: OutboxJanitorService,
     private adaptiveBatchService: AdaptiveBatchService,
   ) {
-    console.log('');
-    console.log('┌─ ⚙ OUTBOX WORKER ' + '─'.repeat(31));
+    console.log("");
+    console.log("┌─ ⚙ OUTBOX WORKER " + "─".repeat(31));
     console.log(`│  Worker id: ${this.workerId.substring(0, 8)}`);
-    console.log(`│  Database: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`);
-    console.log('│  Status: RUNNING');
-    console.log('└' + '─'.repeat(49));
+    console.log(
+      `│  Database: ${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`,
+    );
+    console.log("│  Status: RUNNING");
+    console.log("└" + "─".repeat(49));
   }
 
   @Cron("*/5 * * * * *")
@@ -220,20 +222,45 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
         [this.workerId, ids],
       );
 
-      // Return the selected rows
-      return selectedRows.map((r: any) => ({
-        id: r.id ?? 0,
-        event_type: r.event_type ?? null,
-        payload: r.payload ?? {},
-        status: r.status ?? "PENDING",
-        retry_count: r.retry_count ?? 0,
-        last_error: r.last_error ?? null,
-        next_retry_at: r.next_retry_at ?? null,
-        created_at: r.created_at ?? new Date().toISOString(),
-        processed_at: r.processed_at ?? null,
-        locked_at: r.locked_at ?? null,
-        locked_by: r.locked_by ?? null,
-      })) as RawOutboxRow[];
+      // Return the selected rows with structural validation
+      // CRITICAL: Do NOT normalize malformed rows - fail fast instead
+      return selectedRows.map((r: any) => {
+        // Structural validation: required columns must be present
+        if (r.id === null || r.id === undefined) {
+          this.logger.error(
+            `STRUCTURAL_CORRUPTION: Row missing id. ` +
+              `Row data: ${JSON.stringify(r)}. ` +
+              `Quarantining row.`,
+          );
+          throw new Error(`STRUCTURAL_CORRUPTION: Row missing id`);
+        }
+
+        if (r.event_type === null || r.event_type === undefined) {
+          this.logger.error(
+            `STRUCTURAL_CORRUPTION: Row ${r.id} missing event_type. ` +
+              `Row data: ${JSON.stringify(r)}. ` +
+              `Quarantining row.`,
+          );
+          throw new Error(
+            `STRUCTURAL_CORRUPTION: Row ${r.id} missing event_type`,
+          );
+        }
+
+        // Valid row - return with explicit types
+        return {
+          id: r.id,
+          event_type: r.event_type,
+          payload: r.payload ?? {},
+          status: r.status ?? "PENDING",
+          retry_count: r.retry_count ?? 0,
+          last_error: r.last_error ?? null,
+          next_retry_at: r.next_retry_at ?? null,
+          created_at: r.created_at ?? new Date().toISOString(),
+          processed_at: r.processed_at ?? null,
+          locked_at: r.locked_at ?? null,
+          locked_by: r.locked_by ?? null,
+        } as RawOutboxRow;
+      });
     });
   }
 
@@ -370,30 +397,44 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
   }
 
   private toOutboxEvent(row: RawOutboxRow): OutboxEvent {
-    // Extreme defensive programming - handle malformed rows
+    // STRICT FAIL-FAST: Do not normalize malformed rows
+    // Null/undefined row indicates a bug in claimBatch or upstream data corruption
     if (!row) {
-      this.logger.error("toOutboxEvent received null/undefined row");
-      return {
-        id: 0,
-        eventType: "",
-        payload: {},
-        status: OutboxStatus.FAILED,
-        retryCount: 10,
-        createdAt: new Date(),
-      } as OutboxEvent;
+      this.logger.error(
+        "STRUCTURAL_CORRUPTION: toOutboxEvent received null/undefined row. " +
+          "This indicates a bug in claimBatch structural validation.",
+      );
+      throw new Error(
+        "STRUCTURAL_CORRUPTION: toOutboxEvent received null/undefined row",
+      );
     }
 
-    // Defensive: handle both snake_case and potential camelCase
     const eventType = row.event_type;
-    const rowId = row.id ?? 0;
+    const rowId = row.id;
 
+    // CRITICAL: Do not normalize missing id - this should have been caught in claimBatch
+    if (rowId === null || rowId === undefined) {
+      this.logger.error(
+        `STRUCTURAL_CORRUPTION: Row missing id after claimBatch validation. ` +
+          `This indicates a bug in claimBatch structural validation.`,
+      );
+      throw new Error(`STRUCTURAL_CORRUPTION: Row missing id in toOutboxEvent`);
+    }
+
+    // CRITICAL: Do not normalize missing event_type - this should have been caught in claimBatch
     if (!eventType) {
-      this.logger.warn(`toOutboxEvent: null event_type for row ${rowId}`);
+      this.logger.error(
+        `STRUCTURAL_CORRUPTION: Row ${rowId} has null/undefined event_type. ` +
+          `This indicates a bug in claimBatch structural validation.`,
+      );
+      throw new Error(
+        `STRUCTURAL_CORRUPTION: Row ${rowId} missing event_type in toOutboxEvent`,
+      );
     }
 
     return {
       id: rowId,
-      eventType: eventType || "", // Empty string triggers validation failure
+      eventType,
       payload: row.payload || {},
       status: (row.status as OutboxStatus) || OutboxStatus.PENDING,
       priority: "MEDIUM", // Default priority for backward compatibility
@@ -485,14 +526,14 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
   private async logWorkerHealth(): Promise<void> {
     try {
       this.logger.log("OUTBOX STATUS");
-      
+
       // Get pending events count
       const pendingCount = await this.dataSource.query(`
         SELECT COUNT(*) as count
         FROM outbox
         WHERE status = 'PENDING'
       `);
-      
+
       // Get processing stats
       const processingStats = await this.dataSource.query(`
         SELECT 
@@ -507,12 +548,13 @@ export class OutboxWorker implements OnModuleInit, OnModuleDestroy {
       const workerStats = this.workerLifecycleService.getProcessingStats();
 
       this.logger.log(`Pending events: ${pendingCount[0]?.count || 0}`);
-      this.logger.log(`Processing rate: ${this.metricsService.getMetrics()}/sec`);
+      this.logger.log(
+        `Processing rate: ${this.metricsService.getMetrics()}/sec`,
+      );
       this.logger.log(`Retries: ${processingStats[0]?.retrying_count || 0}`);
       this.logger.log(`Dead letters: ${processingStats[0]?.failed_count || 0}`);
       this.logger.log(`Active workers: ${workerStats.activeWorkers}`);
       this.logger.log(`Processing events: ${workerStats.processingEvents}`);
-
     } catch (error) {
       this.logger.error("Failed to log worker health:", error);
     }

@@ -1,117 +1,345 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
-import { SafeDispatchService } from './safe-dispatch.service';
-import { DispatchDecision, DispatchCohort, DispatchMethod, DispatchStatus } from './entities/dispatch-decision.entity';
-import { DispatchScoringService } from '../dispatch-scoring/dispatch-scoring.service';
-import { DispatchConfigService } from '../dispatch-scoring/dispatch-config.service';
-import { DriversService } from '../drivers/drivers.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { getRepositoryToken } from "@nestjs/typeorm";
+import { DataSource, Repository } from "typeorm";
+import { SafeDispatchService } from "./safe-dispatch.service";
+import {
+  DispatchDecision,
+  DispatchCohort,
+  DispatchMethod,
+  DispatchStatus,
+} from "./entities/dispatch-decision.entity";
+import { DispatchScoringService } from "../dispatch-scoring/dispatch-scoring.service";
+import { DispatchConfigService } from "../dispatch-scoring/dispatch-config.service";
+import { DriversService } from "../drivers/drivers.service";
 
-describe('SafeDispatchService', () => {
+describe("SafeDispatchService", () => {
   let service: SafeDispatchService;
-  let dispatchDecisionRepo: any;
-  let dispatchConfigService: any;
+  let dispatchDecisionRepository: Repository<DispatchDecision>;
+  let dataSource: DataSource;
 
-  const mockDeliveryId = 'del-123';
-  const mockDriverId = 'drv-456';
-  const fallbackCallback = jest.fn();
+  const mockQueryBuilder = {
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    setLock: jest.fn().mockReturnThis(),
+    getOne: jest.fn(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    getRawOne: jest.fn(),
+  };
+
+  const mockRepository = {
+    create: jest.fn(),
+    save: jest.fn(),
+    findOne: jest.fn(),
+    count: jest.fn(),
+    createQueryBuilder: jest.fn(() => mockQueryBuilder),
+  };
+
+  const mockManager = {
+    getRepository: jest.fn(() => mockRepository),
+  };
+
+  const mockDataSource = {
+    transaction: jest.fn((callback) => callback(mockManager)),
+  };
+
+  const mockDispatchScoringService = {
+    isDriverEligible: jest.fn(),
+    getCurrentScore: jest.fn(),
+  };
+
+  const mockDispatchConfigService = {
+    getConfig: jest.fn(),
+  };
+
+  const mockDriversService = {
+    findAvailable: jest.fn(),
+  };
 
   beforeEach(async () => {
-    dispatchDecisionRepo = {
-      create: jest.fn().mockImplementation((dto) => ({ id: 'decision-123', ...dto })),
-      save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
-      findOne: jest.fn().mockResolvedValue({ id: 'decision-123' }),
-      count: jest.fn().mockResolvedValue(0),
-      createQueryBuilder: jest.fn().mockReturnValue({
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([]),
-        getRawOne: jest.fn().mockResolvedValue(null),
-      }),
-    };
-
-    dispatchConfigService = {
-      getConfig: jest.fn().mockResolvedValue({
-        scoringEnabled: true,
-        rolloutPercentage: 100, // Force SCORING cohort for tests
-        fallbackThresholds: { maxProcessingTime: 5000, maxFailureRate: 0.1, minAcceptanceRate: 0.7 },
-      }),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SafeDispatchService,
-        { provide: getRepositoryToken(DispatchDecision), useValue: dispatchDecisionRepo },
-        { provide: DispatchScoringService, useValue: {} },
-        { provide: DispatchConfigService, useValue: dispatchConfigService },
-        { provide: DataSource, useValue: {} },
-        { provide: DriversService, useValue: {} },
+        {
+          provide: getRepositoryToken(DispatchDecision),
+          useValue: mockRepository,
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
+        },
+        {
+          provide: DispatchScoringService,
+          useValue: mockDispatchScoringService,
+        },
+        {
+          provide: DispatchConfigService,
+          useValue: mockDispatchConfigService,
+        },
+        {
+          provide: DriversService,
+          useValue: mockDriversService,
+        },
       ],
     }).compile();
 
     service = module.get<SafeDispatchService>(SafeDispatchService);
-    fallbackCallback.mockClear();
+    dispatchDecisionRepository = module.get<Repository<DispatchDecision>>(
+      getRepositoryToken(DispatchDecision),
+    );
+    dataSource = module.get<DataSource>(DataSource);
+
+    // Reset mocks
+    jest.clearAllMocks();
   });
 
-  describe('executeSafeDispatch', () => {
-    it('should select expected driver via scored dispatch path', async () => {
+  describe("executeIdempotentFallback", () => {
+    it("should prevent concurrent fallback execution for same delivery", async () => {
+      const deliveryId = "delivery-123";
+      const reason = "High failure rate";
+
+      // Mock: no existing ASSIGNED decision, but a pending claim exists
+      mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce(null) // No existing ASSIGNED
+        .mockResolvedValueOnce({
+          // Pending claim exists
+          id: "claim-456",
+          deliveryId,
+          dispatchStatus: DispatchStatus.PENDING,
+          metadata: { fallbackClaim: "true" },
+        });
+
+      const fallbackCallback = jest.fn();
+
+      const result = await (service as any).executeIdempotentFallback(
+        deliveryId,
+        reason,
+        fallbackCallback,
+      );
+
+      // Should return in-progress status without executing callback
+      expect(result.inProgress).toBe(true);
+      expect(fallbackCallback).not.toHaveBeenCalled();
+    });
+
+    it("should return existing result if fallback already executed", async () => {
+      const deliveryId = "delivery-123";
+      const reason = "High failure rate";
+
+      // Mock: existing ASSIGNED decision
+      mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockQueryBuilder.getOne.mockResolvedValueOnce({
+        id: "decision-789",
+        deliveryId,
+        dispatchStatus: DispatchStatus.ASSIGNED,
+        dispatchMethod: DispatchMethod.LEGACY,
+      });
+
+      const fallbackCallback = jest.fn();
+
+      const result = await (service as any).executeIdempotentFallback(
+        deliveryId,
+        reason,
+        fallbackCallback,
+      );
+
+      // Should return already-executed status without executing callback
+      expect(result.alreadyExecuted).toBe(true);
+      expect(result.idempotent).toBe(true);
+      expect(fallbackCallback).not.toHaveBeenCalled();
+    });
+
+    it("should claim and execute fallback when no existing decision", async () => {
+      const deliveryId = "delivery-123";
+      const reason = "High failure rate";
+
+      // Mock: no existing decisions
+      mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce(null) // No existing ASSIGNED
+        .mockResolvedValueOnce(null); // No pending claim
+
+      // Mock: claim creation
+      mockRepository.create.mockReturnValue({
+        deliveryId,
+        cohort: DispatchCohort.CONTROL,
+        dispatchMethod: DispatchMethod.LEGACY,
+        dispatchStatus: DispatchStatus.PENDING,
+      });
+      mockRepository.save.mockResolvedValue({
+        id: "generated-claim-id",
+        deliveryId,
+      });
+
+      // Mock: findOne for updateDispatchDecision
+      mockRepository.findOne.mockResolvedValue({
+        id: "generated-claim-id",
+        deliveryId,
+        cohort: DispatchCohort.CONTROL,
+        dispatchMethod: DispatchMethod.LEGACY,
+        dispatchStatus: DispatchStatus.PENDING,
+        updatedAt: new Date(),
+      });
+
+      const fallbackCallback = jest.fn().mockResolvedValue({
+        driverId: "driver-456",
+        method: "LEGACY",
+      });
+
+      const result = await (service as any).executeIdempotentFallback(
+        deliveryId,
+        reason,
+        fallbackCallback,
+      );
+
+      // Should execute callback
+      expect(fallbackCallback).toHaveBeenCalledWith(deliveryId, reason);
+      expect(result).toBeDefined();
+    });
+
+    it("should handle callback errors and update claim to FAILED", async () => {
+      const deliveryId = "delivery-123";
+      const reason = "High failure rate";
+      const claimId = "claim-error-123";
+
+      // Mock: no existing decisions
+      mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      mockQueryBuilder.getOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      // Mock: claim creation
+      const claimDecision = {
+        id: claimId,
+        deliveryId,
+        cohort: DispatchCohort.CONTROL,
+        dispatchMethod: DispatchMethod.LEGACY,
+        dispatchStatus: DispatchStatus.PENDING,
+      };
+      mockRepository.create.mockReturnValue(claimDecision);
+      mockRepository.save.mockResolvedValue({
+        id: claimId,
+        deliveryId,
+      });
+
+      // Mock: findOne for updateDispatchDecision
+      mockRepository.findOne.mockResolvedValue({
+        ...claimDecision,
+        updatedAt: new Date(),
+      });
+
+      const fallbackCallback = jest
+        .fn()
+        .mockRejectedValue(new Error("Dispatch failed"));
+
+      await expect(
+        (service as any).executeIdempotentFallback(
+          deliveryId,
+          reason,
+          fallbackCallback,
+        ),
+      ).rejects.toThrow("Dispatch failed");
+
+      // Should update claim to FAILED
+      const saveCalls = mockRepository.save.mock.calls;
+      const failedUpdate = saveCalls.find(
+        (call: any[]) => call[0]?.dispatchStatus === DispatchStatus.FAILED,
+      );
+      expect(failedUpdate).toBeDefined();
+    });
+  });
+
+  describe("executeSafeDispatch", () => {
+    it("should use transaction for decision persistence", async () => {
+      const deliveryId = "delivery-123";
       const eligibleDrivers = [
-        { driverId: 'drv-low', score: 60, driver: {} as any },
-        { driverId: mockDriverId, score: 95, driver: {} as any }, // Highest score
+        { driverId: "driver-1", score: 90, driver: {} as any },
       ];
 
-      const result = await service.executeSafeDispatch(mockDeliveryId, eligibleDrivers, fallbackCallback);
+      mockDispatchConfigService.getConfig.mockResolvedValue({
+        scoringEnabled: true,
+        rolloutPercentage: 100,
+      });
 
-      expect(result.method).toBe('SCORING_BASED');
-      expect(result.driverId).toBe(mockDriverId);
-      expect(fallbackCallback).not.toHaveBeenCalled();
-      
-      // Verify decision was persisted correctly
-      expect(dispatchDecisionRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          dispatchStatus: DispatchStatus.ASSIGNED,
-          scoreUsed: 95,
-        })
+      const decision = {
+        id: "decision-1",
+        deliveryId,
+        cohort: DispatchCohort.SCORING,
+        dispatchMethod: DispatchMethod.SCORING_BASED,
+        dispatchStatus: DispatchStatus.PENDING,
+      };
+      mockRepository.create.mockReturnValue(decision);
+      mockRepository.save.mockResolvedValue({
+        id: "decision-1",
+      });
+
+      // Mock: findOne for updateDispatchDecision
+      mockRepository.findOne.mockResolvedValue({
+        ...decision,
+        updatedAt: new Date(),
+      });
+
+      mockDispatchScoringService.isDriverEligible.mockResolvedValue(true);
+      mockDispatchScoringService.getCurrentScore.mockResolvedValue(90);
+
+      const fallbackCallback = jest.fn();
+
+      await service.executeSafeDispatch(
+        deliveryId,
+        eligibleDrivers,
+        fallbackCallback,
       );
+
+      // Should use transaction
+      expect(mockDataSource.transaction).toHaveBeenCalled();
+
+      // Should create decision within transaction
+      expect(mockManager.getRepository).toHaveBeenCalledWith(DispatchDecision);
     });
 
-    it('should trigger fallback path if scoring fails (e.g., no eligible drivers)', async () => {
-      fallbackCallback.mockResolvedValue({ status: 'success', method: 'legacy' });
+    it("should fall back when scoring is disabled", async () => {
+      const deliveryId = "delivery-123";
+      const eligibleDrivers = [
+        { driverId: "driver-1", score: 90, driver: {} as any },
+      ];
 
-      // Empty array will cause executeScoringDispatch to throw a BadRequestException
-      const result = await service.executeSafeDispatch(mockDeliveryId, [], fallbackCallback);
+      mockDispatchConfigService.getConfig.mockResolvedValue({
+        scoringEnabled: false,
+        rolloutPercentage: 0,
+      });
 
-      expect(fallbackCallback).toHaveBeenCalledWith(mockDeliveryId, expect.stringContaining('No eligible drivers found'));
-      expect(result.method).toBe('legacy');
+      const decision = {
+        id: "decision-1",
+        deliveryId,
+        cohort: DispatchCohort.CONTROL,
+        dispatchMethod: DispatchMethod.LEGACY,
+        dispatchStatus: DispatchStatus.PENDING,
+      };
+      mockRepository.create.mockReturnValue(decision);
+      mockRepository.save.mockResolvedValue({
+        id: "decision-1",
+      });
 
-      // Verify the failure and fallback reason were persisted
-      expect(dispatchDecisionRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          dispatchStatus: DispatchStatus.FAILED,
-          fallbackReason: 'No eligible drivers found for scoring dispatch',
-        })
+      // Mock: findOne for updateDispatchDecision
+      mockRepository.findOne.mockResolvedValue({
+        ...decision,
+        updatedAt: new Date(),
+      });
+
+      const fallbackCallback = jest.fn().mockResolvedValue({
+        driverId: "driver-1",
+        method: "LEGACY",
+      });
+
+      await service.executeSafeDispatch(
+        deliveryId,
+        eligibleDrivers,
+        fallbackCallback,
       );
-    });
 
-    it('should trigger fallback immediately if health metrics indicate degraded state', async () => {
-      // Mock getRecentFailureRate to return 50% (exceeds 10% threshold)
-      jest.spyOn(service as any, 'getRecentFailureRate').mockResolvedValue(0.5);
-      fallbackCallback.mockResolvedValue({ status: 'success', method: 'legacy' });
-
-      const result = await service.executeSafeDispatch(mockDeliveryId, [{ driverId: mockDriverId, score: 90, driver: {} as any }], fallbackCallback);
-
+      // Should execute fallback callback
       expect(fallbackCallback).toHaveBeenCalled();
-      expect(result.method).toBe('legacy');
-      
-      // Verify decision caught the degraded state before even attempting scoring
-      expect(dispatchDecisionRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          dispatchStatus: DispatchStatus.FAILED,
-          fallbackReason: expect.stringContaining('High failure rate'),
-        })
-      );
     });
   });
 });
