@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { DriverStats } from './driver-stats.entity';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { DriverStats } from "./driver-stats.entity";
 
 @Injectable()
 export class DriverStatsService {
@@ -34,6 +34,35 @@ export class DriverStatsService {
     });
   }
 
+  /**
+   * Batch get stats for multiple drivers
+   * Returns a Map of driverId -> DriverStats
+   */
+  async getStatsBatch(driverIds: string[]): Promise<Map<string, DriverStats>> {
+    const result = new Map<string, DriverStats>();
+
+    if (driverIds.length === 0) {
+      return result;
+    }
+
+    try {
+      const stats = await this.driverStatsRepository
+        .createQueryBuilder("stats")
+        .where("stats.driverId IN (:...driverIds)", { driverIds })
+        .getMany();
+
+      // Build a map of driverId -> stats
+      for (const stat of stats) {
+        result.set(stat.driverId, stat);
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error batch getting driver stats:`, error);
+      return result;
+    }
+  }
+
   async recordAssignmentAccepted(driverId: string): Promise<void> {
     const stats = await this.ensureStats(driverId);
     stats.acceptanceCount += 1;
@@ -63,16 +92,20 @@ export class DriverStatsService {
 
     // Update average times
     if (input.pickupTimeSeconds !== undefined) {
-      const currentTotalPickupTime = stats.avgPickupTimeSeconds * (stats.completedDeliveries - 1);
+      const currentTotalPickupTime =
+        stats.avgPickupTimeSeconds * (stats.completedDeliveries - 1);
       stats.avgPickupTimeSeconds = Math.round(
-        (currentTotalPickupTime + input.pickupTimeSeconds) / stats.completedDeliveries,
+        (currentTotalPickupTime + input.pickupTimeSeconds) /
+          stats.completedDeliveries,
       );
     }
 
     if (input.totalTimeSeconds !== undefined) {
-      const currentTotalDeliveryTime = stats.avgDeliveryTimeSeconds * (stats.completedDeliveries - 1);
+      const currentTotalDeliveryTime =
+        stats.avgDeliveryTimeSeconds * (stats.completedDeliveries - 1);
       stats.avgDeliveryTimeSeconds = Math.round(
-        (currentTotalDeliveryTime + input.totalTimeSeconds) / stats.completedDeliveries,
+        (currentTotalDeliveryTime + input.totalTimeSeconds) /
+          stats.completedDeliveries,
       );
     }
 

@@ -1,14 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/domain-events/domain-events.module.ts  — updated
 //
-// CHANGE: Add DeliveryStatusForwardingHandler to providers in both
-// DomainEventsModule and DomainEventsApiModule.
+// CHANGE: HandlerRegistry moved to DomainEventsCoreModule.
+// DomainEventsModule and DomainEventsApiModule now import it from there.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Module, forwardRef } from "@nestjs/common";
 import { OutboxWorker } from "./outbox.worker";
 import { OutboxService } from "./outbox.service";
-import { HandlerRegistry } from "./handlers/handler.registry";
 import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
 import { DeliveryCancelledHandler } from "./handlers/delivery-cancelled.handler";
 import { DeliveryStatusForwardingHandler } from "./handlers/delivery-status-forwarding.handler";
@@ -32,7 +31,6 @@ import { DomainEventsCoreModule } from "./domain-events-core.module";
   providers: [
     OutboxWorker,
     DomainEventsStartupService,
-    HandlerRegistry,
     DeliveryAssignedHandler,
     DeliveryCancelledHandler,
     DeliveryStatusForwardingHandler,
@@ -51,7 +49,6 @@ export class DomainEventsModule {}
     forwardRef(() => DriversModule), // ADDED
   ],
   providers: [
-    HandlerRegistry,
     DeliveryAssignedHandler,
     DeliveryCancelledHandler,
     DeliveryStatusForwardingHandler,

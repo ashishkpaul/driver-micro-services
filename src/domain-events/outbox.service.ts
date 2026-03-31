@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Inject, Optional } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, EntityManager } from "typeorm";
 import { OutboxEvent, EventVersion, OutboxEventType } from "./outbox.entity";
@@ -7,9 +7,14 @@ import {
   CircuitBreakerService,
   CircuitBreakerConfig,
 } from "./circuit-breaker.service";
+import { HandlerRegistry } from "./handlers/handler.registry";
 
 /**
  * src/domain-events/outbox.service.ts
+ *
+ * CRITICAL FIX: HandlerRegistry injection restored.
+ * OutboxService.handle() now delegates to HandlerRegistry.handle()
+ * which executes the actual event handler before marking as COMPLETED.
  *
  * CRITICAL-2 FIX: generateIdempotencyKey was appending randomUUID() which
  * made every key unique — breaking deduplication entirely. The existingEvent
@@ -34,6 +39,9 @@ export class OutboxService {
     @InjectRepository(OutboxEvent)
     private outboxRepository: Repository<OutboxEvent>,
     private circuitBreakerService: CircuitBreakerService,
+    @Optional()
+    @Inject(HandlerRegistry)
+    private handlerRegistry?: HandlerRegistry,
   ) {}
 
   async publish(
@@ -105,8 +113,13 @@ export class OutboxService {
           this.logger.debug(
             `Event ${event.id} (${event.eventType}) ready for processing`,
           );
-          // Note: Actual handler execution moved to OutboxWorker
-          // This method now only provides circuit breaker protection
+          // CRITICAL FIX: Delegate to HandlerRegistry to execute the actual handler
+          if (!this.handlerRegistry) {
+            throw new Error(
+              "HandlerRegistry not injected — cannot process outbox event",
+            );
+          }
+          await this.handlerRegistry.handle(event);
         },
         config,
       );

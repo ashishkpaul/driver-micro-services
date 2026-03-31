@@ -9,7 +9,11 @@ import { Repository, DataSource, EntityManager } from "typeorm";
 import { DriverStatsService } from "../delivery-intelligence/driver/driver-stats.service";
 import { DeliveryMetricsService } from "../delivery-intelligence/delivery/delivery-metrics.service";
 import { DispatchConfigService } from "./dispatch-config.service";
-import { DispatchScore, ScoreType, ScoreSource } from "./entities/dispatch-score.entity";
+import {
+  DispatchScore,
+  ScoreType,
+  ScoreSource,
+} from "./entities/dispatch-score.entity";
 import { DispatchConfig, ConfigType } from "./entities/dispatch-config.entity";
 import { Driver } from "../drivers/entities/driver.entity";
 
@@ -53,26 +57,34 @@ export class DispatchScoringService {
   async calculateDispatchScore(driverId: string): Promise<DispatchScore> {
     const driverStats = await this.driverStatsService.getStats(driverId);
     if (!driverStats) {
-      throw new NotFoundException(`Driver stats not found for driver ${driverId}`);
+      throw new NotFoundException(
+        `Driver stats not found for driver ${driverId}`,
+      );
     }
 
     // Get scoring weights from configuration
     const weights = await this.getScoringWeights(driverId);
-    
+
     // Calculate individual component scores
     const completionRateScore = this.calculateCompletionRateScore(driverStats);
     const timingScore = this.calculateTimingScore(driverStats);
     const qualityScore = this.calculateQualityScore(driverStats);
 
     // Calculate weighted overall score
-    const overallScore = this.calculateWeightedScore({
-      completionRate: completionRateScore,
-      timing: timingScore,
-      quality: qualityScore,
-    }, weights);
+    const overallScore = this.calculateWeightedScore(
+      {
+        completionRate: completionRateScore,
+        timing: timingScore,
+        quality: qualityScore,
+      },
+      weights,
+    );
 
     // Apply score decay based on last activity
-    const decayedScore = this.applyScoreDecay(overallScore, driverStats.lastDeliveryAt);
+    const decayedScore = this.applyScoreDecay(
+      overallScore,
+      driverStats.lastDeliveryAt,
+    );
 
     // Create or update dispatch score
     const dispatchScore = await this.createOrUpdateDispatchScore(driverId, {
@@ -99,22 +111,30 @@ export class DispatchScoringService {
   }> {
     const driverStats = await this.driverStatsService.getStats(driverId);
     if (!driverStats) {
-      throw new NotFoundException(`Driver stats not found for driver ${driverId}`);
+      throw new NotFoundException(
+        `Driver stats not found for driver ${driverId}`,
+      );
     }
 
     const weights = await this.getScoringWeights(driverId);
-    
+
     const completionRateScore = this.calculateCompletionRateScore(driverStats);
     const timingScore = this.calculateTimingScore(driverStats);
     const qualityScore = this.calculateQualityScore(driverStats);
 
-    const overallScore = this.calculateWeightedScore({
-      completionRate: completionRateScore,
-      timing: timingScore,
-      quality: qualityScore,
-    }, weights);
+    const overallScore = this.calculateWeightedScore(
+      {
+        completionRate: completionRateScore,
+        timing: timingScore,
+        quality: qualityScore,
+      },
+      weights,
+    );
 
-    const decayedScore = this.applyScoreDecay(overallScore, driverStats.lastDeliveryAt);
+    const decayedScore = this.applyScoreDecay(
+      overallScore,
+      driverStats.lastDeliveryAt,
+    );
 
     return {
       overall: decayedScore,
@@ -156,25 +176,96 @@ export class DispatchScoringService {
       }
 
       const thresholds = await this.getThresholds(driverId);
-      
+
       // Check minimum assignments threshold
-      const totalAssignments = driverStats.acceptanceCount + driverStats.failedDeliveries + driverStats.cancelledDeliveries;
+      const totalAssignments =
+        driverStats.acceptanceCount +
+        driverStats.failedDeliveries +
+        driverStats.cancelledDeliveries;
       if (totalAssignments < thresholds.minimumAssignments) {
-        this.logger.debug(`Driver ${driverId} below minimum assignments: ${totalAssignments} < ${thresholds.minimumAssignments}`);
+        this.logger.debug(
+          `Driver ${driverId} below minimum assignments: ${totalAssignments} < ${thresholds.minimumAssignments}`,
+        );
         return false;
       }
 
       // Check minimum score threshold
       const currentScore = await this.getCurrentScore(driverId);
       if (currentScore < thresholds.minimumScore) {
-        this.logger.debug(`Driver ${driverId} below minimum score: ${currentScore} < ${thresholds.minimumScore}`);
+        this.logger.debug(
+          `Driver ${driverId} below minimum score: ${currentScore} < ${thresholds.minimumScore}`,
+        );
         return false;
       }
 
       return true;
     } catch (error) {
-      this.logger.error(`Error checking driver eligibility for ${driverId}:`, error);
+      this.logger.error(
+        `Error checking driver eligibility for ${driverId}:`,
+        error,
+      );
       return false;
+    }
+  }
+
+  /**
+   * Batch check eligibility for multiple drivers
+   * Returns a Map of driverId -> boolean
+   */
+  async areDriversEligible(driverIds: string[]): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+
+    if (driverIds.length === 0) {
+      return result;
+    }
+
+    try {
+      // Batch load all driver stats in one call
+      const allStats = await this.driverStatsService.getStatsBatch(driverIds);
+
+      // Get thresholds (use default for batch, per-driver config can be added later)
+      const thresholds = this.DEFAULT_THRESHOLDS;
+
+      // Batch load current scores
+      const scores = await this.getCurrentScores(driverIds);
+
+      // Check eligibility for each driver
+      for (const driverId of driverIds) {
+        const driverStats = allStats.get(driverId);
+
+        if (!driverStats) {
+          result.set(driverId, false);
+          continue;
+        }
+
+        // Check minimum assignments threshold
+        const totalAssignments =
+          driverStats.acceptanceCount +
+          driverStats.failedDeliveries +
+          driverStats.cancelledDeliveries;
+        if (totalAssignments < thresholds.minimumAssignments) {
+          result.set(driverId, false);
+          continue;
+        }
+
+        // Check minimum score threshold
+        const currentScore = scores.get(driverId) || 0;
+        if (currentScore < thresholds.minimumScore) {
+          result.set(driverId, false);
+          continue;
+        }
+
+        result.set(driverId, true);
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error batch checking driver eligibility:`, error);
+      // Return all false on error
+      for (const driverId of driverIds) {
+        result.set(driverId, false);
+      }
+      return result;
     }
   }
 
@@ -207,6 +298,68 @@ export class DispatchScoringService {
   }
 
   /**
+   * Batch get current dispatch scores for multiple drivers
+   * Returns a Map of driverId -> score
+   */
+  async getCurrentScores(driverIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+
+    if (driverIds.length === 0) {
+      return result;
+    }
+
+    try {
+      // Batch load all scores in one query
+      const scores = await this.dispatchScoreRepository
+        .createQueryBuilder("score")
+        .where("score.driverId IN (:...driverIds)", { driverIds })
+        .andWhere("score.scoreType = :scoreType", {
+          scoreType: ScoreType.OVERALL,
+        })
+        .andWhere("score.validUntil > :now", { now: new Date() })
+        .orderBy("score.lastCalculatedAt", "DESC")
+        .getMany();
+
+      // Build a map of driverId -> score
+      const scoreMap = new Map<string, number>();
+      for (const score of scores) {
+        // Only keep the most recent valid score per driver
+        if (!scoreMap.has(score.driverId)) {
+          scoreMap.set(score.driverId, score.score);
+        }
+      }
+
+      // For drivers without valid scores, calculate them
+      for (const driverId of driverIds) {
+        if (scoreMap.has(driverId)) {
+          result.set(driverId, scoreMap.get(driverId)!);
+        } else {
+          // Calculate score if it doesn't exist or is expired
+          try {
+            const newScore = await this.calculateDispatchScore(driverId);
+            result.set(driverId, newScore.score);
+          } catch (error) {
+            this.logger.warn(
+              `Failed to calculate score for driver ${driverId}:`,
+              error,
+            );
+            result.set(driverId, 0);
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Error batch getting current scores:`, error);
+      // Return zeros on error
+      for (const driverId of driverIds) {
+        result.set(driverId, 0);
+      }
+      return result;
+    }
+  }
+
+  /**
    * Get top N drivers by score for a given criteria
    */
   async getTopDrivers(criteria: {
@@ -216,13 +369,7 @@ export class DispatchScoringService {
     lat?: number;
     lon?: number;
   }): Promise<Array<{ driverId: string; score: number }>> {
-    const {
-      limit = 10,
-      minScore = 50,
-      maxDistance,
-      lat,
-      lon,
-    } = criteria;
+    const { limit = 10, minScore = 50, maxDistance, lat, lon } = criteria;
 
     // Build query to get top drivers by score
     const query = this.dispatchScoreRepository
@@ -236,7 +383,7 @@ export class DispatchScoringService {
 
     const results = await query.getMany();
 
-    return results.map(result => ({
+    return results.map((result) => ({
       driverId: result.driverId,
       score: result.score,
     }));
@@ -244,29 +391,49 @@ export class DispatchScoringService {
 
   // Private helper methods
 
-  private async getScoringWeights(driverId: string): Promise<typeof this.DEFAULT_WEIGHTS> {
+  private async getScoringWeights(
+    driverId: string,
+  ): Promise<typeof this.DEFAULT_WEIGHTS> {
     try {
-      const config = await this.dispatchConfigService.getConfig(ConfigType.SCORING_WEIGHTS, driverId);
+      const config = await this.dispatchConfigService.getConfig(
+        ConfigType.SCORING_WEIGHTS,
+        driverId,
+      );
       return {
-        completionRate: config?.completionRate || this.DEFAULT_WEIGHTS.completionRate,
+        completionRate:
+          config?.completionRate || this.DEFAULT_WEIGHTS.completionRate,
         timing: config?.timing || this.DEFAULT_WEIGHTS.timing,
         quality: config?.quality || this.DEFAULT_WEIGHTS.quality,
       };
     } catch (error) {
-      this.logger.warn(`Failed to get scoring weights for driver ${driverId}, using defaults:`, error);
+      this.logger.warn(
+        `Failed to get scoring weights for driver ${driverId}, using defaults:`,
+        error,
+      );
       return this.DEFAULT_WEIGHTS;
     }
   }
 
-  private async getThresholds(driverId: string): Promise<typeof this.DEFAULT_THRESHOLDS> {
+  private async getThresholds(
+    driverId: string,
+  ): Promise<typeof this.DEFAULT_THRESHOLDS> {
     try {
-      const config = await this.dispatchConfigService.getConfig(ConfigType.THRESHOLDS, driverId);
+      const config = await this.dispatchConfigService.getConfig(
+        ConfigType.THRESHOLDS,
+        driverId,
+      );
       return {
-        minimumScore: config?.minimumScore || this.DEFAULT_THRESHOLDS.minimumScore,
-        minimumAssignments: config?.minimumAssignments || this.DEFAULT_THRESHOLDS.minimumAssignments,
+        minimumScore:
+          config?.minimumScore || this.DEFAULT_THRESHOLDS.minimumScore,
+        minimumAssignments:
+          config?.minimumAssignments ||
+          this.DEFAULT_THRESHOLDS.minimumAssignments,
       };
     } catch (error) {
-      this.logger.warn(`Failed to get thresholds for driver ${driverId}, using defaults:`, error);
+      this.logger.warn(
+        `Failed to get thresholds for driver ${driverId}, using defaults:`,
+        error,
+      );
       return this.DEFAULT_THRESHOLDS;
     }
   }
@@ -274,7 +441,7 @@ export class DispatchScoringService {
   private calculateCompletionRateScore(driverStats: any): number {
     const totalAssignments = driverStats.acceptanceCount;
     const successfulDeliveries = driverStats.completedDeliveries;
-    
+
     if (totalAssignments === 0) {
       return 50; // Neutral score for new drivers
     }
@@ -286,7 +453,7 @@ export class DispatchScoringService {
   private calculateTimingScore(driverStats: any): number {
     const avgPickupTime = driverStats.avgPickupTimeSeconds;
     const avgTotalTime = driverStats.avgDeliveryTimeSeconds;
-    
+
     if (!avgPickupTime || !avgTotalTime) {
       return 70; // Default score if timing data unavailable
     }
@@ -302,21 +469,25 @@ export class DispatchScoringService {
     const totalAssignments = driverStats.acceptanceCount;
     const failedDeliveries = driverStats.failedDeliveries;
     const cancelledDeliveries = driverStats.cancelledDeliveries;
-    
+
     if (totalAssignments === 0) {
       return 80; // Default score for new drivers
     }
 
-    const qualityRate = 1 - ((failedDeliveries + cancelledDeliveries) / totalAssignments);
+    const qualityRate =
+      1 - (failedDeliveries + cancelledDeliveries) / totalAssignments;
     return Math.min(100, Math.max(0, qualityRate * 100));
   }
 
-  private calculateWeightedScore(scores: {
-    completionRate: number;
-    timing: number;
-    quality: number;
-  }, weights: typeof this.DEFAULT_WEIGHTS): number {
-    const weightedSum = 
+  private calculateWeightedScore(
+    scores: {
+      completionRate: number;
+      timing: number;
+      quality: number;
+    },
+    weights: typeof this.DEFAULT_WEIGHTS,
+  ): number {
+    const weightedSum =
       scores.completionRate * weights.completionRate +
       scores.timing * weights.timing +
       scores.quality * weights.quality;
@@ -329,8 +500,10 @@ export class DispatchScoringService {
       return score;
     }
 
-    const daysSinceActivity = Math.floor((new Date().getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24));
-    
+    const daysSinceActivity = Math.floor(
+      (new Date().getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
     if (daysSinceActivity <= 0) {
       return score;
     }
@@ -349,7 +522,7 @@ export class DispatchScoringService {
       completionRate: number;
       timing: number;
       quality: number;
-    }
+    },
   ): Promise<DispatchScore> {
     const now = new Date();
     const validUntil = new Date(now.getTime() + 60 * 60 * 1000); // Valid for 1 hour

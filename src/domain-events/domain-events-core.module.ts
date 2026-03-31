@@ -12,6 +12,7 @@ import { MetricsService } from "./metrics.service";
 import { CircuitBreakerService } from "./circuit-breaker.service";
 import { WorkerLifecycleService } from "./worker-lifecycle.service";
 import { AdaptiveBatchService } from "./adaptive-batch.service";
+import { HandlerRegistry } from "./handlers/handler.registry";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AdaptiveBatchService } from "./adaptive-batch.service";
     CircuitBreakerService,
     WorkerLifecycleService,
     AdaptiveBatchService,
+    HandlerRegistry,
   ],
 
   exports: [
@@ -40,6 +42,7 @@ import { AdaptiveBatchService } from "./adaptive-batch.service";
     CircuitBreakerService,
     WorkerLifecycleService,
     AdaptiveBatchService,
+    HandlerRegistry,
   ],
 })
 export class DomainEventsCoreModule {}

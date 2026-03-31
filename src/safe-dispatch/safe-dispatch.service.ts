@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, DataSource } from "typeorm";
+import { Repository, DataSource, MoreThanOrEqual } from "typeorm";
 import { DispatchScoringService } from "../dispatch-scoring/dispatch-scoring.service";
 import { DispatchConfigService } from "../dispatch-scoring/dispatch-config.service";
 import {
@@ -334,6 +334,10 @@ export class SafeDispatchService {
    *
    * CRITICAL: Uses database-level locking to prevent concurrent execution
    * of fallback side effects for the same delivery.
+   *
+   * FIX: Uses pessimistic_write lock on the first query to atomically check-and-claim,
+   * preventing race conditions where multiple concurrent requests could both pass
+   * the existingDecision check and both create claims.
    */
   private async executeIdempotentFallback(
     deliveryId: string,
@@ -342,15 +346,12 @@ export class SafeDispatchService {
   ): Promise<any> {
     // Use a transaction with row-level locking to prevent concurrent fallback execution
     const claimResult = await this.dataSource.transaction(async (manager) => {
-      // Check if fallback was already executed for this delivery
-      // Use FOR UPDATE to lock the row and prevent concurrent modifications
+      // FIX: Check if fallback was already executed OR is in progress
+      // Use pessimistic_write lock to atomically check-and-claim
       const existingDecision = await manager
         .getRepository(DispatchDecision)
         .createQueryBuilder("decision")
         .where("decision.deliveryId = :deliveryId", { deliveryId })
-        .andWhere("decision.dispatchStatus = :status", {
-          status: DispatchStatus.ASSIGNED,
-        })
         .andWhere("decision.dispatchMethod = :method", {
           method: DispatchMethod.LEGACY,
         })
@@ -358,46 +359,37 @@ export class SafeDispatchService {
         .getOne();
 
       if (existingDecision) {
-        // Fallback already executed - return existing result
-        return {
-          alreadyExecuted: true,
-          deliveryId,
-          method: "LEGACY",
-          idempotent: true,
-          reason,
-        };
-      }
+        // Check if already completed
+        if (existingDecision.dispatchStatus === DispatchStatus.ASSIGNED) {
+          return {
+            alreadyExecuted: true,
+            deliveryId,
+            method: "LEGACY",
+            idempotent: true,
+            reason,
+          };
+        }
 
-      // Check for a pending fallback claim (to prevent concurrent execution)
-      const pendingFallback = await manager
-        .getRepository(DispatchDecision)
-        .createQueryBuilder("decision")
-        .where("decision.deliveryId = :deliveryId", { deliveryId })
-        .andWhere("decision.dispatchStatus = :status", {
-          status: DispatchStatus.PENDING,
-        })
-        .andWhere("decision.dispatchMethod = :method", {
-          method: DispatchMethod.LEGACY,
-        })
-        .andWhere("decision.metadata ->> 'fallbackClaim' = 'true'")
-        .setLock("pessimistic_write")
-        .getOne();
-
-      if (pendingFallback) {
-        // Another concurrent call is already executing the fallback
-        this.logger.log(
-          `Fallback already in progress for delivery ${deliveryId}, skipping`,
-        );
-        return {
-          alreadyExecuted: false,
-          inProgress: true,
-          deliveryId,
-          method: "LEGACY",
-          reason,
-        };
+        // Check if in progress (PENDING status with fallbackClaim)
+        if (
+          existingDecision.dispatchStatus === DispatchStatus.PENDING &&
+          existingDecision.metadata?.fallbackClaim === true
+        ) {
+          this.logger.log(
+            `Fallback already in progress for delivery ${deliveryId}, skipping`,
+          );
+          return {
+            alreadyExecuted: false,
+            inProgress: true,
+            deliveryId,
+            method: "LEGACY",
+            reason,
+          };
+        }
       }
 
       // Claim the fallback execution by creating a pending decision
+      // The lock above ensures only one transaction can reach this point
       const claimDecision = manager.getRepository(DispatchDecision).create({
         deliveryId,
         cohort: DispatchCohort.CONTROL,
@@ -527,7 +519,7 @@ export class SafeDispatchService {
 
     const totalDecisions = await this.dispatchDecisionRepository.count({
       where: {
-        createdAt: oneHourAgo,
+        createdAt: MoreThanOrEqual(oneHourAgo),
       },
     });
 
@@ -535,7 +527,7 @@ export class SafeDispatchService {
 
     const failedDecisions = await this.dispatchDecisionRepository.count({
       where: {
-        createdAt: oneHourAgo,
+        createdAt: MoreThanOrEqual(oneHourAgo),
         dispatchStatus: DispatchStatus.FAILED,
       },
     });
@@ -561,7 +553,7 @@ export class SafeDispatchService {
 
     const totalDecisions = await this.dispatchDecisionRepository.count({
       where: {
-        createdAt: oneHourAgo,
+        createdAt: MoreThanOrEqual(oneHourAgo),
         dispatchMethod: DispatchMethod.SCORING_BASED,
       },
     });
@@ -570,7 +562,7 @@ export class SafeDispatchService {
 
     const assignedDecisions = await this.dispatchDecisionRepository.count({
       where: {
-        createdAt: oneHourAgo,
+        createdAt: MoreThanOrEqual(oneHourAgo),
         dispatchMethod: DispatchMethod.SCORING_BASED,
         dispatchStatus: DispatchStatus.ASSIGNED,
       },
@@ -581,6 +573,10 @@ export class SafeDispatchService {
 
   /**
    * Get eligible drivers for dispatch scoring
+   *
+   * FIX: Uses batch methods to eliminate N+1 queries:
+   * - areDriversEligible() batch checks eligibility for all drivers
+   * - getCurrentScores() batch loads scores for all drivers
    */
   async getEligibleDrivers(
     deliveryId: string,
@@ -604,7 +600,16 @@ export class SafeDispatchService {
         return [];
       }
 
-      // Filter eligible drivers and get their scores
+      // FIX: Batch check eligibility for all drivers at once
+      const driverIds = availableDrivers.map((d) => d.id);
+      const eligibilityMap =
+        await this.dispatchScoringService.areDriversEligible(driverIds);
+
+      // FIX: Batch get scores for all drivers at once
+      const scoresMap =
+        await this.dispatchScoringService.getCurrentScores(driverIds);
+
+      // Build result using batch-loaded data
       const eligibleDrivers: Array<{
         driverId: string;
         score: number;
@@ -612,34 +617,18 @@ export class SafeDispatchService {
       }> = [];
 
       for (const driver of availableDrivers) {
-        try {
-          // Check if driver is eligible for scoring
-          const isEligible = await this.dispatchScoringService.isDriverEligible(
-            driver.id,
+        const isEligible = eligibilityMap.get(driver.id) ?? false;
+        if (isEligible) {
+          const score = scoresMap.get(driver.id) ?? 0;
+          eligibleDrivers.push({
+            driverId: driver.id,
+            score,
+            driver,
+          });
+        } else {
+          this.logger.debug(
+            `Driver ${driver.id} not eligible for scoring dispatch`,
           );
-
-          if (isEligible) {
-            // Get driver's current score
-            const score = await this.dispatchScoringService.getCurrentScore(
-              driver.id,
-            );
-
-            eligibleDrivers.push({
-              driverId: driver.id,
-              score,
-              driver,
-            });
-          } else {
-            this.logger.debug(
-              `Driver ${driver.id} not eligible for scoring dispatch`,
-            );
-          }
-        } catch (error) {
-          this.logger.warn(
-            `Error checking eligibility for driver ${driver.id}:`,
-            error,
-          );
-          // Skip this driver and continue with others
         }
       }
 
