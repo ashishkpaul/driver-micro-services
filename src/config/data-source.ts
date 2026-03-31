@@ -28,7 +28,7 @@ const root = process.cwd();
 const options: DataSourceOptions = {
   type: "postgres",
 
-  host: process.env.DB_HOST || "localhost",
+  host: process.env.DB_HOST || "postgres",
   port: parseInt(process.env.DB_PORT || "5432", 10),
 
   // Primary: DB_USER (matches .env and docker-compose convention)

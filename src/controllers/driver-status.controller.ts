@@ -10,6 +10,7 @@ import {
   Req,
   ParseUUIDPipe,
   BadRequestException,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
@@ -24,7 +25,7 @@ import { DriverAdminApplicationService } from "../application/driver-admin.appli
 import { AuthenticatedUser } from "../auth/auth.types";
 import { DriverRegistrationService } from "../drivers/driver-registration.service";
 
-@Controller("admin/drivers")
+@Controller({ path: "admin/drivers", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class DriverStatusController {
   constructor(

@@ -7,10 +7,11 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { OutboxArchiveService } from "../domain-events/outbox-archive.service";
 
-@Controller("admin/archive")
+@Controller({ path: "admin/archive", version: VERSION_NEUTRAL })
 export class AdminArchiveController {
   constructor(private archiveService: OutboxArchiveService) {}
 

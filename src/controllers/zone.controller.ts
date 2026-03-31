@@ -13,6 +13,7 @@ import {
   ParseUUIDPipe,
   NotFoundException,
   BadRequestException,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
@@ -24,7 +25,7 @@ import { Repository } from "typeorm";
 import { Zone } from "../entities/zone.entity";
 import { City } from "../entities/city.entity";
 
-@Controller("admin/zones")
+@Controller({ path: "admin/zones", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class ZoneController {
   constructor(

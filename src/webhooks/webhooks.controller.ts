@@ -6,11 +6,12 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { WebhooksService } from "./webhooks.service";
 import { ConfigService } from "@nestjs/config";
 
-@Controller("webhooks")
+@Controller({ path: "webhooks", version: VERSION_NEUTRAL })
 export class WebhooksController {
   constructor(
     private readonly webhooksService: WebhooksService,

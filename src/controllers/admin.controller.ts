@@ -12,6 +12,7 @@ import {
   Req,
   ParseUUIDPipe,
   BadRequestException,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { AdminService } from "../services/admin.service";
 import { PasswordService } from "../services/password.service";
@@ -29,7 +30,7 @@ import { Permission } from "../auth/permissions";
 import { AdminRole } from "../entities/admin-user.entity";
 import { DriverAdminApplicationService } from "../application/driver-admin.application";
 
-@Controller("admin/users")
+@Controller({ path: "admin/users", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class AdminController {
   constructor(

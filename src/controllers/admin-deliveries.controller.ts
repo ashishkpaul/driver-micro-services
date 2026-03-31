@@ -7,6 +7,7 @@ import {
   Req,
   ParseUUIDPipe,
   Param,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
@@ -17,7 +18,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from "typeorm";
 import { Delivery } from "../deliveries/entities/delivery.entity";
 
-@Controller("admin/deliveries")
+@Controller({ path: "admin/deliveries", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class AdminDeliveriesController {
   constructor(

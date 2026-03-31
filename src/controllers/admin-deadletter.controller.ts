@@ -8,10 +8,11 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { DeadLetterService } from "../domain-events/dead-letter.service";
 
-@Controller("admin/deadletter")
+@Controller({ path: "admin/deadletter", version: VERSION_NEUTRAL })
 export class AdminDeadLetterController {
   constructor(private deadLetterService: DeadLetterService) {}
 

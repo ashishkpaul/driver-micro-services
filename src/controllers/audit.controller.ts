@@ -8,6 +8,7 @@ import {
   Param,
   ParseUUIDPipe,
   BadRequestException,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { AuditService } from "../services/audit.service";
 import { AuthGuard } from "@nestjs/passport";
@@ -16,7 +17,7 @@ import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
 import { AuthenticatedUser } from "../auth/auth.types";
 
-@Controller("admin/audit-logs")
+@Controller({ path: "admin/audit-logs", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}

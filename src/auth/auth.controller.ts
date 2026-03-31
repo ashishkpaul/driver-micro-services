@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   BadRequestException,
   UseGuards,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -30,7 +31,7 @@ import { AuthGuard } from "@nestjs/passport";
 
 @ApiTags("Auth")
 @ApiExtraModels(ApiResponseDto, LoginResponseDto)
-@Controller("auth")
+@Controller({ path: "auth", version: VERSION_NEUTRAL })
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Get, Param, Patch } from "@nestjs/common";
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Param,
+  Patch,
+  Version,
+} from "@nestjs/common";
 import { OffersService } from "./offers.service";
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { AcceptOfferDto } from "./dto/accept-offer.dto";
@@ -8,6 +16,7 @@ import { RejectOfferDto } from "./dto/reject-offer.dto";
 export class V2OffersController {
   constructor(private readonly offersService: OffersService) {}
 
+  @Version("2")
   @Post("deliveries/:deliveryId/offers")
   async createOffer(
     @Param("deliveryId") deliveryId: string,
@@ -20,6 +29,7 @@ export class V2OffersController {
     });
   }
 
+  @Version("2")
   @Post("drivers/:driverId/offers/:offerId/accept")
   async acceptOffer(
     @Param("driverId") driverId: string,
@@ -34,6 +44,7 @@ export class V2OffersController {
     });
   }
 
+  @Version("2")
   @Patch("drivers/:driverId/offers/:offerId/reject")
   async rejectOffer(
     @Param("driverId") driverId: string,
@@ -48,11 +59,13 @@ export class V2OffersController {
     });
   }
 
+  @Version("2")
   @Get("drivers/:driverId/offers")
   async getDriverOffers(@Param("driverId") driverId: string) {
     return this.offersService.getDriverOffers(driverId);
   }
 
+  @Version("2")
   @Get("deliveries/:deliveryId/offers")
   async getDeliveryOffers(@Param("deliveryId") deliveryId: string) {
     return this.offersService.getDeliveryOffers(deliveryId);

@@ -2,7 +2,7 @@ import "./observability/tracing";
 
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
-import { ValidationPipe } from "@nestjs/common";
+import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import * as compression from "compression";
@@ -86,6 +86,12 @@ async function bootstrap() {
 
   // Enable shutdown hooks for graceful shutdown
   app.enableShutdownHooks();
+
+  // Enable URI-based API versioning
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: "1",
+  });
 
   const configService = app.get(ConfigService);
   const readinessService = app.get(SystemReadinessService);

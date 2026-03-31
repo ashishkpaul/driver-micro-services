@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { Controller, Get, Query, VERSION_NEUTRAL } from "@nestjs/common";
 import { HealthCheck, HealthCheckService } from "@nestjs/terminus";
 import { TypeOrmHealthIndicator } from "./typeorm.health";
 import { RedisHealthIndicator } from "./redis.health";
@@ -6,7 +6,7 @@ import { OutboxHealthIndicator } from "./outbox.health";
 import { HealthAggregatorService } from "./health-aggregator.service";
 import { HealthDashboardService } from "./health-dashboard.service";
 
-@Controller("health")
+@Controller({ path: "health", version: VERSION_NEUTRAL })
 export class HealthController {
   constructor(
     private health: HealthCheckService,
@@ -38,12 +38,12 @@ export class HealthController {
   @Get("readiness")
   async readiness() {
     const readinessState = this.healthAggregator.getReadinessState();
-    
+
     return {
       ready: readinessState.isReady,
       currentPhase: readinessState.currentPhase,
       completedPhases: Array.from(readinessState.completedPhases),
-      readiness: readinessState.isReady ? 'READY' : 'NOT_READY',
+      readiness: readinessState.isReady ? "READY" : "NOT_READY",
     };
   }
 
@@ -68,7 +68,7 @@ export class HealthController {
    */
   @Get("db-pool")
   async dbPoolStatus(@Query("detailed") detailed?: string) {
-    const includeDetails = detailed === 'true';
+    const includeDetails = detailed === "true";
     return await this.healthAggregator.getDbPoolStatus(includeDetails);
   }
 
@@ -77,7 +77,7 @@ export class HealthController {
    */
   @Get("schema")
   async schemaStatus(@Query("detailed") detailed?: string) {
-    const includeDetails = detailed === 'true';
+    const includeDetails = detailed === "true";
     return await this.healthAggregator.getSchemaStatus(includeDetails);
   }
 
