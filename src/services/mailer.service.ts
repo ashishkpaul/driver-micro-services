@@ -8,36 +8,39 @@ export class MailerService {
   private transporter: nodemailer.Transporter;
 
   constructor(private configService: ConfigService) {
-    console.log("DEBUG MAILER CONSTRUCTOR HIT");
-
     const smtpHost = this.configService.get("SMTP_HOST", "localhost");
-    const smtpPort = this.configService.get("SMTP_PORT", 2525);
+    const smtpPort = Number(this.configService.get("SMTP_PORT", "2525"));
+    const smtpUser = this.configService.get("SMTP_USER", "");
+    const smtpPass = this.configService.get("SMTP_PASS", "");
+    const nodeEnv = this.configService.get("NODE_ENV", "development");
+    const isProduction = nodeEnv === "production";
 
-    console.log("📧 [MailerService] Initializing SMTP transporter");
-    console.log("📧 [MailerService] SMTP_HOST:", smtpHost);
-    console.log("📧 [MailerService] SMTP_PORT:", smtpPort);
+    this.logger.log(
+      `Initializing SMTP transporter: host=${smtpHost} port=${smtpPort} env=${nodeEnv}`,
+    );
 
+    // Production SMTP config with TLS and authentication
+    // Dev defaults to localhost:2525 (smtp4dev) without TLS
     this.transporter = nodemailer.createTransport({
       host: smtpHost,
-      port: Number(smtpPort),
-      secure: false, // smtp4dev doesn't use TLS
-      tls: { rejectUnauthorized: false },
+      port: smtpPort,
+      secure: smtpPort === 465, // true for port 465 (SSL), false for other ports (TLS via STARTTLS)
+      auth:
+        smtpUser && smtpPass ? { user: smtpUser, pass: smtpPass } : undefined,
+      tls: {
+        rejectUnauthorized: isProduction, // true in production, false in dev
+      },
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
   }
 
   async sendOtpEmail(to: string, otp: string): Promise<void> {
     const from = this.configService.get("SMTP_FROM", "system@zapride.local");
-
-    console.log("📧 [MailerService] Attempting to send OTP email");
-    console.log("📧 [MailerService] From:", from);
-    console.log("📧 [MailerService] To:", to);
-    console.log("📧 [MailerService] OTP:", otp);
-
     const htmlTemplate = this.getOtpHtmlTemplate(otp);
 
     try {
-      console.log("📧 [MailerService] Calling transporter.sendMail...");
-
       const result = await this.transporter.sendMail({
         from,
         to,
@@ -46,18 +49,14 @@ export class MailerService {
         text: `Your ZapRide verification code is: ${otp}. It expires in 5 minutes.`,
       });
 
-      console.log("📧 [MailerService] ✅ Email sent successfully!");
-      console.log("📧 [MailerService] Message ID:", result.messageId);
-      console.log("📧 [MailerService] Response:", result.response);
-
-      this.logger.log(`OTP email sent to ${to}`);
+      this.logger.log(
+        `OTP email sent to ${to} (messageId: ${result.messageId})`,
+      );
     } catch (error) {
-      console.error("📧 [MailerService] ❌ Failed to send email!");
-      console.error("📧 [MailerService] Error:", error);
-      console.error("📧 [MailerService] Error message:", error.message);
-      console.error("📧 [MailerService] Error code:", error.code);
-
-      this.logger.error(`Failed to send OTP email to ${to}:`, error.message);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to send OTP email to ${to}: ${errorMessage}`);
+      throw error; // Re-throw so callers can handle email failures
     }
   }
 

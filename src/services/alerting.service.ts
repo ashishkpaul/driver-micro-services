@@ -1,9 +1,9 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 
 @Injectable()
-export class AlertingService {
+export class AlertingService implements OnModuleInit {
   private readonly logger = new Logger(AlertingService.name);
   private readonly opsAlertWebhookUrl: string;
 
@@ -12,6 +12,20 @@ export class AlertingService {
       "OPS_ALERT_WEBHOOK_URL",
       "",
     );
+  }
+
+  onModuleInit(): void {
+    if (!this.opsAlertWebhookUrl) {
+      this.logger.warn(
+        "⚠️  OPS_ALERT_WEBHOOK_URL not configured! " +
+          "DLQ alerts, SLA breach alerts, and system health alerts will NOT be sent. " +
+          "Set this environment variable to a Slack/Discord webhook URL for production.",
+      );
+    } else {
+      this.logger.log(
+        `Alerting service initialized with webhook: ${this.opsAlertWebhookUrl.substring(0, 30)}...`,
+      );
+    }
   }
 
   /**
