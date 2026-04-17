@@ -6,8 +6,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "start": "node dist/driver-backend-nest/src/main.js",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch",
+    "start:dev": "nest start --watch --entryFile driver-backend-nest/src/main",
+    "start:debug": "nest start --debug --watch --entryFile driver-backend-nest/src/main",
     "start:prod": "node dist/driver-backend-nest/src/main.js",
     "build": "nest build",
     "build:prod": "rimraf dist && nest build",
