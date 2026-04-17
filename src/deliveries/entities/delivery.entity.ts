@@ -14,6 +14,7 @@ import {
   IsNumber,
   IsOptional,
   IsEnum,
+  IsString,
 } from "class-validator";
 
 export enum DeliveryStatus {
@@ -38,11 +39,11 @@ export class Delivery {
   id!: string;
 
   @Column({
-    type: "uuid",
+    type: "varchar",
     nullable: false
   })
   @IsNotEmpty()
-  @IsUUID()
+  @IsString()
   sellerOrderId!: string;
 
   @Column({ type: "varchar" })
