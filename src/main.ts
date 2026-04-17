@@ -158,7 +158,7 @@ async function bootstrap() {
   // Swagger contract
   setupSwagger(app);
 
-  const port = configService.get("PORT", 3001);
+  const port = configService.get("PORT", 3002);
   await app.listen(port);
 
   // Complete API phase
