@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "driver-service",
-      script: "dist/main.js",
+      script: "dist/driver-backend-nest/src/main.js",
 
       // 🚀 Cluster mode
       exec_mode: "cluster",
@@ -34,7 +34,7 @@ module.exports = {
     },
     {
       name: "outbox-worker",
-      script: "dist/worker.js",
+      script: "dist/driver-backend-nest/src/worker.js",
       instances: 2, // Fixed number, not "max" for workers
       exec_mode: "cluster",
       env: { NODE_ENV: "production" },
