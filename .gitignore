@@ -31,3 +31,12 @@ logs/
 
 # Mac
 .DS_Store
+
+# Compiled script/test output (tsc emits these alongside .ts sources)
+scripts/**/*.js
+scripts/**/*.d.ts
+scripts/**/*.js.map
+test/**/*.js
+test/**/*.d.ts
+test/**/*.js.map
+tsconfig.tsbuildinfo
