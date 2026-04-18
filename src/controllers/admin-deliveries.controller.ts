@@ -5,6 +5,7 @@ import {
   Query,
   UseGuards,
   Req,
+  Headers,
   ParseUUIDPipe,
   Param,
   VERSION_NEUTRAL,
@@ -15,16 +16,22 @@ import { Permission } from "../auth/permissions";
 import { AdminRole } from "../entities/admin-user.entity";
 import { Request } from "express";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from "typeorm";
+import { ConfigService } from "@nestjs/config";
+import { Repository } from "typeorm";
 import { Delivery } from "../deliveries/entities/delivery.entity";
 
 @Controller({ path: "admin/deliveries", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)
 export class AdminDeliveriesController {
+  private readonly vendureSecret: string;
+
   constructor(
     @InjectRepository(Delivery)
     private readonly deliveryRepository: Repository<Delivery>,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.vendureSecret = this.configService.get('VENDURE_TO_DRIVER_SECRET') ?? '';
+  }
 
   /**
    * GET /admin/deliveries/stats
@@ -35,105 +42,79 @@ export class AdminDeliveriesController {
   @RequirePermissions(Permission.ADMIN_READ_DELIVERY_ANY)
   async getDeliveryStats(
     @Req() request: Request & { user: any },
+    @Headers('x-webhook-secret') webhookSecret?: string,
     @Query("cityId") cityId?: string,
+    @Query("dateFrom") dateFrom?: string,
+    @Query("dateTo") dateTo?: string,
   ) {
-    // SUPER_ADMIN can see all, ADMIN can only see their city
+    // Allow Vendure internal service-to-service calls via shared secret (bypasses JWT)
+    const isInternalCall = webhookSecret && webhookSecret === this.vendureSecret;
+
     let filterCityId = cityId;
-    if (request.user.role !== AdminRole.SUPER_ADMIN && !filterCityId) {
-      filterCityId = request.user.cityId;
+    if (!isInternalCall && request.user?.role !== AdminRole.SUPER_ADMIN && !filterCityId) {
+      filterCityId = request.user?.cityId;
     }
 
-    // Build query conditions
-    const where: any = {};
-    if (filterCityId) {
-      where.cityId = filterCityId;
-    }
+    const qb = this.deliveryRepository.createQueryBuilder("d");
+    if (filterCityId) qb.andWhere("d.cityId = :cityId", { cityId: filterCityId });
+    if (dateFrom) qb.andWhere("d.createdAt >= :dateFrom", { dateFrom: new Date(dateFrom) });
+    if (dateTo) qb.andWhere("d.createdAt <= :dateTo", { dateTo: new Date(dateTo) });
 
-    // Get total deliveries
-    const total = await this.deliveryRepository.count({ where });
+    const [
+      byStatus,
+      onTime,
+      slaBreached,
+      avgTimes,
+    ] = await Promise.all([
+      // Count by status
+      qb.clone()
+        .select("d.status", "status")
+        .addSelect("COUNT(*)", "count")
+        .groupBy("d.status")
+        .getRawMany<{ status: string; count: string }>(),
 
-    // Get deliveries by status
-    const byStatus = await this.deliveryRepository
-      .createQueryBuilder("delivery")
-      .select("delivery.status", "status")
-      .addSelect("COUNT(*)", "count")
-      .where(filterCityId ? "delivery.cityId = :cityId" : "1=1", {
-        cityId: filterCityId,
-      })
-      .groupBy("delivery.status")
-      .getRawMany();
+      // On-time: delivered before or at expectedDeliveryAt (or no SLA set)
+      qb.clone()
+        .andWhere("d.status = 'DELIVERED'")
+        .andWhere("(d.slaBreachAt IS NULL)")
+        .getCount(),
 
-    // Get active deliveries (not completed/failed/cancelled)
-    const activeDeliveries = await this.deliveryRepository.count({
-      where: {
-        ...where,
-        status: "ACTIVE" as any,
-      },
-    });
+      // SLA breached: slaBreachAt was set (includes in-flight breaches + delivered-late)
+      qb.clone()
+        .andWhere("d.slaBreachAt IS NOT NULL")
+        .getCount(),
 
-    // Get today's date range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+      // Average phase durations (seconds) for delivered orders
+      qb.clone()
+        .select("AVG(EXTRACT(EPOCH FROM (d.assignedAt - d.createdAt)))", "avgDispatchToAssignSec")
+        .addSelect("AVG(EXTRACT(EPOCH FROM (d.pickedUpAt - d.assignedAt)))", "avgAssignToPickupSec")
+        .addSelect("AVG(EXTRACT(EPOCH FROM (d.deliveredAt - d.pickedUpAt)))", "avgPickupToDeliverSec")
+        .addSelect("AVG(EXTRACT(EPOCH FROM (d.deliveredAt - d.createdAt)))", "avgTotalSec")
+        .andWhere("d.status = 'DELIVERED'")
+        .getRawOne<Record<string, string>>(),
+    ]);
 
-    // Get completed today
-    const completedToday = await this.deliveryRepository.count({
-      where: {
-        ...where,
-        status: "DELIVERED" as any,
-        updatedAt: Between(today, tomorrow),
-      },
-    });
+    const statusMap = byStatus.reduce((acc, r) => {
+      acc[r.status] = parseInt(r.count, 10);
+      return acc;
+    }, {} as Record<string, number>);
 
-    // Get failed today
-    const failedToday = await this.deliveryRepository.count({
-      where: {
-        ...where,
-        status: "FAILED" as any,
-        updatedAt: Between(today, tomorrow),
-      },
-    });
-
-    // Calculate average delivery time (simplified - using createdAt to updatedAt)
-    const avgDeliveryTime = await this.deliveryRepository
-      .createQueryBuilder("delivery")
-      .select(
-        "AVG(EXTRACT(EPOCH FROM (delivery.updatedAt - delivery.createdAt)) / 60)",
-        "avgMinutes",
-      )
-      .where("delivery.status = :status", { status: "DELIVERED" })
-      .andWhere(filterCityId ? "delivery.cityId = :cityId" : "1=1", {
-        cityId: filterCityId,
-      })
-      .getRawOne();
-
-    // Calculate SLA breach count (deliveries taking more than 60 minutes)
-    const slaBreachCount = await this.deliveryRepository
-      .createQueryBuilder("delivery")
-      .where("delivery.status = :status", { status: "DELIVERED" })
-      .andWhere(
-        "EXTRACT(EPOCH FROM (delivery.updatedAt - delivery.createdAt)) > 3600",
-      )
-      .andWhere(filterCityId ? "delivery.cityId = :cityId" : "1=1", {
-        cityId: filterCityId,
-      })
-      .getCount();
+    const pending = (statusMap['PENDING'] ?? 0) + (statusMap['ASSIGNED'] ?? 0) + (statusMap['PICKED_UP'] ?? 0) + (statusMap['IN_TRANSIT'] ?? 0);
 
     return {
-      total,
-      byStatus: byStatus.reduce(
-        (acc, item) => {
-          acc[item.status] = parseInt(item.count);
-          return acc;
-        },
-        {} as Record<string, number>,
-      ),
-      activeDeliveries,
-      completedToday,
-      failedToday,
-      avgDeliveryTimeMinutes: parseFloat(avgDeliveryTime?.avgMinutes || "0"),
-      slaBreachCount,
+      byStatus: statusMap,
+      pending,
+      onTime,
+      slaBreached,
+      slaBreachRate: onTime + slaBreached > 0
+        ? Math.round((slaBreached / (onTime + slaBreached)) * 100 * 10) / 10
+        : 0,
+      avgDurations: {
+        dispatchToAssignSeconds: parseFloat(avgTimes?.avgDispatchToAssignSec ?? '0') || 0,
+        assignToPickupSeconds: parseFloat(avgTimes?.avgAssignToPickupSec ?? '0') || 0,
+        pickupToDeliverSeconds: parseFloat(avgTimes?.avgPickupToDeliverSec ?? '0') || 0,
+        totalSeconds: parseFloat(avgTimes?.avgTotalSec ?? '0') || 0,
+      },
     };
   }
 
