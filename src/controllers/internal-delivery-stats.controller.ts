@@ -25,7 +25,7 @@ export class InternalDeliveryStatsController {
     if (dateFrom) qb.andWhere('d.createdAt >= :dateFrom', { dateFrom: new Date(dateFrom) });
     if (dateTo)   qb.andWhere('d.createdAt <= :dateTo',   { dateTo: new Date(dateTo) });
 
-    const [byStatus, onTime, slaBreached, avgTimes] = await Promise.all([
+    const [byStatus, onTime, slaBreached, avgTimes, fulfillments] = await Promise.all([
       qb.clone()
         .select('d.status', 'status')
         .addSelect('COUNT(*)', 'count')
@@ -42,12 +42,22 @@ export class InternalDeliveryStatsController {
         .getCount(),
 
       qb.clone()
-        .select("AVG(EXTRACT(EPOCH FROM (d.assignedAt - d.createdAt)))",  'dispatchToAssign')
+        .select("AVG(EXTRACT(EPOCH FROM (d.assignedAt - d.createdAt)))",     'dispatchToAssign')
         .addSelect("AVG(EXTRACT(EPOCH FROM (d.pickedUpAt - d.assignedAt)))", 'assignToPickup')
-        .addSelect("AVG(EXTRACT(EPOCH FROM (d.deliveredAt - d.pickedUpAt)))", 'pickupToDeliver')
-        .addSelect("AVG(EXTRACT(EPOCH FROM (d.deliveredAt - d.createdAt)))",  'total')
+        .addSelect("AVG(EXTRACT(EPOCH FROM (d.deliveredAt - d.pickedUpAt)))",'pickupToDeliver')
+        .addSelect("AVG(EXTRACT(EPOCH FROM (d.deliveredAt - d.createdAt)))", 'total')
         .andWhere("d.status = 'DELIVERED'")
         .getRawOne<Record<string, string>>(),
+
+      // Fulfillment list: all active + recent completed (last 100)
+      qb.clone()
+        .select(['d.id', 'd.sellerOrderId', 'd.status', 'd.driverId',
+                 'd.pickupLat', 'd.pickupLon', 'd.dropLat', 'd.dropLon',
+                 'd.assignedAt', 'd.pickedUpAt', 'd.deliveredAt',
+                 'd.expectedDeliveryAt', 'd.slaBreachAt', 'd.createdAt'])
+        .orderBy('d.createdAt', 'DESC')
+        .take(100)
+        .getMany(),
     ]);
 
     const statusMap = byStatus.reduce((acc, r) => {
@@ -72,6 +82,20 @@ export class InternalDeliveryStatsController {
         pickupToDeliverSeconds:   parseFloat(avgTimes?.pickupToDeliver  ?? '0') || 0,
         totalSeconds:             parseFloat(avgTimes?.total            ?? '0') || 0,
       },
+      fulfillments: fulfillments.map(d => ({
+        id:                 d.id,
+        sellerOrderId:      d.sellerOrderId,
+        status:             d.status,
+        driverId:           d.driverId ?? null,
+        pickup:             { lat: Number(d.pickupLat), lon: Number(d.pickupLon) },
+        drop:               { lat: Number(d.dropLat),  lon: Number(d.dropLon)  },
+        assignedAt:         d.assignedAt   ?? null,
+        pickedUpAt:         d.pickedUpAt   ?? null,
+        deliveredAt:        d.deliveredAt  ?? null,
+        expectedDeliveryAt: d.expectedDeliveryAt ?? null,
+        slaBreached:        d.slaBreachAt != null,
+        createdAt:          d.createdAt,
+      })),
     };
   }
 }
