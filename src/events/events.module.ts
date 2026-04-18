@@ -5,16 +5,17 @@ import { DeliveriesModule } from "../deliveries/deliveries.module";
 import { DriversModule } from "../drivers/drivers.module";
 import { OffersModule } from "../offers/offers.module";
 import { SafeDispatchModule } from "../safe-dispatch/safe-dispatch.module";
+import { InternalDeliveryStatsController } from "../controllers/internal-delivery-stats.controller";
 
 @Module({
   imports: [
-    RedisModule, 
-    DeliveriesModule, 
-    DriversModule, 
-    OffersModule, 
-    SafeDispatchModule
+    RedisModule,
+    DeliveriesModule,
+    DriversModule,
+    OffersModule,
+    SafeDispatchModule,
   ],
-  controllers: [EventsController],
+  controllers: [EventsController, InternalDeliveryStatsController],
   providers: [],
   exports: [],
 })
