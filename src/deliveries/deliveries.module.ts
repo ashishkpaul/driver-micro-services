@@ -34,6 +34,6 @@ import { DeliveryIntelligenceModule } from "../delivery-intelligence/delivery-in
     DeliveryStateMachine,
     SlaMonitorService,
   ],
-  exports: [DeliveriesService, DeliveryAuthorizationService],
+  exports: [DeliveriesService, DeliveryAuthorizationService, TypeOrmModule],
 })
 export class DeliveriesModule {}
