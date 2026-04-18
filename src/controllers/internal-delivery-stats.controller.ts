@@ -20,10 +20,12 @@ export class InternalDeliveryStatsController {
   async getStats(
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
+    @Query('channelId') channelId?: string,
   ) {
     const qb = this.deliveryRepo.createQueryBuilder('d');
-    if (dateFrom) qb.andWhere('d.createdAt >= :dateFrom', { dateFrom: new Date(dateFrom) });
-    if (dateTo)   qb.andWhere('d.createdAt <= :dateTo',   { dateTo: new Date(dateTo) });
+    if (dateFrom)  qb.andWhere('d.createdAt >= :dateFrom', { dateFrom: new Date(dateFrom) });
+    if (dateTo)    qb.andWhere('d.createdAt <= :dateTo',   { dateTo: new Date(dateTo) });
+    if (channelId) qb.andWhere('d.channelId = :channelId', { channelId });
 
     const [byStatus, onTime, slaBreached, avgTimes, fulfillments] = await Promise.all([
       qb.clone()
