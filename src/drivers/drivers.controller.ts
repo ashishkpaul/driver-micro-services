@@ -23,7 +23,7 @@ import { DriverRegistrationService } from "./driver-registration.service";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { UpdateDriverLocationDto } from "./dto/update-driver-location.dto";
 import { UpdateDriverStatusDto } from "./dto/update-driver-status.dto";
-import { RegisterDriverDto } from "../auth/dto/register-driver.dto";
+import { UpdateDriverProfileDto } from "./dto/update-driver-profile.dto";
 import {
   DriverEarningsQueryDto,
   EarningsPeriod,
@@ -106,7 +106,7 @@ export class DriversController {
   @Patch("me/profile")
   @UseGuards(AuthGuard("jwt"))
   async updateMyProfile(
-    @Body() dto: RegisterDriverDto,
+    @Body() dto: UpdateDriverProfileDto,
     @Req() req: Request & { user: any },
   ) {
     return this.driverRegistrationService.completeProfile(req.user.driverId, {
