@@ -1,7 +1,8 @@
 // src/websocket/websocket.module.ts
 
 import { Module, Global, forwardRef } from "@nestjs/common";
-import { JwtModule, JwtService } from "@nestjs/jwt";
+import { JwtModule } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
 
 import { WebSocketGatewayHandler } from "./websocket.gateway";
 import { WebSocketService } from "./websocket.service";
@@ -17,8 +18,11 @@ import { OffersModule } from "../offers/offers.module";
 @Global()
 @Module({
   imports: [
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || "driver-service-secret",
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>("JWT_SECRET") || "driver-service-secret",
+      }),
     }),
     DriversModule,
     forwardRef(() => DeliveriesModule),
@@ -31,7 +35,6 @@ import { OffersModule } from "../offers/offers.module";
     WebSocketJwtGuard,
     WebSocketMetricsService,
     DriverRealtimeService,
-    JwtService,
   ],
   exports: [WebSocketService, WebSocketMetricsService],
 })

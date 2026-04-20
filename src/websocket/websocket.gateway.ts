@@ -48,7 +48,7 @@ export class WebSocketGatewayHandler
 
   // Per-driver connection rate limiting
   private readonly connectionAttempts = new Map<string, number[]>();
-  private readonly MAX_CONNECTIONS_PER_MINUTE = 10;
+  private readonly MAX_CONNECTIONS_PER_MINUTE = 30;
 
   // Duplicate-session tracking
   private readonly driverSessions = new Map<string, Set<string>>();

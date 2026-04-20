@@ -33,8 +33,8 @@ async function bootstrap() {
 
   // Custom format to filter NestJS framework noise
   const filterFrameworkLogs = winston.format((info) => {
-    const message = (info.message as string) || "";
-    const context = (info.context as string) || "";
+    const message = String(info.message ?? "");
+    const context = String(info.context ?? "");
 
     const suppressPatterns = [
       "InstanceLoader",
