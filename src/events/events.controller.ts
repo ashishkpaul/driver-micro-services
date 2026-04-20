@@ -5,6 +5,7 @@ import {
   Headers,
   BadRequestException,
   Logger,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { DeliveriesService } from "../deliveries/deliveries.service"; // ADDED
 import { DriversService } from "../drivers/drivers.service"; // ADDED
@@ -59,7 +60,7 @@ class SellerOrderReadyPayloadDto {
   drop!: DropLocationDto;
 }
 
-@Controller("events")
+@Controller({ path: "events", version: VERSION_NEUTRAL })
 export class EventsController {
   private readonly logger = new Logger(EventsController.name);
   private readonly expectedSecret: string | undefined;

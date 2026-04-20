@@ -10,6 +10,7 @@ import {
   UseGuards,
   Req,
   ForbiddenException,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { DeliveriesService } from "./deliveries.service";
 import { CreateDeliveryDto } from "./dto/create-delivery.dto";
@@ -28,7 +29,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { PolicyGuard } from "../auth/policy.guard";
 import { Request } from "express";
 
-@Controller("deliveries")
+@Controller({ path: "deliveries", version: VERSION_NEUTRAL })
 @ApiTags("Deliveries")
 @ApiExtraModels(ApiResponseDto, Delivery)
 @UseGuards(AuthGuard("jwt"), PolicyGuard)

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, Patch } from "@nestjs/common";
+import { Controller, Post, Body, Get, Param, Patch, VERSION_NEUTRAL } from "@nestjs/common";
 import {
   ApiTags,
   ApiOkResponse,
@@ -14,7 +14,7 @@ import { DriverOffer } from "./entities/driver-offer.entity";
 
 @ApiTags("Offers")
 @ApiExtraModels(ApiResponseDto, DriverOffer)
-@Controller("offers")
+@Controller({ path: "offers", version: VERSION_NEUTRAL })
 export class OffersController {
   constructor(private readonly offersService: OffersService) {}
 

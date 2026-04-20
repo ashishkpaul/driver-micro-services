@@ -6,13 +6,14 @@ import {
   Param,
   Patch,
   Version,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { OffersService } from "./offers.service";
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { AcceptOfferDto } from "./dto/accept-offer.dto";
 import { RejectOfferDto } from "./dto/reject-offer.dto";
 
-@Controller("v2")
+@Controller({ path: "v2", version: VERSION_NEUTRAL })
 export class V2OffersController {
   constructor(private readonly offersService: OffersService) {}
 
