@@ -102,6 +102,21 @@ export class DriversController {
     return this.driversService.findById(req.user.driverId);
   }
 
+  @Patch("me/profile")
+  @UseGuards(AuthGuard("jwt"))
+  async updateMyProfile(
+    @Body() dto: RegisterDriverDto,
+    @Req() req: Request & { user: any },
+  ) {
+    return this.driverRegistrationService.completeProfile(req.user.driverId, {
+      name: dto.name,
+      phone: dto.phone,
+      cityId: dto.cityId,
+      vehicleType: dto.vehicleType,
+      vehicleNumber: dto.vehicleNumber,
+    });
+  }
+
   @Get(":id")
   @UseGuards(AuthGuard("jwt"))
   findOne(@Param("id", ParseUUIDPipe) id: string) {
@@ -155,22 +170,5 @@ export class DriversController {
       req.user.driverId,
       query.period || EarningsPeriod.TODAY,
     );
-  }
-
-  /* -------------------- PROFILE -------------------- */
-
-  @Patch("me/profile")
-  @UseGuards(AuthGuard("jwt"))
-  async updateMyProfile(
-    @Body() dto: RegisterDriverDto,
-    @Req() req: Request & { user: any },
-  ) {
-    return this.driverRegistrationService.completeProfile(req.user.driverId, {
-      name: dto.name,
-      phone: dto.phone,
-      cityId: dto.cityId,
-      vehicleType: dto.vehicleType,
-      vehicleNumber: dto.vehicleNumber,
-    });
   }
 }
