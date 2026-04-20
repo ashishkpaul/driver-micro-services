@@ -266,6 +266,9 @@ export class AuthService {
     // Clean up OTP only after successful verification/creation
     await this.redisService.getClient().del(`auth:otp:${normalizedEmail}`);
 
+    // Clear any existing token revocation so re-login works
+    await this.redisService.getClient().del(`revoked_token:${driver.id}`);
+
     const profileComplete = !!(driver.name && driver.phone && driver.cityId);
 
     if (!driver.isActive) {
