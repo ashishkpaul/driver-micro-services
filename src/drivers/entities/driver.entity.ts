@@ -29,8 +29,8 @@ export class Driver {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
-  @Column({ type: "varchar" })
-  name!: string;
+  @Column({ type: "varchar", nullable: true })
+  name?: string;
 
   @Column({ type: "varchar", unique: true, nullable: true })
   phone?: string;
