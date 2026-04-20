@@ -87,6 +87,16 @@ export class AuthService {
       driver: {
         id: driver.id,
         name: driver.name,
+        email: driver.email,
+        phone: driver.phone,
+        cityId: driver.cityId,
+        zoneId: driver.zoneId,
+        isActive: driver.isActive,
+        status: driver.status,
+        registrationStatus: driver.registrationStatus,
+        vehicleType: driver.vehicleType,
+        vehicleNumber: driver.vehicleNumber,
+        authProvider: driver.authProvider,
       },
     };
   }
