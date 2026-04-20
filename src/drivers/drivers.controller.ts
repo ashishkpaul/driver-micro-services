@@ -18,9 +18,11 @@ import {
 } from "@nestjs/common";
 import { Request } from "express";
 import { DriversService } from "./drivers.service";
+import { DriverRegistrationService } from "./driver-registration.service";
 import { CreateDriverDto } from "./dto/create-driver.dto";
 import { UpdateDriverLocationDto } from "./dto/update-driver-location.dto";
 import { UpdateDriverStatusDto } from "./dto/update-driver-status.dto";
+import { RegisterDriverDto } from "../auth/dto/register-driver.dto";
 import {
   DriverEarningsQueryDto,
   EarningsPeriod,
@@ -31,7 +33,10 @@ import { Permission } from "../auth/permissions";
 
 @Controller("drivers")
 export class DriversController {
-  constructor(private readonly driversService: DriversService) {}
+  constructor(
+    private readonly driversService: DriversService,
+    private readonly driverRegistrationService: DriverRegistrationService,
+  ) {}
 
   /* -------------------- ADMIN -------------------- */
 
@@ -139,11 +144,6 @@ export class DriversController {
     return this.driversService.updateStatus(id, dto.status);
   }
 
-  /**
-   * GET /drivers/me/earnings?period=today|week|month
-   *
-   * Get driver earnings for the specified period
-   */
   @Get("me/earnings")
   @UseGuards(AuthGuard("jwt"))
   @RequirePermissions(Permission.DRIVER_READ_OWN_EARNINGS)
@@ -155,5 +155,22 @@ export class DriversController {
       req.user.driverId,
       query.period || EarningsPeriod.TODAY,
     );
+  }
+
+  /* -------------------- PROFILE -------------------- */
+
+  @Patch("me/profile")
+  @UseGuards(AuthGuard("jwt"))
+  async updateMyProfile(
+    @Body() dto: RegisterDriverDto,
+    @Req() req: Request & { user: any },
+  ) {
+    return this.driverRegistrationService.completeProfile(req.user.driverId, {
+      name: dto.name,
+      phone: dto.phone,
+      cityId: dto.cityId,
+      vehicleType: dto.vehicleType,
+      vehicleNumber: dto.vehicleNumber,
+    });
   }
 }

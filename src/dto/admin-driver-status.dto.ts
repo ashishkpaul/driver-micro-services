@@ -10,6 +10,7 @@ import {
   Max,
 } from "class-validator";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
+import { DriverRegistrationStatus } from "../drivers/enums/driver-registration-status.enum";
 
 export class AdminUpdateDriverStatusDto {
   @IsBoolean()
@@ -44,6 +45,10 @@ export class AdminDriverListQueryDto {
   @IsOptional()
   @IsEnum(DriverStatus)
   status?: DriverStatus;
+
+  @IsOptional()
+  @IsEnum(DriverRegistrationStatus)
+  registrationStatus?: DriverRegistrationStatus;
 
   @IsOptional()
   @IsBoolean()
