@@ -5,12 +5,14 @@ import { Driver } from "../drivers/entities/driver.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { DriverRegistrationStatus } from "../drivers/enums/driver-registration-status.enum";
 import { AuthenticatedUser } from "../auth/auth.types";
+import { RedisService } from "../redis/redis.service";
 
 @Injectable()
 export class DriverAdminApplicationService {
   constructor(
     private readonly driversService: DriversService,
     private readonly auditService: AuditService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -105,6 +107,11 @@ export class DriverAdminApplicationService {
 
     // Disable driver
     const updatedDriver = await this.driversService.setActive(driverId, false);
+
+    // Revoke active JWT so driver is kicked out immediately
+    try {
+      await this.redisService.getClient().set(`revoked_token:${driverId}`, "true", "EX", 86400);
+    } catch { /* non-fatal */ }
 
     // Audit log
     await this.auditService.log({
