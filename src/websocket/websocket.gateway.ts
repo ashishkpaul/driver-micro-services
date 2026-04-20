@@ -209,7 +209,7 @@ export class WebSocketGatewayHandler
     } catch (error) {
       this.logger.error(
         `Failed to set presence TTL for driver ${driverId}:`,
-        error,
+        error instanceof Error ? error.message : String(error),
       );
       // Fallback: mark driver OFFLINE immediately
       await this.driversService.updateStatus(driverId, DriverStatus.OFFLINE);
@@ -237,7 +237,7 @@ export class WebSocketGatewayHandler
       if (keys.length === 0) return;
 
       const connectedDrivers = new Set<string>();
-      for (const socket of this.server.sockets.sockets.values()) {
+      for (const socket of (this.server?.sockets?.sockets?.values() ?? [])) {
         if (socket.data?.driverId) connectedDrivers.add(socket.data.driverId);
       }
 
