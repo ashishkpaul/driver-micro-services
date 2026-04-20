@@ -223,47 +223,39 @@ export class WebSocketGatewayHandler
   @Cron("*/10 * * * * *")
   async processExpiredPresence(): Promise<void> {
     try {
-      // Get all driver presence TTL keys
       const client = this.redisService.getClient();
-      const keys = await client.keys("driver:presence:ttl:*");
 
-      if (keys.length === 0) {
-        return;
-      }
+      // Use SCAN instead of KEYS to avoid blocking Redis
+      const keys: string[] = [];
+      let cursor = "0";
+      do {
+        const [nextCursor, batch] = await client.scan(cursor, "MATCH", "driver:presence:ttl:*", "COUNT", 100);
+        cursor = nextCursor;
+        keys.push(...batch);
+      } while (cursor !== "0");
 
-      // Check which drivers are still connected via WebSocket
+      if (keys.length === 0) return;
+
       const connectedDrivers = new Set<string>();
       for (const socket of this.server.sockets.sockets.values()) {
-        if (socket.data?.driverId) {
-          connectedDrivers.add(socket.data.driverId);
-        }
+        if (socket.data?.driverId) connectedDrivers.add(socket.data.driverId);
       }
 
-      // Mark drivers as OFFLINE if they have expired TTL and are not connected
       for (const key of keys) {
         const driverId = key.replace("driver:presence:ttl:", "");
-
-        // Skip if driver is still connected
         if (connectedDrivers.has(driverId)) {
-          // Remove the TTL key since driver is connected
           await client.del(key);
           continue;
         }
-
-        // Check if TTL has expired (key exists means TTL is active)
         const ttl = await client.ttl(key);
         if (ttl <= 0) {
-          // TTL expired — mark driver OFFLINE
-          await this.driversService.updateStatus(
-            driverId,
-            DriverStatus.OFFLINE,
-          );
+          await this.driversService.updateStatus(driverId, DriverStatus.OFFLINE);
           await client.del(key);
           this.logger.log(`Driver ${driverId} marked OFFLINE (TTL expired)`);
         }
       }
     } catch (error) {
-      this.logger.error("Error processing expired presence:", error);
+      this.logger.error("Error processing expired presence:", error instanceof Error ? error.message : String(error));
     }
   }
 
