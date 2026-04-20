@@ -282,9 +282,10 @@ export class AuthService {
     const profileComplete = !!(driver.name && driver.phone && driver.cityId);
 
     if (!driver.isActive) {
+      const loginResult = await this.login(driver);
       return {
+        ...loginResult,
         status: "PENDING_APPROVAL",
-        driver: { id: driver.id, email: driver.email },
         profileComplete,
         isApproved: false,
       };

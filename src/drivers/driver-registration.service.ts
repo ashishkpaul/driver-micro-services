@@ -13,14 +13,7 @@ import { DriverRegistrationStatus } from "./enums/driver-registration-status.enu
 import { Driver } from "./entities/driver.entity";
 import { OutboxService } from "../domain-events/outbox.service";
 import { AuditService } from "../services/audit.service";
-
-export const DRIVER_REGISTRATION_EVENTS = {
-  DRIVER_REGISTERED: "DRIVER_REGISTERED",
-  DRIVER_PROFILE_COMPLETED: "DRIVER_PROFILE_COMPLETED",
-  DRIVER_APPROVAL_REQUESTED: "DRIVER_APPROVAL_REQUESTED",
-  DRIVER_APPROVED: "DRIVER_APPROVED",
-  DRIVER_REJECTED: "DRIVER_REJECTED",
-};
+import { WS_EVENTS } from "../../../packages/ws-contracts";
 
 @Injectable()
 export class DriverRegistrationService {
@@ -214,7 +207,7 @@ export class DriverRegistrationService {
     try {
       await this.outboxService.publish(
         null,
-        DRIVER_REGISTRATION_EVENTS.DRIVER_REGISTERED as any,
+        WS_EVENTS.DRIVER_REGISTERED as any,
         { driverId: driver.id, email: driver.email },
       );
     } catch (error) {
@@ -226,7 +219,7 @@ export class DriverRegistrationService {
     try {
       await this.outboxService.publish(
         null,
-        DRIVER_REGISTRATION_EVENTS.DRIVER_PROFILE_COMPLETED as any,
+        WS_EVENTS.DRIVER_PROFILE_COMPLETED as any,
         { driverId: driver.id },
       );
     } catch (error) {
@@ -238,7 +231,7 @@ export class DriverRegistrationService {
     try {
       await this.outboxService.publish(
         null,
-        DRIVER_REGISTRATION_EVENTS.DRIVER_APPROVAL_REQUESTED as any,
+        WS_EVENTS.DRIVER_APPROVAL_REQUESTED as any,
         { driverId: driver.id, cityId: driver.cityId },
       );
     } catch (error) {
@@ -253,7 +246,7 @@ export class DriverRegistrationService {
     try {
       await this.outboxService.publish(
         null,
-        DRIVER_REGISTRATION_EVENTS.DRIVER_APPROVED as any,
+        WS_EVENTS.DRIVER_APPROVED as any,
         { driverId: driver.id },
       );
     } catch (error) {
@@ -265,7 +258,7 @@ export class DriverRegistrationService {
     try {
       await this.outboxService.publish(
         null,
-        DRIVER_REGISTRATION_EVENTS.DRIVER_REJECTED as any,
+        WS_EVENTS.DRIVER_REJECTED as any,
         { driverId: driver.id, reason: driver.rejectionReason },
       );
     } catch (error) {
