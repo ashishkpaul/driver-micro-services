@@ -15,6 +15,7 @@ import {
   Req,
   ParseUUIDPipe,
   NotFoundException,
+  VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { Request } from "express";
 import { DriversService } from "./drivers.service";
@@ -31,7 +32,7 @@ import { AuthGuard } from "@nestjs/passport";
 import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
 import { Permission } from "../auth/permissions";
 
-@Controller("drivers")
+@Controller({ path: "drivers", version: VERSION_NEUTRAL })
 export class DriversController {
   constructor(
     private readonly driversService: DriversService,
