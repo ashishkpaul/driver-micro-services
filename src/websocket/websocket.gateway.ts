@@ -166,7 +166,6 @@ export class WebSocketGatewayHandler
 
       // Fire-and-forget metrics to prevent Redis stalls from blocking connections
       this.metrics.onConnect(driverId).catch(() => {});
-      await this.driversService.updateStatus(driverId, DriverStatus.AVAILABLE);
 
       this.logger.log(`Driver ${driverId} connected`);
     } catch (error) {
