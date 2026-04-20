@@ -128,10 +128,7 @@ export class DriversController {
   @UseGuards(AuthGuard("jwt"))
   async getDriverStats(@Param("id", ParseUUIDPipe) id: string) {
     const stats = await this.driversService.getStats(id);
-    if (!stats) {
-      throw new NotFoundException(`Stats for driver ${id} not found`);
-    }
-    return stats;
+    return stats ?? { driverId: id, totalDeliveries: 0, completedDeliveries: 0, cancelledDeliveries: 0, reliabilityScore: 100 };
   }
 
   @Get(":id/score")
