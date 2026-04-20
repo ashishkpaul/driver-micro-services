@@ -14,6 +14,7 @@ import { AuditController } from "../controllers/audit.controller";
 import { DriverStatusController } from "../controllers/driver-status.controller";
 import { AdminDeliveriesController } from "../controllers/admin-deliveries.controller";
 import { ZoneController } from "../controllers/zone.controller";
+import { CityController } from "../controllers/city.controller";
 import { DriverAdminApplicationService } from "../application/driver-admin.application";
 import { AuditLoggingInterceptor } from "../interceptors/audit-logging.interceptor";
 import { APP_INTERCEPTOR } from "@nestjs/core";
@@ -42,6 +43,7 @@ import { Delivery } from "../deliveries/entities/delivery.entity";
     DriverStatusController,
     AdminDeliveriesController,
     ZoneController,
+    CityController,
   ],
   exports: [AdminService, PasswordService, AuditService],
 })

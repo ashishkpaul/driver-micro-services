@@ -56,70 +56,44 @@ async function seed() {
     const cityRepository = dataSource.getRepository(City);
 
     const cities = [
-      {
-        name: "Mumbai",
-        state: "Maharashtra",
-        country: "India",
-        lat: 19.076,
-        lon: 72.8777,
-        isActive: true,
-      },
-      {
-        name: "Delhi",
-        state: "Delhi",
-        country: "India",
-        lat: 28.6139,
-        lon: 77.209,
-        isActive: true,
-      },
-      {
-        name: "Bangalore",
-        state: "Karnataka",
-        country: "India",
-        lat: 12.9716,
-        lon: 77.5946,
-        isActive: true,
-      },
-      {
-        name: "Hyderabad",
-        state: "Telangana",
-        country: "India",
-        lat: 17.385,
-        lon: 78.4867,
-        isActive: true,
-      },
-      {
-        name: "Chennai",
-        state: "Tamil Nadu",
-        country: "India",
-        lat: 13.0827,
-        lon: 80.2707,
-        isActive: true,
-      },
-      {
-        name: "Kolkata",
-        state: "West Bengal",
-        country: "India",
-        lat: 22.5726,
-        lon: 88.3639,
-        isActive: true,
-      },
-      {
-        name: "Pune",
-        state: "Maharashtra",
-        country: "India",
-        lat: 18.5204,
-        lon: 73.8567,
-        isActive: true,
-      },
-      {
-        name: "Ahmedabad",
-        state: "Gujarat",
-        country: "India",
-        lat: 23.0225,
-        lon: 72.5714,
-        isActive: true,
-      },
+      { name: "Mumbai",      code: "MUM", lat: 19.0760, lon: 72.8777 },
+      { name: "Delhi",       code: "DEL", lat: 28.6139, lon: 77.2090 },
+      { name: "Bangalore",   code: "BLR", lat: 12.9716, lon: 77.5946 },
+      { name: "Hyderabad",   code: "HYD", lat: 17.3850, lon: 78.4867 },
+      { name: "Chennai",     code: "CHE", lat: 13.0827, lon: 80.2707 },
+      { name: "Kolkata",     code: "KOL", lat: 22.5726, lon: 88.3639 },
+      { name: "Pune",        code: "PUN", lat: 18.5204, lon: 73.8567 },
+      { name: "Ahmedabad",   code: "AMD", lat: 23.0225, lon: 72.5714 },
+      { name: "Jaipur",      code: "JAI", lat: 26.9124, lon: 75.7873 },
+      { name: "Surat",       code: "SUR", lat: 21.1702, lon: 72.8311 },
+      { name: "Lucknow",     code: "LKO", lat: 26.8467, lon: 80.9462 },
+      { name: "Kanpur",      code: "KNP", lat: 26.4499, lon: 80.3319 },
+      { name: "Nagpur",      code: "NAG", lat: 21.1458, lon: 79.0882 },
+      { name: "Indore",      code: "IDR", lat: 22.7196, lon: 75.8577 },
+      { name: "Bhopal",      code: "BHO", lat: 23.2599, lon: 77.4126 },
+      { name: "Visakhapatnam", code: "VIZ", lat: 17.6868, lon: 83.2185 },
+      { name: "Patna",       code: "PAT", lat: 25.5941, lon: 85.1376 },
+      { name: "Vadodara",    code: "VAD", lat: 22.3072, lon: 73.1812 },
+      { name: "Ghaziabad",   code: "GZB", lat: 28.6692, lon: 77.4538 },
+      { name: "Ludhiana",    code: "LDH", lat: 30.9010, lon: 75.8573 },
+      { name: "Agra",        code: "AGR", lat: 27.1767, lon: 78.0081 },
+      { name: "Nashik",      code: "NSK", lat: 19.9975, lon: 73.7898 },
+      { name: "Faridabad",   code: "FBD", lat: 28.4089, lon: 77.3178 },
+      { name: "Meerut",      code: "MRT", lat: 28.9845, lon: 77.7064 },
+      { name: "Rajkot",      code: "RJT", lat: 22.3039, lon: 70.8022 },
+      { name: "Varanasi",    code: "VNS", lat: 25.3176, lon: 82.9739 },
+      { name: "Amritsar",    code: "ATQ", lat: 31.6340, lon: 74.8723 },
+      { name: "Chandigarh",  code: "IXC", lat: 30.7333, lon: 76.7794 },
+      { name: "Coimbatore",  code: "CBE", lat: 11.0168, lon: 76.9558 },
+      { name: "Kochi",       code: "COK", lat: 9.9312,  lon: 76.2673 },
+      { name: "Guwahati",    code: "GAU", lat: 26.1445, lon: 91.7362 },
+      { name: "Dehradun",    code: "DED", lat: 30.3165, lon: 78.0322 },
+      { name: "Kurukshetra", code: "KUK", lat: 29.9695, lon: 76.8783 },
+      { name: "Ambala",      code: "UMB", lat: 30.3782, lon: 76.7767 },
+      { name: "Panipat",     code: "PNP", lat: 29.3909, lon: 76.9635 },
+      { name: "Karnal",      code: "KNL", lat: 29.6857, lon: 76.9905 },
+      { name: "Rohtak",      code: "ROH", lat: 28.8955, lon: 76.6066 },
+      { name: "Hisar",       code: "HSR", lat: 29.1492, lon: 75.7217 },
     ];
 
     const savedCities: City[] = [];
@@ -129,7 +103,11 @@ async function seed() {
       });
 
       if (!city) {
-        city = cityRepository.create(cityData);
+        city = cityRepository.create({
+          name: cityData.name,
+          code: cityData.code,
+          center: { type: "Point", coordinates: [cityData.lon, cityData.lat] },
+        });
         city = await cityRepository.save(city);
         console.log(`  ✅ Created city: ${city.name}`);
       } else {
