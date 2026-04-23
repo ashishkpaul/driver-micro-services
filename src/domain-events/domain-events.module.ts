@@ -12,6 +12,7 @@ import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
 import { DeliveryCancelledHandler } from "./handlers/delivery-cancelled.handler";
 import { DeliveryStatusForwardingHandler } from "./handlers/delivery-status-forwarding.handler";
 import { DriverLocationUpdatedHandler } from "./handlers/driver-location-updated.handler";
+import { DriverLifecycleHandler } from "./handlers/driver-lifecycle.handler";
 import { DomainEventsStartupService } from "./domain-events.startup.service";
 
 import { WebhooksModule } from "../webhooks/webhooks.module";
@@ -35,6 +36,7 @@ import { DomainEventsCoreModule } from "./domain-events-core.module";
     DeliveryCancelledHandler,
     DeliveryStatusForwardingHandler,
     DriverLocationUpdatedHandler,
+    DriverLifecycleHandler,
   ],
   exports: [DomainEventsCoreModule],
 })

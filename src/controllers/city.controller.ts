@@ -66,7 +66,7 @@ export class CityController {
       code: dto.code.toUpperCase(),
       ...(dto.lat != null &&
         dto.lon != null && {
-          center: { type: "Point", coordinates: [dto.lon, dto.lat] },
+          center: `(${dto.lon},${dto.lat})` as any,
         }),
     });
 

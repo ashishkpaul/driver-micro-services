@@ -106,7 +106,7 @@ async function seed() {
         city = cityRepository.create({
           name: cityData.name,
           code: cityData.code,
-          center: { type: "Point", coordinates: [cityData.lon, cityData.lat] },
+          center: `(${cityData.lon},${cityData.lat})` as any,
         });
         city = await cityRepository.save(city);
         console.log(`  ✅ Created city: ${city.name}`);

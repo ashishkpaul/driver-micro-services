@@ -4,6 +4,7 @@ import { DeliveryAssignedHandler } from "./handlers/delivery-assigned.handler";
 import { DeliveryCancelledHandler } from "./handlers/delivery-cancelled.handler";
 import { DeliveryStatusForwardingHandler } from "./handlers/delivery-status-forwarding.handler"; // NEW
 import { DriverLocationUpdatedHandler } from "./handlers/driver-location-updated.handler";
+import { DriverLifecycleHandler } from "./handlers/driver-lifecycle.handler";
 
 /**
  * src/domain-events/domain-events.startup.service.ts
@@ -29,6 +30,7 @@ export class DomainEventsStartupService implements OnModuleInit {
     private deliveryCancelledHandler: DeliveryCancelledHandler,
     private deliveryStatusForwardingHandler: DeliveryStatusForwardingHandler, // NEW
     private driverLocationUpdatedHandler: DriverLocationUpdatedHandler,
+    private driverLifecycleHandler: DriverLifecycleHandler,
   ) {}
 
   onModuleInit() {
@@ -118,6 +120,20 @@ export class DomainEventsStartupService implements OnModuleInit {
     this.handlerRegistry.register(
       "DRIVER_LOCATION_UPDATED_V1",
       this.driverLocationUpdatedHandler,
+    );
+
+    // ── Driver lifecycle (internal events, no external side-effects) ──────────
+    this.handlerRegistry.register(
+      "DRIVER_REGISTERED_V1",
+      this.driverLifecycleHandler,
+    );
+    this.handlerRegistry.register(
+      "DRIVER_PROFILE_COMPLETED_V1",
+      this.driverLifecycleHandler,
+    );
+    this.handlerRegistry.register(
+      "DRIVER_APPROVAL_REQUESTED_V1",
+      this.driverLifecycleHandler,
     );
 
     this.logger.log("All event handlers registered");
