@@ -56,6 +56,9 @@ export class DeliveryAssignedHandler implements EventHandler {
     try {
       // 1. WebSocket notification (local operation, no concurrency limit needed)
       await this.wsService.emitDeliveryAssigned(driverId, event.payload);
+      this.logger.log(
+        `[PHASE 5] WebSocket DELIVERY_ASSIGNED emitted | driverId=${driverId} | deliveryId=${event.payload?.deliveryId}`,
+      );
 
       // 2. Vendure webhook with concurrency limiting
       if (event.payload?.sellerOrderId && event.payload?.channelId) {
@@ -68,6 +71,9 @@ export class DeliveryAssignedHandler implements EventHandler {
             assignedAt: event.payload.assignedAt || new Date().toISOString(),
           });
         });
+        this.logger.log(
+          `[PHASE 5] Vendure webhook DELIVERY_ASSIGNED sent | sellerOrderId=${event.payload.sellerOrderId} | driverId=${driverId}`,
+        );
       } else {
         this.logger.warn(
           `Event ${event.id} missing sellerOrderId/channelId; skipping Vendure webhook`,

@@ -70,7 +70,7 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
     const { sellerOrderId, channelId, pickupProofUrl, pickedUpAt } = payload;
 
     this.logger.log(
-      `Processing DELIVERY_PICKED_UP_V1 for seller order ${sellerOrderId}`,
+      `[PHASE 7] Processing DELIVERY_PICKED_UP_V1 | sellerOrderId=${sellerOrderId} | pickedUpAt=${pickedUpAt}`,
     );
 
     // Notify Vendure via webhook
@@ -80,6 +80,9 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
       pickupProofUrl,
       pickedUpAt: pickedUpAt || new Date().toISOString(),
     });
+    this.logger.log(
+      `[PHASE 7] Vendure webhook DELIVERY_PICKED_UP sent | sellerOrderId=${sellerOrderId}`,
+    );
   }
 
   private async handleDeliveryDroppedOff(event: OutboxEvent): Promise<void> {
@@ -87,7 +90,7 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
     const { sellerOrderId, channelId, deliveryProofUrl, deliveredAt } = payload;
 
     this.logger.log(
-      `Processing DELIVERY_DROPPED_OFF_V1 for seller order ${sellerOrderId}`,
+      `[PHASE 8] Processing DELIVERY_DROPPED_OFF_V1 | sellerOrderId=${sellerOrderId} | deliveredAt=${deliveredAt}`,
     );
 
     // Notify Vendure via webhook
@@ -97,6 +100,9 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
       deliveryProofUrl,
       deliveredAt: deliveredAt || new Date().toISOString(),
     });
+    this.logger.log(
+      `[PHASE 8] Vendure webhook DELIVERY_DELIVERED sent | sellerOrderId=${sellerOrderId}`,
+    );
   }
 
   private async handleProofAccepted(event: OutboxEvent): Promise<void> {

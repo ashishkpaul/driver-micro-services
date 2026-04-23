@@ -75,7 +75,7 @@ export class WebhooksService {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to send ${eventType} webhook:`, errorMessage);
-      // In production, implement retry logic with exponential backoff
+      throw error;
     }
   }
 
