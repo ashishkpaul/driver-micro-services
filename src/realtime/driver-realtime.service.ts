@@ -43,6 +43,7 @@ export class DriverRealtimeService {
 
   /**
    * Handle driver heartbeat events
+   * Refreshes the driver:online: TTL key so the driver stays visible to dispatch.
    * Delegates to DriverStateService for state synchronization
    */
   async handleHeartbeat(
@@ -50,6 +51,14 @@ export class DriverRealtimeService {
     payload: any,
   ): Promise<{ ok: boolean; state?: any }> {
     try {
+      // Refresh online presence TTL so dispatch can find this driver
+      await this.redis.getClient().set(
+        `driver:online:${driverId}`,
+        '1',
+        'EX',
+        60,
+      );
+
       const state = await this.state.getState(
         driverId,
         this.deliveries,
