@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Logger,
 } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, Not } from "typeorm";
@@ -18,6 +19,8 @@ import { DriverStatsService } from "../delivery-intelligence/driver/driver-stats
 
 @Injectable()
 export class DeliveryStateMachine {
+  private readonly logger = new Logger(DeliveryStateMachine.name);
+
   constructor(
     @InjectDataSource()
     private dataSource: DataSource,
@@ -36,6 +39,9 @@ export class DeliveryStateMachine {
   }
 
   async acceptOffer(offerId: string, driverId: string) {
+    this.logger.log(
+      `[PHASE 5] Driver accepting offer | offerId=${offerId} | driverId=${driverId}`,
+    );
     return this.dataSource.transaction(async (manager) => {
       // 1. Load and lock offer
       const offer = await manager.findOne(DriverOffer, {
@@ -114,6 +120,10 @@ export class DeliveryStateMachine {
         driverId,
         assignmentId: assignment.id,
       });
+
+      this.logger.log(
+        `[PHASE 5] Offer accepted | offerId=${offerId} | driverId=${driverId} | deliveryId=${delivery.id} | assignmentId=${assignment.id} | delivery.status=ASSIGNED | driver.status=BUSY`,
+      );
 
       return {
         success: true,

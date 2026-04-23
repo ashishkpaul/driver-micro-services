@@ -119,7 +119,7 @@ export class EventsController {
       };
     }
 
-    this.logger.log(`Received seller order ready: ${payload.sellerOrderId}`);
+    this.logger.log(`[PHASE 4] Received seller-order-ready | sellerOrderId=${payload.sellerOrderId} | pickup=(${payload.pickup.lat},${payload.pickup.lon}) | drop=(${payload.drop.lat},${payload.drop.lon})`);
 
     try {
       // 1. Create the delivery record (V2: PENDING status)
@@ -131,6 +131,7 @@ export class EventsController {
         dropLat: payload.drop.lat,
         dropLon: payload.drop.lon,
       });
+      this.logger.log(`[PHASE 4] Delivery record created | deliveryId=${delivery.id} | sellerOrderId=${payload.sellerOrderId} | status=PENDING`);
 
       // 2. Use SafeDispatchService for intelligent dispatch
       const dispatchResult = await this.safeDispatchService.executeSafeDispatch(
@@ -154,7 +155,7 @@ export class EventsController {
 
           if (!nearestDriver) {
             this.logger.warn(
-              `No available drivers for order ${payload.sellerOrderId}`,
+              `[PHASE 4] No available drivers for order ${payload.sellerOrderId}`,
             );
             return {
               status: "queued",
@@ -163,12 +164,19 @@ export class EventsController {
             };
           }
 
+          this.logger.log(
+            `[PHASE 4] Nearest driver found | driverId=${nearestDriver.id} | sellerOrderId=${payload.sellerOrderId}`,
+          );
+
           // Create offer — This triggers OFFER_CREATED_V2 via WebSocket
           await this.offersService.createOfferForDriver({
             driverId: nearestDriver.id,
             deliveryId: delivery.id,
             expiresInSeconds: 30,
           });
+          this.logger.log(
+            `[PHASE 4] Offer created for driver | driverId=${nearestDriver.id} | deliveryId=${delivery.id} | expiresInSeconds=30`,
+          );
 
           return {
             status: "success",
@@ -183,7 +191,7 @@ export class EventsController {
         .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
 
       this.logger.log(
-        `Dispatch completed for order ${payload.sellerOrderId}, delivery ID: ${delivery.id}, method: ${dispatchResult.method || 'legacy'}`,
+        `[PHASE 4] Dispatch completed | sellerOrderId=${payload.sellerOrderId} | deliveryId=${delivery.id} | method=${dispatchResult.method || 'legacy'}`,
       );
 
       return {
