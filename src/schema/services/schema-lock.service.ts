@@ -20,7 +20,7 @@ export class SchemaLockService {
    * this pod knows to wait or skip rather than crashing.
    */
   async acquireLock(): Promise<boolean> {
-    this.logger.log(`Attempting to acquire advisory lock (key: ${ADVISORY_LOCK_KEY})...`);
+    this.logger.debug(`Attempting to acquire advisory lock (key: ${ADVISORY_LOCK_KEY})...`);
 
     try {
       const queryRunner = this.dataSource.createQueryRunner();
@@ -36,7 +36,7 @@ export class SchemaLockService {
         const acquired = result[0]?.acquired;
 
         if (acquired) {
-          this.logger.log(`✅ Advisory lock acquired successfully (key: ${ADVISORY_LOCK_KEY})`);
+          this.logger.debug(`✅ Advisory lock acquired successfully (key: ${ADVISORY_LOCK_KEY})`);
           return true;
         } else {
           this.logger.warn(`🔒 Advisory lock already held by another process (key: ${ADVISORY_LOCK_KEY})`);
@@ -55,7 +55,7 @@ export class SchemaLockService {
    * Release advisory lock
    */
   async releaseLock(): Promise<void> {
-    this.logger.log(`Releasing advisory lock (key: ${ADVISORY_LOCK_KEY})...`);
+    this.logger.debug(`Releasing advisory lock (key: ${ADVISORY_LOCK_KEY})...`);
 
     try {
       const queryRunner = this.dataSource.createQueryRunner();
@@ -63,7 +63,7 @@ export class SchemaLockService {
 
       try {
         await queryRunner.query("SELECT pg_advisory_unlock($1)", [ADVISORY_LOCK_KEY]);
-        this.logger.log(`✅ Advisory lock released successfully (key: ${ADVISORY_LOCK_KEY})`);
+        this.logger.debug(`✅ Advisory lock released successfully (key: ${ADVISORY_LOCK_KEY})`);
       } finally {
         await queryRunner.release();
       }

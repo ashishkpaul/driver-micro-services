@@ -29,7 +29,7 @@ export class SchemaOrchestratorService {
 
     await tracer.startActiveSpan("schema.convergence", async (span) => {
       try {
-        this.logger.log("Starting schema convergence...");
+        this.logger.debug("Starting schema convergence...");
 
         // Step 1: Acquire lock to prevent multi-pod race conditions
         const lockStartTime = Date.now();
@@ -66,7 +66,7 @@ export class SchemaOrchestratorService {
 
           // If no differences, we're done
           if (diff.up.length === 0) {
-            this.logger.log(
+            this.logger.debug(
               "✅ No schema differences detected - schema is up to date",
             );
             span.setAttributes({
@@ -148,7 +148,7 @@ export class SchemaOrchestratorService {
             "schema.execution.duration_ms": executionDuration,
           });
 
-          this.logger.log("✅ Schema convergence completed successfully");
+          this.logger.debug("✅ Schema convergence completed successfully");
 
           span.setAttributes({
             "schema.convergence.status": "completed",
@@ -183,7 +183,7 @@ export class SchemaOrchestratorService {
    * Check for drift and perform auto-repair if possible
    */
   private async checkAndRepairDrift(): Promise<void> {
-    this.logger.log("Checking for schema drift...");
+    this.logger.debug("Checking for schema drift...");
 
     try {
       const driftReport = await this.driftEngine.checkFullDrift();
@@ -205,7 +205,7 @@ export class SchemaOrchestratorService {
             "Drift heuristics reported changes, but detailed diff found no actionable differences; suppressing warning",
           );
         }
-        this.logger.log("✅ No actionable drift detected");
+        this.logger.debug("✅ No actionable drift detected");
       }
     } catch (error) {
       this.logger.error("Failed to check drift", error);

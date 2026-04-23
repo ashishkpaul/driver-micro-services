@@ -66,7 +66,7 @@ export class DriftEngine {
    * Check full drift status with detailed explanations
    */
   public async checkFullDrift(): Promise<DriftReport> {
-    console.log("🔍 Checking full drift status...");
+    this.logger.debug("🔍 Checking full drift status...");
 
     const migrationDrift = await this.checkMigrationDrift();
 
@@ -179,13 +179,13 @@ export class DriftEngine {
    */
   public async checkMigrationDrift(): Promise<boolean> {
     this.ensureReady();
-    console.log("  Checking migration drift...");
+    this.logger.debug("  Checking migration drift...");
 
     try {
       const pendingMigrations = await this.dataSource.showMigrations();
       return pendingMigrations;
     } catch (error) {
-      console.warn("  Migration drift check failed:", error);
+      this.logger.debug("  Migration drift check failed:");
       return false;
     }
   }
@@ -213,33 +213,33 @@ export class DriftEngine {
    * Build database schema snapshot
    */
   private async buildDatabaseSnapshot(): Promise<SchemaSnapshot> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
+    const rows: { table_name: string }[] = await this.dataSource.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+    `);
 
-    try {
-      const tables = await queryRunner.getTables();
-
-      return {
-        tables: tables.map((table) => ({
-          name: table.name,
-          columns: table.columns.map((col) => ({
-            name: col.name,
-            type: col.type,
-            nullable: col.isNullable,
-            default: col.default,
-            primaryKey: col.isPrimary,
-            unique: false, // Simplified for compatibility
+    const tables = await Promise.all(
+      rows.map(async r => {
+        const columns: any[] = await this.dataSource.query(`
+          SELECT column_name as name, data_type as type,
+                 is_nullable = 'YES' as nullable, column_default as default,
+                 false as primary_key
+          FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = $1
+        `, [r.table_name]);
+        return {
+          name: r.table_name,
+          columns: columns.map(c => ({
+            name: c.name, type: c.type, nullable: c.nullable,
+            default: c.default, primaryKey: c.primary_key, unique: false,
           })),
           indexes: [],
           constraints: [],
-        })),
-        indexes: [],
-        constraints: [],
-        enums: [],
-      };
-    } finally {
-      await queryRunner.release();
-    }
+        };
+      }),
+    );
+
+    return { tables, indexes: [], constraints: [], enums: [] };
   }
 
   /**
@@ -429,7 +429,7 @@ export class DriftEngine {
     const startTime = Date.now();
 
     try {
-      this.logger.log("🔄 Running background drift analysis...");
+      this.logger.debug("🔄 Running background drift analysis...");
 
       const driftReport = await this.checkFullDrift();
       const durationMs = Date.now() - startTime;
@@ -437,7 +437,7 @@ export class DriftEngine {
       // Cache the result
       await this.driftCacheService.update(driftReport, durationMs);
 
-      this.logger.log(
+      this.logger.debug(
         `✅ Background drift analysis completed (${durationMs}ms)`,
       );
     } catch (error) {

@@ -50,81 +50,54 @@ export class SchemaDiffService {
    * Detect schema differences between entity definitions and database with detailed explanations
    */
   async detectSchemaDiff(): Promise<SchemaDiff> {
-    this.logger.log("Detecting schema differences...");
+    this.logger.debug("Detecting schema differences...");
 
     try {
-      // Use TypeORM's schema synchronization to detect differences
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-
-      try {
-        // Get current database schema - filter to only public schema
-        const currentTables = await queryRunner.getTables();
-        const publicTables = currentTables.filter(t => {
-          // Filter out system schemas
-          return !t.name.startsWith('pg_') && 
-                 !t.name.startsWith('information_') && 
-                 !t.name.startsWith('sql_') &&
-                 t.name !== '_migrations' &&
-                 t.name !== '_migrations_lock';
-        });
-        
-        const currentTableNames = new Set(publicTables.map(t => t.name));
-
-        // Get entity metadata
-        const entityMetadatas = this.dataSource.entityMetadatas;
-        
-        // Normalize entity table names to snake_case for comparison
-        const normalizedEntityTableNames = new Set(
-          entityMetadatas.map(m => this.normalizeTableName(m.tableName))
+      const rows: { table_name: string }[] = await this.dataSource.query(`
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      `);
+      const publicTables = rows
+        .map(r => ({ name: r.table_name }))
+        .filter(t =>
+          !t.name.startsWith('pg_') &&
+          !t.name.startsWith('information_') &&
+          !t.name.startsWith('sql_') &&
+          t.name !== '_migrations' &&
+          t.name !== '_migrations_lock',
         );
 
-        // Find new tables (in entities but not in database)
-        const newTables = entityMetadatas.filter(m => {
-          const normalizedTableName = this.normalizeTableName(m.tableName);
-          return !currentTableNames.has(normalizedTableName);
-        });
-        
-        // Find dropped tables (in database but not in entities)
-        const droppedTables = publicTables.filter(t => {
-          const normalizedTableName = this.normalizeTableName(t.name);
-          return !normalizedEntityTableNames.has(normalizedTableName);
-        });
+      const currentTableNames = new Set(publicTables.map(t => t.name));
+      const entityMetadatas = this.dataSource.entityMetadatas;
+      const normalizedEntityTableNames = new Set(
+        entityMetadatas.map(m => this.normalizeTableName(m.tableName)),
+      );
 
-        // For now, we'll return a basic structure
-        // In a real implementation, this would use TypeORM's schema builder
-        // to generate the actual SQL differences
-        const up: string[] = [];
-        const down: string[] = [];
+      const newTables = entityMetadatas.filter(
+        m => !currentTableNames.has(this.normalizeTableName(m.tableName)),
+      );
+      const droppedTables = publicTables.filter(
+        t => !normalizedEntityTableNames.has(this.normalizeTableName(t.name)),
+      );
 
-        // Add new tables
-        newTables.forEach(metadata => {
-          up.push(`-- CREATE TABLE ${metadata.tableName}`);
-          down.push(`-- DROP TABLE ${metadata.tableName}`);
-        });
+      const up: string[] = [];
+      const down: string[] = [];
+      newTables.forEach(m => { up.push(`-- CREATE TABLE ${m.tableName}`); down.push(`-- DROP TABLE ${m.tableName}`); });
+      droppedTables.forEach(t => { up.push(`-- DROP TABLE ${t.name}`); down.push(`-- CREATE TABLE ${t.name}`); });
 
-        // Add dropped tables
-        droppedTables.forEach(table => {
-          up.push(`-- DROP TABLE ${table.name}`);
-          down.push(`-- CREATE TABLE ${table.name}`);
-        });
+      const diff: SchemaDiff = {
+        up,
+        down,
+        newTables: newTables.map(m => m.tableName),
+        droppedTables: droppedTables.map(t => t.name),
+        alteredTables: [],
+      };
 
-        const diff: SchemaDiff = {
-          up,
-          down,
-          newTables: newTables.map(m => m.tableName),
-          droppedTables: droppedTables.map(t => t.name),
-          alteredTables: [], // Would be populated with actual column/index changes
-        };
+      this.logger.debug(
+        `Schema diff detected: ${newTables.length} new tables, ${droppedTables.length} dropped tables`,
+      );
 
-        this.logger.log(
-          `Schema diff detected: ${newTables.length} new tables, ${droppedTables.length} dropped tables`,
-        );
-
-        return diff;
-      } finally {
-        await queryRunner.release();
-      }
+      return diff;
     } catch (error) {
       this.logger.error("Failed to detect schema differences", error);
       throw error;
@@ -135,42 +108,27 @@ export class SchemaDiffService {
    * Get detailed schema differences with explanations
    */
   async getDetailedSchemaDiff(): Promise<DetailedSchemaDiff> {
-    this.logger.log("Generating detailed schema diff report...");
+    this.logger.debug("Generating detailed schema diff report...");
 
     try {
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
+      const dbSchema = await this.getDatabaseSchemaDetails(null);
+      const entitySchema = await this.getEntitySchemaDetails();
+      const differences = this.compareSchemas(dbSchema, entitySchema);
+      const summary = this.generateSummary(differences);
 
-      try {
-        // Get database schema details
-        const dbSchema = await this.getDatabaseSchemaDetails(queryRunner);
-        
-        // Get entity schema details
-        const entitySchema = await this.getEntitySchemaDetails();
-        
-        // Compare and generate differences
-        const differences = this.compareSchemas(dbSchema, entitySchema);
-        
-        // Generate summary
-        const summary = this.generateSummary(differences);
+      const detailedDiff: DetailedSchemaDiff = {
+        differences,
+        newTables: this.getNewTables(dbSchema, entitySchema),
+        droppedTables: this.getDroppedTables(dbSchema, entitySchema),
+        alteredTables: this.getAlteredTables(differences),
+        summary,
+      };
 
-        const detailedDiff: DetailedSchemaDiff = {
-          differences,
-          newTables: this.getNewTables(dbSchema, entitySchema),
-          droppedTables: this.getDroppedTables(dbSchema, entitySchema),
-          alteredTables: this.getAlteredTables(differences),
-          summary,
-        };
+      this.logger.debug(
+        `Detailed schema diff generated: ${summary.totalDifferences} differences found`,
+      );
 
-        this.logger.log(
-          `Detailed schema diff generated: ${summary.totalDifferences} differences found`
-        );
-
-        return detailedDiff;
-
-      } finally {
-        await queryRunner.release();
-      }
+      return detailedDiff;
     } catch (error) {
       this.logger.error("Failed to generate detailed schema diff", error);
       throw error;
@@ -180,63 +138,58 @@ export class SchemaDiffService {
   /**
    * Get database schema details
    */
-  private async getDatabaseSchemaDetails(queryRunner: any): Promise<any> {
+  private async getDatabaseSchemaDetails(_queryRunner: any): Promise<any> {
     const tables: any = {};
 
-    // Get table information
-    const currentTables = await queryRunner.getTables();
-    const publicTables = currentTables.filter(t => {
-      return !t.name.startsWith('pg_') && 
-             !t.name.startsWith('information_') && 
-             !t.name.startsWith('sql_') &&
-             t.name !== '_migrations' &&
-             t.name !== '_migrations_lock';
-    });
+    const rows: { table_name: string }[] = await this.dataSource.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        AND table_name NOT LIKE 'pg_%'
+        AND table_name NOT LIKE 'information_%'
+        AND table_name NOT LIKE 'sql_%'
+        AND table_name NOT IN ('_migrations', '_migrations_lock')
+    `);
+    const publicTables = rows.map(r => ({ name: r.table_name }));
 
     for (const table of publicTables) {
       const tableName = this.normalizeTableName(table.name);
-      
-      // Get column details
-      const columns = await queryRunner.query(`
-        SELECT 
-          column_name as name,
-          data_type as type,
-          is_nullable = 'YES' as nullable,
-          column_default as default,
-          column_name IN (
-            SELECT column_name 
-            FROM information_schema.key_column_usage 
-            WHERE table_name = $1 AND constraint_name IN (
-              SELECT constraint_name 
-              FROM information_schema.table_constraints 
-              WHERE table_name = $1 AND constraint_type = 'PRIMARY KEY'
-            )
-          ) as primary_key,
-          false as unique
-        FROM information_schema.columns 
-        WHERE table_name = $1
-        AND table_schema = 'public'
-      `, [table.name]);
 
-      // Get index details
-      const indexes = await queryRunner.query(`
-        SELECT 
-          indexname as name,
-          indexdef as definition
-        FROM pg_indexes 
-        WHERE tablename = $1
-      `, [table.name]);
-
-      // Get constraint details
-      const constraints = await queryRunner.query(`
-        SELECT 
-          constraint_name as name,
-          constraint_type as type,
-          pg_get_constraintdef(c.oid) as definition
-        FROM information_schema.table_constraints tc
-        JOIN pg_constraint c ON tc.constraint_name = c.conname
-        WHERE tc.table_name = $1
-      `, [table.name]);
+      // Use dataSource.query() (pool connection) instead of queryRunner.query()
+      // to avoid "client already executing a query" pg@9 deprecation warning.
+      const [columns, indexes, constraints] = await Promise.all([
+        this.dataSource.query(`
+          SELECT
+            column_name as name,
+            data_type as type,
+            is_nullable = 'YES' as nullable,
+            column_default as default,
+            column_name IN (
+              SELECT column_name
+              FROM information_schema.key_column_usage
+              WHERE table_name = $1 AND constraint_name IN (
+                SELECT constraint_name
+                FROM information_schema.table_constraints
+                WHERE table_name = $1 AND constraint_type = 'PRIMARY KEY'
+              )
+            ) as primary_key,
+            false as unique
+          FROM information_schema.columns
+          WHERE table_name = $1 AND table_schema = 'public'
+        `, [table.name]),
+        this.dataSource.query(`
+          SELECT indexname as name, indexdef as definition
+          FROM pg_indexes WHERE tablename = $1
+        `, [table.name]),
+        this.dataSource.query(`
+          SELECT
+            constraint_name as name,
+            constraint_type as type,
+            pg_get_constraintdef(c.oid) as definition
+          FROM information_schema.table_constraints tc
+          JOIN pg_constraint c ON tc.constraint_name = c.conname
+          WHERE tc.table_name = $1
+        `, [table.name]),
+      ]);
 
       tables[tableName] = {
         name: tableName,
@@ -601,7 +554,7 @@ export class SchemaDiffService {
       this.logger.log("===================");
       
       if (detailedDiff.summary.totalDifferences === 0) {
-        this.logger.log("✅ No schema differences detected");
+        this.logger.debug("✅ No schema differences detected");
         return;
       }
 

@@ -21,7 +21,7 @@ export class DriftCacheService {
     this.lastError = undefined;
     this.lastErrorTime = undefined;
 
-    this.logger.log(`Drift cache updated (${durationMs}ms)`);
+    this.logger.debug(`Drift cache updated (${durationMs}ms)`);
   }
 
   /**
