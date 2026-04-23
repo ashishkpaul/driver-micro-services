@@ -29,7 +29,7 @@ export class WebSocketJwtGuard implements CanActivate {
 
       client.data.driverId = payload.driverId;
 
-      this.logger.log(`WS authenticated driver ${payload.driverId}`);
+      this.logger.debug(`WS authenticated driver ${payload.driverId}`);
       return true;
     } catch (err) {
       this.logger.error("WS auth failed", err);

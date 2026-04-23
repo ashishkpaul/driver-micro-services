@@ -16,11 +16,16 @@ export class AlertingService implements OnModuleInit {
 
   onModuleInit(): void {
     if (!this.opsAlertWebhookUrl) {
-      this.logger.warn(
-        "⚠️  OPS_ALERT_WEBHOOK_URL not configured! " +
-          "DLQ alerts, SLA breach alerts, and system health alerts will NOT be sent. " +
-          "Set this environment variable to a Slack/Discord webhook URL for production.",
-      );
+      const isProduction = this.configService.get('NODE_ENV') === 'production';
+      if (isProduction) {
+        this.logger.warn(
+          "⚠️  OPS_ALERT_WEBHOOK_URL not configured! " +
+            "DLQ alerts, SLA breach alerts, and system health alerts will NOT be sent. " +
+            "Set this environment variable to a Slack/Discord webhook URL for production.",
+        );
+      } else {
+        this.logger.debug("OPS_ALERT_WEBHOOK_URL not set (non-production, alerts disabled)");
+      }
     } else {
       this.logger.log(
         `Alerting service initialized with webhook: ${this.opsAlertWebhookUrl.substring(0, 30)}...`,
