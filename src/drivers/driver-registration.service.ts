@@ -11,6 +11,7 @@ import { DriversService } from "./drivers.service";
 import { DriverCapabilityService } from "./driver-capability.service";
 import { DriverRegistrationStatus } from "./enums/driver-registration-status.enum";
 import { Driver } from "./entities/driver.entity";
+import { DriverStats } from "../delivery-intelligence/driver/driver-stats.entity";
 import { OutboxService } from "../domain-events/outbox.service";
 import { AuditService } from "../services/audit.service";
 import { WS_EVENTS } from "../../../packages/ws-contracts";
@@ -22,6 +23,8 @@ export class DriverRegistrationService {
   constructor(
     @InjectRepository(Driver)
     private readonly driverRepository: Repository<Driver>,
+    @InjectRepository(DriverStats)
+    private readonly driverStatsRepository: Repository<DriverStats>,
     private readonly driversService: DriversService,
     @Inject(forwardRef(() => OutboxService))
     private readonly outboxService: OutboxService,
@@ -143,6 +146,15 @@ export class DriverRegistrationService {
     driver.approvedAt = new Date();
     driver.approvedById = adminId;
     await this.driversService.save(driver);
+
+    // Ensure driver_stats row exists so scoring/dispatch works immediately
+    await this.driverStatsRepository
+      .createQueryBuilder()
+      .insert()
+      .into(DriverStats)
+      .values({ driverId: driverId })
+      .orIgnore()
+      .execute();
 
     await this.auditService.log({
       userId: adminId,
