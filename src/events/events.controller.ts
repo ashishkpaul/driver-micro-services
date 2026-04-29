@@ -195,10 +195,10 @@ export class EventsController {
           await this.offersService.createOfferForDriver({
             driverId: nearestDriver.id,
             deliveryId: delivery.id,
-            expiresInSeconds: 30,
+            expiresInSeconds: 90,
           });
           this.logger.log(
-            `[PHASE 4] Offer created for driver | driverId=${nearestDriver.id} | deliveryId=${delivery.id} | expiresInSeconds=30`,
+            `[PHASE 4] Offer created for driver | driverId=${nearestDriver.id} | deliveryId=${delivery.id} | expiresInSeconds=90`,
           );
 
           return {
