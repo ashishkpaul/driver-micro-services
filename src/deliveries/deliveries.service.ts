@@ -126,10 +126,14 @@ export class DeliveriesService {
     return await this.deliveryRepository.save(delivery);
   }
 
-  async findAll(): Promise<Delivery[]> {
+  async findAll(filters: { driverId?: string; take?: number; status?: string } = {}): Promise<Delivery[]> {
+    const where: any = {};
+    if (filters.driverId) where.driverId = filters.driverId;
+    if (filters.status) where.status = filters.status;
     return await this.deliveryRepository.find({
-      relations: ["events"],
+      where,
       order: { createdAt: "DESC" },
+      take: filters.take,
     });
   }
 

@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  Query,
   ParseUUIDPipe,
   UseInterceptors,
   UseGuards,
@@ -55,8 +56,16 @@ export class DeliveriesController {
   }
 
   @Get()
-  findAll() {
-    return this.deliveriesService.findAll();
+  findAll(
+    @Query('driverId') driverId?: string,
+    @Query('take') take?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.deliveriesService.findAll({
+      driverId,
+      take: take ? parseInt(take, 10) : undefined,
+      status,
+    });
   }
 
   @Get("seller-order/:sellerOrderId")
