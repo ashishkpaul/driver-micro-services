@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 import axiosRetry from "axios-retry";
-import crypto from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { WS_EVENTS } from "../../../packages/ws-contracts";
 import {
   DeliveryAssignedDto,
@@ -80,12 +80,12 @@ export class WebhooksService {
   }
 
   async emitDeliveryAssigned(data: DeliveryAssignedDto): Promise<void> {
-    const eventId = crypto.randomUUID();
+    const eventId = randomUUID();
     await this.sendToVendure({ eventId, ...data }, WS_EVENTS.DELIVERY_ASSIGNED);
   }
 
   async emitDeliveryPickedUp(data: DeliveryPickedUpDto): Promise<void> {
-    const eventId = crypto.randomUUID();
+    const eventId = randomUUID();
     await this.sendToVendure(
       { eventId, ...data },
       WS_EVENTS.DELIVERY_PICKUP_CONFIRMED,
@@ -93,7 +93,7 @@ export class WebhooksService {
   }
 
   async emitDeliveryDelivered(data: DeliveryDeliveredDto): Promise<void> {
-    const eventId = crypto.randomUUID();
+    const eventId = randomUUID();
     await this.sendToVendure(
       { eventId, ...data },
       WS_EVENTS.DELIVERY_DROPOFF_CONFIRMED,
@@ -101,7 +101,7 @@ export class WebhooksService {
   }
 
   async emitDeliveryFailed(data: DeliveryFailedDto): Promise<void> {
-    const eventId = crypto.randomUUID();
+    const eventId = randomUUID();
     await this.sendToVendure({ eventId, ...data }, WS_EVENTS.DELIVERY_FAILED);
   }
 
@@ -113,7 +113,7 @@ export class WebhooksService {
     // v1 stub: mobile integration pending - driver app will call cancel endpoint
     await this.sendToVendure(
       {
-        eventId: crypto.randomUUID(),
+        eventId: randomUUID(),
         cancelledAt: new Date().toISOString(),
         ...data,
       },
