@@ -123,16 +123,26 @@ export class EventsController {
     this.logger.log(`[PHASE 4] Received seller-order-ready | sellerOrderId=${payload.sellerOrderId} | pickup=(${payload.pickup.lat},${payload.pickup.lon}) | drop=(${payload.drop.lat},${payload.drop.lon})`);
 
     try {
-      // 1. Create the delivery record (V2: PENDING status)
-      const delivery = await this.deliveriesService.create({
-        sellerOrderId: payload.sellerOrderId,
-        channelId: payload.channelId,
-        pickupLat: payload.pickup.lat,
-        pickupLon: payload.pickup.lon,
-        dropLat: payload.drop.lat,
-        dropLon: payload.drop.lon,
-      });
-      this.logger.log(`[PHASE 4] Delivery record created | deliveryId=${delivery.id} | sellerOrderId=${payload.sellerOrderId} | status=PENDING`);
+      // 1. Find or create delivery record — idempotent on sellerOrderId
+      let delivery = await this.deliveriesService.findBySellerOrderIdOrNull(payload.sellerOrderId);
+      if (delivery) {
+        this.logger.log(`[PHASE 4] Delivery already exists | deliveryId=${delivery.id} | sellerOrderId=${payload.sellerOrderId} | status=${delivery.status}`);
+        // If already assigned/delivered, mark idempotency key and return success
+        if (['ASSIGNED', 'PICKED_UP', 'DELIVERED'].includes(delivery.status)) {
+          await this.redisService.getClient().set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
+          return { status: "success", deliveryId: delivery.id, message: "Already dispatched" };
+        }
+      } else {
+        delivery = await this.deliveriesService.create({
+          sellerOrderId: payload.sellerOrderId,
+          channelId: payload.channelId,
+          pickupLat: payload.pickup.lat,
+          pickupLon: payload.pickup.lon,
+          dropLat: payload.drop.lat,
+          dropLon: payload.drop.lon,
+        });
+        this.logger.log(`[PHASE 4] Delivery record created | deliveryId=${delivery.id} | sellerOrderId=${payload.sellerOrderId} | status=PENDING`);
+      }
 
       // 2. Use SafeDispatchService for intelligent dispatch
       const eligibleDrivers = await this.safeDispatchService.getEligibleDrivers(

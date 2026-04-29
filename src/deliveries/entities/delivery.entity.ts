@@ -40,7 +40,8 @@ export class Delivery {
 
   @Column({
     type: "varchar",
-    nullable: false
+    nullable: false,
+    unique: true,
   })
   @IsNotEmpty()
   @IsString()

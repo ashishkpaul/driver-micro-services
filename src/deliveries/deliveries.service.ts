@@ -150,6 +150,10 @@ export class DeliveriesService {
     return delivery;
   }
 
+  async findBySellerOrderIdOrNull(sellerOrderId: string): Promise<Delivery | null> {
+    return this.deliveryRepository.findOne({ where: { sellerOrderId } });
+  }
+
   async findBySellerOrderId(sellerOrderId: string): Promise<Delivery> {
     const delivery = await this.deliveryRepository.findOne({
       where: { sellerOrderId },
