@@ -53,7 +53,14 @@ export class WebSocketService {
    * Generic method to emit any event to a specific driver
    */
   async emitToDriver(driverId: string, event: WsEvent, data: any) {
-    this.server.to(this.room(driverId)).emit(WS_EVENTS[event], data);
+    const eventName = WS_EVENTS[event];
+    const room = this.room(driverId);
+    const sockets = this.server?.sockets?.adapter?.rooms?.get(room);
+    const socketCount = sockets?.size ?? 0;
+    this.logger.log(
+      `[emitToDriver] driverId=${driverId} | event=${event} → ${eventName} | room=${room} | connectedSockets=${socketCount} | data=${JSON.stringify(data)}`,
+    );
+    this.server.to(room).emit(eventName, data);
     this.metrics.messageSent(driverId).catch(() => {});
   }
 
