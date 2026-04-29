@@ -312,6 +312,12 @@ export class SafeDispatchService {
     } catch (error) {
       this.logger.error(`Dispatch failed for delivery ${deliveryId}:`, error);
 
+      // Re-throw HTTP exceptions (e.g. ServiceUnavailableException) so the
+      // controller can return the correct status code to Vendure
+      if ((error as any)?.status >= 400) {
+        throw error;
+      }
+
       // Update decision status atomically
       await this.updateDispatchDecision(decision.id, {
         dispatchStatus: DispatchStatus.FAILED,

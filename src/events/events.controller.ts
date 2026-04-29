@@ -4,6 +4,7 @@ import {
   Body,
   Headers,
   BadRequestException,
+  ServiceUnavailableException,
   Logger,
   VERSION_NEUTRAL,
 } from "@nestjs/common";
@@ -169,15 +170,11 @@ export class EventsController {
           );
 
           if (!nearestDriver) {
-            // Log Redis state for debugging
             this.logger.warn(
               `[PHASE 4] No available drivers for order ${payload.sellerOrderId} — check: 1) drivers are ONLINE in Redis, 2) drivers have registrationStatus=APPROVED, 3) drivers are within 5km of pickup (${payload.pickup.lat},${payload.pickup.lon})`,
             );
-            return {
-              status: "queued",
-              deliveryId: delivery.id,
-              message: "No drivers available",
-            };
+            // Throw so executeSafeDispatch propagates the error up and we return 503
+            throw new ServiceUnavailableException('No drivers available');
           }
 
           this.logger.log(
@@ -202,13 +199,14 @@ export class EventsController {
         },
       );
 
-      await this.redisService
-        .getClient()
-        .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
-
       this.logger.log(
         `[PHASE 4] Dispatch completed | sellerOrderId=${payload.sellerOrderId} | deliveryId=${delivery.id} | method=${dispatchResult.method || 'legacy'}`,
       );
+
+      // Only mark idempotency key after a driver was successfully dispatched
+      await this.redisService
+        .getClient()
+        .set(eventIdKey, "1", "EX", this.eventIdTtlSeconds);
 
       return {
         status: "success",
@@ -217,6 +215,12 @@ export class EventsController {
         method: dispatchResult.method || "legacy",
       };
     } catch (error: any) {
+      // Re-throw NestJS HTTP exceptions (e.g. 503 No drivers available)
+      // so Vendure receives a non-2xx and BullMQ retries the dispatch job
+      if (error?.status >= 400) {
+        throw error;
+      }
+
       // PostgreSQL unique violation code: 23505
       const isUniqueViolation =
         error?.code === "23505" ||
