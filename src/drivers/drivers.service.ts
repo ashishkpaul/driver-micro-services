@@ -258,6 +258,10 @@ export class DriversService {
           limit,
         );
 
+        this.logger.log(
+          `[findAvailable] Redis geo query | lat=${lat} lon=${lon} radius=${radiusKm || 5}km | redisDrivers=${redisDrivers.length} | ids=${JSON.stringify(redisDrivers.map(d => d.driverId))}`,
+        );
+
         if (!redisDrivers.length) return [];
 
         const ids = redisDrivers.map((d) => d.driverId);
@@ -273,6 +277,10 @@ export class DriversService {
             registrationStatus: "APPROVED",
           })
           .getMany();
+
+        this.logger.log(
+          `[findAvailable] DB filter result | fromRedis=${ids.length} | afterDBFilter=${drivers.length} | approved+active+available=${drivers.map(d => d.id)}`,
+        );
 
         const map = new Map(drivers.map((d) => [d.id, d]));
         return redisDrivers

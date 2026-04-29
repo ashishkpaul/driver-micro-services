@@ -134,6 +134,17 @@ export class EventsController {
       this.logger.log(`[PHASE 4] Delivery record created | deliveryId=${delivery.id} | sellerOrderId=${payload.sellerOrderId} | status=PENDING`);
 
       // 2. Use SafeDispatchService for intelligent dispatch
+      const eligibleDrivers = await this.safeDispatchService.getEligibleDrivers(
+        delivery.id,
+        payload.pickup.lat,
+        payload.pickup.lon,
+        10, // maxDistanceKm
+        20, // limit
+      );
+      this.logger.log(
+        `[PHASE 4] Eligible drivers found | deliveryId=${delivery.id} | count=${eligibleDrivers.length} | drivers=${JSON.stringify(eligibleDrivers.map(d => d.driverId))}`,
+      );
+
       const dispatchResult = await this.safeDispatchService.executeSafeDispatch(
         delivery.id,
         await this.safeDispatchService.getEligibleDrivers(
@@ -153,9 +164,14 @@ export class EventsController {
             payload.pickup.lon,
           );
 
+          this.logger.log(
+            `[PHASE 4] Legacy dispatch | nearestDriver=${nearestDriver?.id ?? 'NONE'} | pickup=(${payload.pickup.lat},${payload.pickup.lon})`,
+          );
+
           if (!nearestDriver) {
+            // Log Redis state for debugging
             this.logger.warn(
-              `[PHASE 4] No available drivers for order ${payload.sellerOrderId}`,
+              `[PHASE 4] No available drivers for order ${payload.sellerOrderId} — check: 1) drivers are ONLINE in Redis, 2) drivers have registrationStatus=APPROVED, 3) drivers are within 5km of pickup (${payload.pickup.lat},${payload.pickup.lon})`,
             );
             return {
               status: "queued",
