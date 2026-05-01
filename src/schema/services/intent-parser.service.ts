@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { SchemaIntent, SchemaIntentParser, IntentValidation } from "../intent/schema-intent";
+import { SchemaIntent, SchemaIntentParser, IntentValidation } from "../engine/intent/schema-intent";
 
 @Injectable()
 export class IntentParserService {

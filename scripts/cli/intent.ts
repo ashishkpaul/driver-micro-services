@@ -4,8 +4,8 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import { IntentParserService } from '../../src/schema/services/intent-parser.service';
-import { IntentTranslator } from '../../src/schema/intent/intent-translator';
-import { SchemaIntent } from '../../src/schema/intent/schema-intent';
+import { IntentTranslator } from '../../src/schema/engine/intent/intent-translator';
+import { SchemaIntent } from '../../src/schema/engine/intent/schema-intent';
 import { DataSource } from 'typeorm';
 
 const program = new Command();

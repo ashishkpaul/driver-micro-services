@@ -5,7 +5,7 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "../app.module";
 import { IntentParserService } from "../schema/services/intent-parser.service";
 import { IntentTranslatorService } from "../schema/services/intent-translator.service";
-import { SchemaIntent } from "../schema/intent/schema-intent";
+import { SchemaIntent } from "../schema/engine/intent/schema-intent";
 import * as fs from "fs";
 import * as path from "path";
 

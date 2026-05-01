@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { IntentTranslator as CoreIntentTranslator } from "../intent/intent-translator";
-import { SchemaIntent, IntentTranslation } from "../intent/schema-intent";
+import { IntentTranslator as CoreIntentTranslator } from "../engine/intent/intent-translator";
+import { SchemaIntent, IntentTranslation } from "../engine/intent/schema-intent";
 
 @Injectable()
 export class IntentTranslatorService {
