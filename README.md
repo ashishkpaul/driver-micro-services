@@ -1,31 +1,34 @@
 # Driver Microservice
 
-NestJS backend for the ZapRide driver platform. Provides REST + WebSocket APIs for driver management, delivery lifecycle, real-time dispatch, and admin operations.
+NestJS backend for the BuyLits last-mile delivery platform. Manages the complete driver lifecycle — registration, dispatch, real-time delivery tracking, and fulfilment callbacks to Vendure.
 
 ## Stack
 
-- **Runtime**: Node.js 18+, NestJS 10
-- **Database**: PostgreSQL + TypeORM (migrations-only, no sync)
-- **Cache / Presence**: Redis (ioredis)
-- **Real-time**: Socket.IO (JWT-authenticated)
-- **Auth**: JWT (driver) + JWT (admin), Google SSO, OTP email
-- **Observability**: OpenTelemetry tracing, Winston logging, health endpoints
-- **Push**: Firebase Cloud Messaging (optional)
+| Layer | Technology |
+|---|---|
+| Runtime | Node.js 18+, NestJS 10 |
+| Database | PostgreSQL 15 + TypeORM (migrations only, no sync) |
+| Cache / Presence | Redis 7 (ioredis) |
+| Real-time | Socket.IO (JWT-authenticated, `/driver` namespace) |
+| Auth | JWT (driver + admin), Google SSO, OTP email |
+| Job Queue | Outbox pattern (PostgreSQL-backed, adaptive batching) |
+| Observability | OpenTelemetry tracing, Winston structured logging |
+| Push | Firebase Cloud Messaging (optional) |
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Install
+# 1. Install dependencies
 npm install
 
-# 2. Configure
+# 2. Configure environment
 cp .env.example .env
-# Edit .env — set DB_*, REDIS_*, JWT_SECRET at minimum
+# Minimum required: DB_*, REDIS_*, JWT_SECRET
 
-# 3. Start infrastructure
-docker compose up -d
+# 3. Start infrastructure (Postgres + Redis)
+docker compose up -d postgres redis
 
 # 4. Run migrations
 npm run db:migrate
@@ -37,224 +40,250 @@ npm run init:superadmin
 npm run start:dev
 ```
 
-Service starts on `PORT` (default `3001`). Swagger UI at `http://localhost:3001/api`.
+Service starts on `PORT` (default **3002**).
+Swagger UI: `http://localhost:3002/api/docs`
 
 ---
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `DB_HOST` | ✅ | Postgres host |
-| `DB_PORT` | ✅ | Postgres port (default `5432`) |
-| `DB_USER` | ✅ | Postgres user |
-| `DB_PASSWORD` | ✅ | Postgres password |
-| `DB_NAME` | ✅ | Database name |
-| `REDIS_HOST` | ✅ | Redis host |
-| `REDIS_PORT` | ✅ | Redis port |
-| `REDIS_PASSWORD` | ✅ | Redis password |
-| `JWT_SECRET` | ✅ | JWT signing secret |
-| `PORT` | — | HTTP port (default `3001`) |
-| `CORS_ORIGINS` | — | Comma-separated allowed origins |
-| `VENDURE_WEBHOOK_URL` | — | Vendure webhook endpoint |
-| `WEBHOOK_SECRET` | — | Shared webhook secret |
-| `SMTP_HOST` | — | SMTP host for OTP emails |
-| `SMTP_PORT` | — | SMTP port |
-| `SMTP_USER` | — | SMTP username |
-| `SMTP_PASS` | — | SMTP password |
-| `SMTP_FROM` | — | From address |
-| `FIREBASE_PROJECT_ID` | — | FCM project ID (push notifications) |
-| `FIREBASE_PRIVATE_KEY` | — | FCM service account key |
-| `FIREBASE_CLIENT_EMAIL` | — | FCM service account email |
-| `OPS_ALERT_WEBHOOK_URL` | — | Slack/Discord webhook for ops alerts |
+### Required
+
+| Variable | Description |
+|---|---|
+| `DB_HOST` | Postgres host |
+| `DB_PORT` | Postgres port (default `5432`) |
+| `DB_USER` | Postgres user |
+| `DB_PASSWORD` | Postgres password |
+| `DB_NAME` | Database name |
+| `REDIS_HOST` | Redis host |
+| `REDIS_PORT` | Redis port |
+| `REDIS_PASSWORD` | Redis password |
+| `JWT_SECRET` | JWT signing secret |
+
+### Integration
+
+| Variable | Description |
+|---|---|
+| `VENDURE_WEBHOOK_URL` | Vendure inbound webhook endpoint |
+| `VENDURE_TO_DRIVER_SECRET` | Shared secret for Vendure → Driver calls |
+| `DRIVER_TO_VENDURE_SECRET` | Shared secret for Driver → Vendure callbacks |
+
+### Optional
+
+| Variable | Description |
+|---|---|
+| `PORT` | HTTP port (default `3002`) |
+| `CORS_ORIGINS` | Comma-separated allowed origins |
+| `SMTP_HOST/PORT/FROM` | SMTP for OTP emails |
+| `FIREBASE_PROJECT_ID/PRIVATE_KEY/CLIENT_EMAIL` | FCM push notifications |
+| `OPS_ALERT_WEBHOOK_URL` | Slack/Discord webhook for DLQ alerts |
+| `DISPATCH_MODE` | `v1` (direct) or `v2` (offers flow) |
 
 ---
 
-## API Routes
+## Delivery Lifecycle
+
+The core flow from order placement to fulfilment:
+
+```
+Vendure (PaymentSettled)
+  └─► POST /events/seller-order-ready          ← Vendure → Driver
+        └─► Create Delivery (PENDING)
+        └─► Find nearest available driver
+        └─► Create Offer → emit OFFER_CREATED_V2 via WebSocket
+              └─► Driver accepts offer
+                    └─► Delivery → ASSIGNED
+                    └─► Outbox: DELIVERY_ASSIGNED_V1
+                          └─► POST /webhooks/driver-events  ← Driver → Vendure
+                                └─► Vendure: DeliveryAssignment ASSIGNED
+
+Driver picks up order
+  └─► WebSocket: proof:uploaded (PICKUP)
+        └─► Delivery → PICKED_UP
+        └─► Outbox: DELIVERY_PICKUP_CONFIRMED_V1 → Vendure webhook
+              └─► Vendure: Order PaymentSettled → Shipped
+
+Driver delivers order
+  └─► WebSocket: proof:uploaded (DROPOFF)
+        └─► Delivery → DELIVERED
+        └─► Outbox: DELIVERY_DROPOFF_CONFIRMED_V1 → Vendure webhook
+              └─► Vendure: Order Shipped → Delivered
+```
+
+### Delivery States
+
+```
+PENDING → ASSIGNED → PICKED_UP → IN_TRANSIT → DELIVERED
+                ↘                           ↗
+                  FAILED ←→ (retry loop)
+                CANCELLED  (terminal)
+```
+
+---
+
+## API Reference
 
 ### Auth (`/auth`)
+
 | Method | Path | Description |
 |---|---|---|
-| POST | `/auth/login` | Driver login (email + password) |
-| POST | `/auth/register` | Driver registration |
+| POST | `/auth/login` | Driver login |
+| POST | `/auth/register` | Driver self-registration |
 | POST | `/auth/otp/request` | Request OTP email |
 | POST | `/auth/otp/verify` | Verify OTP |
-| POST | `/auth/google` | Google SSO login |
+| POST | `/auth/google` | Google SSO |
 | POST | `/auth/admin/login` | Admin login |
 | POST | `/auth/refresh` | Refresh JWT |
 | POST | `/auth/logout` | Logout |
-| GET | `/auth/me` | Current driver profile |
+| GET | `/auth/me` | Current user profile |
 | GET | `/auth/cities` | Available cities |
 
 ### Drivers (`/drivers`)
+
 | Method | Path | Description |
 |---|---|---|
 | GET | `/drivers` | List drivers |
 | GET | `/drivers/me` | Own profile |
-| GET | `/drivers/available` | Available drivers |
 | GET | `/drivers/:id` | Driver by ID |
-| POST | `/drivers` | Create driver |
 | PATCH | `/drivers/me/profile` | Update own profile |
-| PATCH | `/drivers/me/location` | Update location |
-| PATCH | `/drivers/me/status` | Update status (AVAILABLE/BUSY/OFFLINE) |
+| PATCH | `/drivers/:id/location` | Update location |
+| PATCH | `/drivers/:id/status` | Update status (`AVAILABLE`/`BUSY`/`OFFLINE`) |
 | GET | `/drivers/me/earnings` | Earnings summary |
-| GET | `/drivers/me/score` | Dispatch score |
-| GET | `/drivers/stats` | Driver stats |
+| GET | `/drivers/:id/stats` | Driver stats |
 
 ### Deliveries (`/deliveries`)
+
 | Method | Path | Description |
 |---|---|---|
-| GET | `/deliveries` | List deliveries |
-| POST | `/deliveries` | Create delivery |
+| GET | `/deliveries` | List deliveries (filterable) |
 | GET | `/deliveries/:id` | Delivery by ID |
-| PATCH | `/deliveries/:id/status` | Update delivery status |
-| POST | `/deliveries/:id/assign` | Assign driver |
-| GET | `/deliveries/driver/active` | Active delivery for current driver |
-| GET | `/deliveries/driver/history` | Delivery history |
-| GET | `/deliveries/seller/:orderId` | By seller order ID |
-| POST | `/deliveries/:id/otp/generate` | Generate OTP |
-| POST | `/deliveries/:id/otp/verify` | Verify OTP |
+| PATCH | `/deliveries/:id/status` | Update status (idempotent) |
+| GET | `/deliveries/drivers/:id/active` | Active delivery for driver |
+| POST | `/deliveries/:id/otp/generate` | Generate delivery OTP |
+| POST | `/deliveries/:id/otp/verify` | Verify OTP (triggers DELIVERED) |
 
 ### Offers (`/v2/offers`)
+
 | Method | Path | Description |
 |---|---|---|
-| POST | `/v2/offers` | Create offer |
-| POST | `/v2/offers/:id/accept` | Accept offer |
-| POST | `/v2/offers/:id/reject` | Reject offer |
-| GET | `/v2/offers/driver/:driverId` | Driver's offers |
-| GET | `/v2/offers/delivery/:deliveryId` | Delivery's offers |
+| POST | `/v2/drivers/:driverId/offers/:offerId/accept` | Accept offer |
+| POST | `/v2/drivers/:driverId/offers/:offerId/reject` | Reject offer |
+| GET | `/v2/offers/driver/:driverId` | Driver's pending offers |
+| GET | `/v2/offers/delivery/:deliveryId` | Offers for a delivery |
+
+### Events (Vendure → Driver)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/events/seller-order-ready` | Trigger dispatch for a seller order |
+
+### Webhooks (Driver → Vendure)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/webhooks/driver-events` | Receive inbound driver lifecycle events |
+
+Supported inbound events: `DELIVERY_ASSIGNED_V1`, `DELIVERY_PICKUP_CONFIRMED_V1`, `DELIVERY_DROPOFF_CONFIRMED_V1`, `DELIVERY_FAILED_V1`, `DELIVERY_CANCELLED_V1`
 
 ### Admin — Users (`/admin/users`)
+
 | Method | Path | Description |
 |---|---|---|
-| GET | `/admin/users/me` | Current admin profile |
-| GET | `/admin/users/stats` | Admin user stats |
 | GET | `/admin/users` | List admin users |
-| POST | `/admin/users` | Create admin user (SUPER_ADMIN) |
-| GET | `/admin/users/:id` | Admin by ID |
+| POST | `/admin/users` | Create admin (SUPER_ADMIN only) |
 | PATCH | `/admin/users/:id` | Update admin |
-| DELETE | `/admin/users/:id` | Disable admin (SUPER_ADMIN) |
-| POST | `/admin/users/:id/reset-password` | Reset password (SUPER_ADMIN) |
-| PATCH | `/admin/users/me/change-password` | Change own password |
+| DELETE | `/admin/users/:id` | Disable admin (SUPER_ADMIN only) |
+| POST | `/admin/users/:id/reset-password` | Reset password |
 | GET | `/admin/users/pending-drivers` | Pending driver approvals |
-| GET | `/admin/users/driver-stats` | Driver statistics |
 
 ### Admin — Drivers (`/admin/drivers`)
+
 | Method | Path | Description |
 |---|---|---|
-| GET | `/admin/drivers` | List drivers (with filters) |
-| GET | `/admin/drivers/pending` | Pending approval drivers |
-| PATCH | `/admin/drivers/:id/status` | Enable/disable driver |
-| PATCH | `/admin/drivers/:id/enable` | Enable driver |
-| PATCH | `/admin/drivers/:id/disable` | Disable driver |
+| GET | `/admin/drivers` | List drivers with filters |
+| GET | `/admin/drivers/pending` | Pending approvals |
 | PATCH | `/admin/drivers/:id/approve` | Approve registration |
 | PATCH | `/admin/drivers/:id/reject` | Reject registration |
 | PATCH | `/admin/drivers/bulk/status` | Bulk enable/disable |
 
 ### Admin — Deliveries (`/admin/deliveries`)
+
 | Method | Path | Description |
 |---|---|---|
-| GET | `/admin/deliveries` | List all deliveries |
+| GET | `/admin/deliveries` | All deliveries |
 | GET | `/admin/deliveries/stats` | Delivery statistics |
-| GET | `/admin/deliveries/drivers/:id/deliveries` | Deliveries by driver |
 
 ### Admin — Dead Letter Queue (`/admin/dead-letter`)
+
 | Method | Path | Description |
 |---|---|---|
-| GET | `/admin/dead-letter` | Inspect failed events |
-| GET | `/admin/dead-letter/failed` | List failed events |
-| GET | `/admin/dead-letter/failed/:id` | Failed event detail |
-| POST | `/admin/dead-letter/:id/retry` | Retry event |
-| POST | `/admin/dead-letter/retry-all` | Retry all failed |
-| POST | `/admin/dead-letter/cleanup` | Cleanup expired |
-| GET | `/admin/dead-letter/threshold` | Failure threshold check |
+| GET | `/admin/dead-letter/failed` | List failed outbox events |
+| POST | `/admin/dead-letter/:id/retry` | Retry a failed event |
+| POST | `/admin/dead-letter/retry-all` | Retry all failed events |
+| POST | `/admin/dead-letter/cleanup` | Cleanup expired events |
 
 ### Admin — Archive (`/admin/archive`)
+
 | Method | Path | Description |
 |---|---|---|
 | GET | `/admin/archive/stats` | Archive statistics |
-| GET | `/admin/archive/hot-table-stats` | Hot table stats |
-| GET | `/admin/archive/events` | Archived events |
 | POST | `/admin/archive/archive` | Archive old events |
-| POST | `/admin/archive/hard-delete` | Hard delete old archives |
 | POST | `/admin/archive/emergency` | Emergency archive |
 
+### Delivery Metrics (`/delivery-metrics`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/delivery-metrics/summary` | Aggregate metrics |
+| GET | `/delivery-metrics/delivery/:id` | Per-delivery metrics |
+| GET | `/delivery-metrics/driver/:id` | Per-driver metrics |
+
+### Health (`/health`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Basic liveness |
+| GET | `/health/ready` | Readiness probe (DB + Redis) |
+| GET | `/health/status` | Full system status |
+| GET | `/health/outbox` | Outbox queue health |
+| GET | `/health/dashboard` | Health dashboard |
+
 ### Zones (`/zones`)
+
 | Method | Path | Description |
 |---|---|---|
 | GET | `/zones` | List zones |
 | POST | `/zones` | Create zone |
 | PATCH | `/zones/:id` | Update zone |
 | DELETE | `/zones/:id` | Delete zone |
-| GET | `/zones/:id/drivers` | Drivers in zone |
-
-### Health (`/health`)
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Basic health check |
-| GET | `/health/ready` | Readiness probe |
-| GET | `/health/status` | System status |
-| GET | `/health/metrics` | System metrics |
-| GET | `/health/schema` | Schema status |
-| GET | `/health/db-pool` | DB pool status |
-| GET | `/health/features` | Feature flags |
-| GET | `/health/outbox` | Outbox health |
-| GET | `/health/summary` | Health summary |
-| GET | `/health/dashboard` | Health dashboard |
-| GET | `/health/components` | Component health |
-
-### Webhooks (`/webhooks`)
-| Method | Path | Description |
-|---|---|---|
-| POST | `/webhooks/driver-events` | Receive Vendure driver events |
-
-### Events (`/events`)
-| Method | Path | Description |
-|---|---|---|
-| POST | `/events/seller-order-ready` | Seller order ready trigger |
-
-### Delivery Metrics (`/delivery-metrics`)
-| Method | Path | Description |
-|---|---|---|
-| GET | `/delivery-metrics/summary` | Metrics summary |
-| GET | `/delivery-metrics/delivery/:id` | By delivery |
-| GET | `/delivery-metrics/driver/:id` | By driver |
-
-### Audit (`/audit`)
-| Method | Path | Description |
-|---|---|---|
-| GET | `/audit/me` | Own audit logs |
-| GET | `/audit/action/:action` | By action |
-| GET | `/audit/resource/:type/:id` | By resource |
-| GET | `/audit/date-range` | By date range |
-| GET | `/audit/stats` | Audit stats |
-| DELETE | `/audit/cleanup` | Cleanup old logs |
 
 ---
 
-## WebSocket Events
+## WebSocket
 
-Connect to `ws://localhost:PORT` with `Authorization: Bearer <token>`.
+Connect to `ws://localhost:3002/driver` with `Authorization: Bearer <token>`.
 
 ### Client → Server
+
 | Event | Payload | Description |
 |---|---|---|
-| `location:update` | `{ lat, lon, accuracy?, heading? }` | Driver location update |
-| `driver:status` | `{ status }` | Status change |
-| `driver:heartbeat` | `{ timestamp }` | Presence heartbeat |
-| `delivery:status` | `{ deliveryId, status }` | Delivery status update |
-| `proof:uploaded` | `{ deliveryId, type, url }` | Proof of delivery |
-| `ping` | — | Connection keepalive |
-| `sync:state` | — | Request state sync |
+| `LOCATION_UPDATE_V1` | `{ lat, lon, accuracy?, heading? }` | Location update |
+| `DRIVER_STATUS_V1` | `{ status }` | Status change |
+| `DRIVER_HEARTBEAT_V1` | `{ timestamp }` | Presence keepalive |
+| `PROOF_UPLOADED_V1` | `{ deliveryId, proofType, imageUrl }` | Proof of pickup/delivery |
+| `SYNC_STATE_V1` | — | Request full state sync |
+| `PING_V1` | — | Connection ping |
 
 ### Server → Client
+
 | Event | Payload | Description |
 |---|---|---|
-| `delivery:assigned` | Delivery object | New delivery assigned |
-| `delivery:assigned_v1` | Versioned delivery event | Offer notification |
-| `location:ack` | `{ received: true }` | Location acknowledged |
-| `proof:accepted` | `{ deliveryId }` | Proof accepted |
-| `error` | `{ message }` | Error notification |
+| `OFFER_CREATED_V2` | Offer object | New delivery offer |
+| `DELIVERY_ASSIGNED` | Delivery object | Assignment confirmed |
+| `PROOF_ACCEPTED_V1` | `{ deliveryId, proofType }` | Proof accepted |
+| `LOCATION_ACK` | `{ received: true }` | Location acknowledged |
+| `error` | `{ code, message }` | Error notification |
 
 ---
 
@@ -262,60 +291,50 @@ Connect to `ws://localhost:PORT` with `Authorization: Bearer <token>`.
 
 | Role | Access |
 |---|---|
-| `DRIVER` | Own profile, own deliveries, location updates, offers |
-| `ADMIN` | Drivers in their city, deliveries, approvals |
+| `DRIVER` | Own profile, own deliveries, location, offers |
+| `ADMIN` | Drivers and deliveries in their city |
 | `SUPER_ADMIN` | All cities, all admins, system configuration |
+
+---
+
+## Outbox Worker
+
+Domain events (webhooks to Vendure, WebSocket notifications) are processed asynchronously via a PostgreSQL-backed outbox. The worker runs in the same process by default, or as a standalone process for horizontal scaling.
+
+```bash
+# Standalone worker (production)
+node dist/driver-backend-nest/src/worker.js
+```
+
+The outbox provides:
+- At-least-once delivery with exponential backoff (up to 10 retries)
+- Circuit breaker per event type (opens after 5 failures)
+- Idempotency keys to prevent duplicate processing
+- Dead letter queue for events that exhaust retries
+- Automatic archival of completed events
 
 ---
 
 ## Database Migrations
 
 ```bash
-# Create a new migration
-npm run db:new AddDriverRating
-
-# Run pending migrations
-npm run db:migrate
-
-# Rollback last migration
-npm run db:rollback
-
-# Check migration status
-npm run db:status
-
-# Full deploy (validate + simulate + run + verify)
-npm run db:deploy
-
-# Check for schema drift
-npm run db:drift
-
-# Verify schema integrity
-npm run db:verify
+npm run db:new <Name>     # Generate a new migration
+npm run db:migrate        # Run pending migrations
+npm run db:rollback       # Revert last migration
+npm run db:status         # Show migration status
+npm run db:drift          # Check for schema drift
+npm run db:deploy         # Full deploy: validate → simulate → run → verify
 ```
 
 ### Migration Prefix Convention
-- `SAFE_` — additive changes (new tables, columns, indexes)
-- `DATA_` — data backfills
-- `BREAKING_` — destructive changes (DROP, SET NOT NULL)
-- `FIX_` — targeted repairs
-- `BASELINE_` — full schema snapshot (auto-generated)
 
----
-
-## Scripts
-
-```bash
-npm run start:dev          # Development with hot reload
-npm run build              # Compile TypeScript
-npm run start:prod         # Production start
-npm run test               # Unit tests
-npm run test:e2e           # E2E tests (runs migrations first)
-npm run lint               # ESLint
-npm run init:superadmin    # Seed super admin account
-npm run db:seed:dev        # Seed development data
-npm run openapi:generate   # Generate OpenAPI spec
-npm run openapi:check      # Check for API drift
-```
+| Prefix | Meaning |
+|---|---|
+| `SAFE_` | Additive only (new tables, columns, indexes) |
+| `DATA_` | Data backfills |
+| `BREAKING_` | Destructive changes (DROP, SET NOT NULL) |
+| `FIX_` | Targeted repairs |
+| `BASELINE_` | Full schema snapshot |
 
 ---
 
@@ -323,43 +342,46 @@ npm run openapi:check      # Check for API drift
 
 ```
 src/
-├── auth/                  # JWT, Google SSO, OTP, guards, permissions
-├── drivers/               # Driver entity, service, registration, capability
-├── deliveries/            # Delivery lifecycle, state machine, SLA monitor
-├── assignment/            # Driver assignment logic
-├── offers/                # Offer creation and acceptance flow
-├── websocket/             # Socket.IO gateway, presence, metrics
-├── domain-events/         # Outbox pattern, event handlers, dead letter queue
-├── admin/                 # Admin user management
-├── controllers/           # Admin REST controllers (drivers, deliveries, audit)
-├── dispatch-scoring/      # Multi-factor driver scoring for dispatch
+├── auth/                  # JWT, Google SSO, OTP, guards, ABAC permissions
+├── drivers/               # Driver entity, registration, capability, scoring
+├── deliveries/            # Delivery FSM, SLA monitor, OTP verification
+├── offers/                # Offer creation, acceptance, expiry
+├── assignment/            # Driver assignment authorization
+├── websocket/             # Socket.IO gateway, proof handler, presence
+├── domain-events/         # Outbox worker, handlers, circuit breaker, DLQ
+├── dispatch-scoring/      # Multi-factor driver scoring
 ├── safe-dispatch/         # Canary dispatch with scoring rollout
 ├── delivery-intelligence/ # Delivery metrics, driver stats
-├── schema/                # Schema control plane, drift detection, migrations
+├── webhooks/              # Inbound Vendure webhook receiver
+├── events/                # Seller order event controller
+├── admin/                 # Admin user management
+├── controllers/           # Admin REST controllers
 ├── health/                # Health checks and dashboard
-├── observability/         # OpenTelemetry, Winston, performance tracking
-├── push/                  # Firebase push notifications
-├── webhooks/              # Vendure webhook receiver
-├── events/                # Seller order events
+├── schema/                # Schema control plane, drift detection
+├── observability/         # OpenTelemetry, Winston, request context
 ├── redis/                 # Redis service with circuit breaker
-├── bootstrap/             # Startup orchestration, Swagger setup
+├── push/                  # Firebase push notifications
+├── bootstrap/             # Startup orchestration, Swagger
 ├── config/                # TypeORM data source, naming strategies
 ├── migrations/            # TypeORM migration files
-└── worker/                # Standalone outbox worker process
+└── worker/                # Standalone outbox worker entry point
 ```
 
 ---
 
-## Running the Outbox Worker
-
-The outbox worker runs as a separate process to process domain events:
+## Scripts
 
 ```bash
-# Development
-npx ts-node src/worker.ts
-
-# Production
-node dist/driver-backend-nest/src/worker.js
+npm run start:dev          # Dev server with hot reload
+npm run build              # Compile TypeScript
+npm run start:prod         # Production (compiled)
+npm run test               # Unit tests
+npm run test:e2e           # E2E tests (runs migrations first)
+npm run lint               # ESLint
+npm run init:superadmin    # Seed super admin
+npm run db:seed:dev        # Seed dev data
+npm run openapi:generate   # Generate OpenAPI spec
+npm run openapi:check      # Check for API drift
 ```
 
 ---
@@ -368,5 +390,5 @@ node dist/driver-backend-nest/src/worker.js
 
 ```bash
 docker build -t driver-micro-services .
-docker run -p 3001:3001 --env-file .env driver-micro-services
+docker run -p 3002:3002 --env-file .env driver-micro-services
 ```
