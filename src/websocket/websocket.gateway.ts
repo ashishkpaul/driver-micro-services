@@ -16,7 +16,7 @@ import { Cron } from "@nestjs/schedule";
 
 import { WebSocketJwtGuard } from "./websocket.guard";
 import { WebSocketService } from "./websocket.service";
-import { DriverRealtimeService } from "../realtime/driver-realtime.service";
+import { DriverRealtimeService } from "./driver-realtime.service";
 import { DriversService } from "../drivers/drivers.service";
 import { DeliveriesService } from "../deliveries/deliveries.service";
 

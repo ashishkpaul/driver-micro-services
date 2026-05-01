@@ -8,7 +8,7 @@ import { WebSocketGatewayHandler } from "./websocket.gateway";
 import { WebSocketService } from "./websocket.service";
 import { WebSocketJwtGuard } from "./websocket.guard";
 import { WebSocketMetricsService } from "./websocket-metrics.service";
-import { DriverRealtimeService } from "../realtime/driver-realtime.service";
+import { DriverRealtimeService } from "./driver-realtime.service";
 
 import { DriversModule } from "../drivers/drivers.module";
 import { RedisModule } from "../redis/redis.module";
