@@ -17,7 +17,11 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
 
     switch (eventType) {
       case "DELIVERY_ASSIGNED_V1":
-        await this.handleDeliveryAssigned(event);
+        // Handled exclusively by DeliveryAssignedHandler (WebSocket + webhook + push).
+        // DeliveryStatusForwardingHandler must not also send the webhook.
+        this.logger.warn(
+          `DELIVERY_ASSIGNED_V1 routed to DeliveryStatusForwardingHandler for event ${event.id} — this should not happen. Check handler registry registration.`,
+        );
         break;
       case "DELIVERY_PICKED_UP_V1":
         await this.handleDeliveryPickedUp(event);
@@ -106,20 +110,17 @@ export class DeliveryStatusForwardingHandler implements EventHandler {
   }
 
   private async handleProofAccepted(event: OutboxEvent): Promise<void> {
-    const payload = event.payload;
-    const { sellerOrderId, channelId, proofType, deliveryProofUrl } = payload;
+    const { proofType, deliveryId } = event.payload;
 
     this.logger.log(
-      `Processing PROOF_ACCEPTED_V1 for seller order ${sellerOrderId}, proofType: ${proofType}`,
+      `Processing PROOF_ACCEPTED_V1 for deliveryId=${deliveryId}, proofType=${proofType}`,
     );
 
-    // Notify Vendure via webhook - simplified for now
-    await this.webhookService.emitDeliveryDelivered({
-      sellerOrderId,
-      channelId,
-      deliveryProofUrl,
-      deliveredAt: new Date().toISOString(),
-    });
+    // PROOF_ACCEPTED_V1 is a driver-internal event (proof image accepted by the system).
+    // It does NOT carry sellerOrderId so it cannot be forwarded to Vendure directly.
+    // The corresponding Vendure webhook is sent by DELIVERY_PICKUP_CONFIRMED_V1 /
+    // DELIVERY_DROPOFF_CONFIRMED_V1 which do carry sellerOrderId.
+    // Nothing to do here — log and return.
   }
 
   private async handleDeliveryPickupConfirmed(event: OutboxEvent): Promise<void> {

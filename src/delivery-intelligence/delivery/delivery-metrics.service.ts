@@ -14,20 +14,16 @@ export class DeliveryMetricsService {
   ) {}
 
   async ensureMetrics(deliveryId: string, sellerOrderId: string): Promise<DeliveryMetrics> {
-    let metrics = await this.deliveryMetricsRepository.findOne({
-      where: { deliveryId },
-    });
+    // Use upsert to handle concurrent inserts from WebSocket and REST paths
+    await this.deliveryMetricsRepository
+      .createQueryBuilder()
+      .insert()
+      .into(DeliveryMetrics)
+      .values({ deliveryId, sellerOrderId })
+      .orIgnore()
+      .execute();
 
-    if (!metrics) {
-      metrics = this.deliveryMetricsRepository.create({
-        deliveryId,
-        sellerOrderId,
-      });
-      metrics = await this.deliveryMetricsRepository.save(metrics);
-      this.logger.log(`Created new metrics record for delivery ${deliveryId}`);
-    }
-
-    return metrics;
+    return this.deliveryMetricsRepository.findOne({ where: { deliveryId } }) as Promise<DeliveryMetrics>;
   }
 
   async recordAssignment(delivery: Delivery): Promise<void> {

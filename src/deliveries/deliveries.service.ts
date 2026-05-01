@@ -61,7 +61,7 @@ export class DeliveriesService {
       DeliveryStatus.FAILED,
       DeliveryStatus.CANCELLED,
     ],
-    PICKED_UP: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.FAILED],
+    PICKED_UP: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.DELIVERED, DeliveryStatus.FAILED],
     IN_TRANSIT: [DeliveryStatus.DELIVERED, DeliveryStatus.FAILED],
     DELIVERED: [],
     FAILED: [],
@@ -397,7 +397,9 @@ export class DeliveriesService {
           {
             sellerOrderId: delivery.sellerOrderId,
             channelId: delivery.channelId,
-            deliveryProofUrl: proofUrl,
+            // Strip base64 data — Vendure only needs the fact of delivery, not the image bytes.
+            // If proofUrl is a real URL (https://...) include it; otherwise omit.
+            deliveryProofUrl: proofUrl?.startsWith('http') ? proofUrl : `proof://${delivery.id}`,
             deliveredAt: delivery.deliveredAt.toISOString(),
           },
         );
@@ -460,6 +462,11 @@ export class DeliveriesService {
         // Convert string status to enum
         const statusEnum = this.mapStringToDeliveryStatus(updateDto.status);
 
+        // Idempotency: already in the target state — return without error
+        if (delivery.status === statusEnum) {
+          return delivery;
+        }
+
         // Task 1: Enforce Strict Delivery State Transitions
         if (!this.allowedTransitions[delivery.status].includes(statusEnum)) {
           throw new ConflictException(
@@ -514,14 +521,18 @@ export class DeliveriesService {
 
         // 4️⃣ Emit to Vendure via Outbox ONLY if the status is allowed
         if (this.isVendureStatus(updateDto.status)) {
+          // Strip base64 proof data — only pass real URLs to Vendure
+          const safeProofUrl = (url?: string) =>
+            url?.startsWith('http') ? url : url ? `proof://${delivery.id}` : undefined;
+
           await this.outbox.publish(
             manager,
             this.getVendureEventType(updateDto.status),
             {
               sellerOrderId: delivery.sellerOrderId,
               channelId: delivery.channelId,
-              pickupProofUrl: delivery.pickupProofUrl,
-              deliveryProofUrl: delivery.deliveryProofUrl,
+              pickupProofUrl: safeProofUrl(delivery.pickupProofUrl),
+              deliveryProofUrl: safeProofUrl(delivery.deliveryProofUrl),
               pickedUpAt: delivery.pickedUpAt?.toISOString(),
               deliveredAt: delivery.deliveredAt?.toISOString(),
               failure:

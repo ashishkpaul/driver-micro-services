@@ -102,6 +102,9 @@ async function bootstrap() {
   // Security & middleware
   app.use(helmet());
   app.use(compression());
+  // Increase body limit for base64 proof image uploads
+  app.use(require('express').json({ limit: '10mb' }));
+  app.use(require('express').urlencoded({ extended: true, limit: '10mb' }));
 
   const origins = configService
     .get<string>("CORS_ORIGINS", "")
