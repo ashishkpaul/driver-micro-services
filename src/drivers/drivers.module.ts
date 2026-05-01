@@ -11,7 +11,7 @@ import { DriverStateService } from "./driver-state.service";
 import { DriverRegistrationService } from "./driver-registration.service";
 import { DispatchScoringModule } from "../dispatch-scoring/dispatch-scoring.module";
 import { DomainEventsModule } from "../domain-events/domain-events.module";
-import { ServicesModule } from "../services/services.module";
+import { ServicesModule } from "../shared/services.module";
 
 @Module({
   imports: [

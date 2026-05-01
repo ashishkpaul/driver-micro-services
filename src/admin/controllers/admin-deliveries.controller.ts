@@ -11,14 +11,14 @@ import {
   VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
-import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
-import { Permission } from "../auth/permissions";
-import { AdminRole } from "../entities/admin-user.entity";
+import { PolicyGuard, RequirePermissions } from "../../auth/policy.guard";
+import { Permission } from "../../auth/permissions";
+import { AdminRole } from "../../entities/admin-user.entity";
 import { Request } from "express";
 import { InjectRepository } from "@nestjs/typeorm";
 import { ConfigService } from "@nestjs/config";
 import { Repository } from "typeorm";
-import { Delivery } from "../deliveries/entities/delivery.entity";
+import { Delivery } from "../../deliveries/entities/delivery.entity";
 
 @Controller({ path: "admin/deliveries", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)

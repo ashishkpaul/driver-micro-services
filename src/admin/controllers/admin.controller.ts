@@ -14,8 +14,8 @@ import {
   BadRequestException,
   VERSION_NEUTRAL,
 } from "@nestjs/common";
-import { AdminService } from "../services/admin.service";
-import { PasswordService } from "../services/password.service";
+import { AdminService } from "../../shared/admin.service";
+import { PasswordService } from "../../shared/password.service";
 import { AuthGuard } from "@nestjs/passport";
 import {
   CreateAdminDto,
@@ -23,12 +23,12 @@ import {
   AdminListQueryDto,
   AdminDriverListQueryDto,
 } from "../dto/admin.dto";
-import { AuditService } from "../services/audit.service";
+import { AuditService } from "../../shared/audit.service";
 import { Request } from "express";
-import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
-import { Permission } from "../auth/permissions";
-import { AdminRole } from "../entities/admin-user.entity";
-import { DriverAdminApplicationService } from "../application/driver-admin.application";
+import { PolicyGuard, RequirePermissions } from "../../auth/policy.guard";
+import { Permission } from "../../auth/permissions";
+import { AdminRole } from "../../entities/admin-user.entity";
+import { DriverAdminApplicationService } from "../driver-admin.application";
 
 @Controller({ path: "admin/users", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)

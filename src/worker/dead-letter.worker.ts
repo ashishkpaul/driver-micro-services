@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { DeadLetterService } from "../domain-events/dead-letter.service";
-import { AlertingService } from "../services/alerting.service";
+import { AlertingService } from "../shared/alerting.service";
 
 @Injectable()
 export class DeadLetterWorker {

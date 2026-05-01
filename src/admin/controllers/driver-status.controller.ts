@@ -19,11 +19,11 @@ import {
   AdminBulkUpdateDriverStatusDto,
   AdminDriverListQueryDto,
 } from "../dto/admin-driver-status.dto";
-import { RequirePermissions, PolicyGuard } from "../auth/policy.guard";
-import { Permission } from "../auth/permissions";
-import { DriverAdminApplicationService } from "../application/driver-admin.application";
-import { AuthenticatedUser } from "../auth/auth.types";
-import { DriverRegistrationService } from "../drivers/driver-registration.service";
+import { RequirePermissions, PolicyGuard } from "../../auth/policy.guard";
+import { Permission } from "../../auth/permissions";
+import { DriverAdminApplicationService } from "../driver-admin.application";
+import { AuthenticatedUser } from "../../auth/auth.types";
+import { DriverRegistrationService } from "../../drivers/driver-registration.service";
 
 @Controller({ path: "admin/drivers", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)

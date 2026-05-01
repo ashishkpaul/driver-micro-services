@@ -9,7 +9,7 @@ import {
   HttpStatus,
   VERSION_NEUTRAL,
 } from "@nestjs/common";
-import { OutboxArchiveService } from "../domain-events/outbox-archive.service";
+import { OutboxArchiveService } from "../../domain-events/outbox-archive.service";
 
 @Controller({ path: "admin/archive", version: VERSION_NEUTRAL })
 export class AdminArchiveController {

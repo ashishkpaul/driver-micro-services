@@ -4,7 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { In, IsNull, LessThan, Repository } from "typeorm";
 import { Delivery, DeliveryStatus } from "./entities/delivery.entity";
 import { RedisService } from "../redis/redis.service";
-import { AlertingService } from "../services/alerting.service";
+import { AlertingService } from "../shared/alerting.service";
 
 @Injectable()
 export class SlaMonitorService {

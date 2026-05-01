@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { DriversService } from "../drivers/drivers.service";
-import { AuditService, CreateAuditLogDto } from "../services/audit.service";
+import { AuditService, CreateAuditLogDto } from "../shared/audit.service";
 import { Driver } from "../drivers/entities/driver.entity";
 import { DriverStatus } from "../drivers/enums/driver-status.enum";
 import { DriverRegistrationStatus } from "../drivers/enums/driver-registration-status.enum";

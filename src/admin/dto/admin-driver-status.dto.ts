@@ -9,8 +9,8 @@ import {
   Min,
   Max,
 } from "class-validator";
-import { DriverStatus } from "../drivers/enums/driver-status.enum";
-import { DriverRegistrationStatus } from "../drivers/enums/driver-registration-status.enum";
+import { DriverStatus } from "../../drivers/enums/driver-status.enum";
+import { DriverRegistrationStatus } from "../../drivers/enums/driver-registration-status.enum";
 
 export class AdminUpdateDriverStatusDto {
   @IsBoolean()

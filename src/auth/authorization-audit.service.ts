@@ -1,6 +1,6 @@
 // src/auth/authorization-audit.service.ts
 import { Injectable } from "@nestjs/common";
-import { AuditService } from "../services/audit.service";
+import { AuditService } from "../shared/audit.service";
 import { Request } from "express";
 
 interface AuthorizationDecision {

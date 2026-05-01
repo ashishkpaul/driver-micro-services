@@ -16,14 +16,14 @@ import {
   VERSION_NEUTRAL,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
-import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
-import { Permission } from "../auth/permissions";
-import { AdminRole } from "../entities/admin-user.entity";
+import { PolicyGuard, RequirePermissions } from "../../auth/policy.guard";
+import { Permission } from "../../auth/permissions";
+import { AdminRole } from "../../entities/admin-user.entity";
 import { Request } from "express";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Zone } from "../entities/zone.entity";
-import { City } from "../entities/city.entity";
+import { Zone } from "../../entities/zone.entity";
+import { City } from "../../entities/city.entity";
 
 @Controller({ path: "admin/zones", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)

@@ -1,4 +1,4 @@
-// src/services/admin.service.ts
+// src/shared/admin.service.ts
 import {
   Injectable,
   BadRequestException,
@@ -13,7 +13,7 @@ import {
   CreateAdminDto,
   UpdateAdminDto,
   AdminLoginDto,
-} from "../dto/admin.dto";
+} from "../admin/dto/admin.dto";
 import { City } from "../entities/city.entity";
 import { RedisService } from "../redis/redis.service";
 

@@ -13,7 +13,7 @@ import { DriverRegistrationStatus } from "./enums/driver-registration-status.enu
 import { Driver } from "./entities/driver.entity";
 import { DriverStats } from "../delivery-intelligence/driver/driver-stats.entity";
 import { OutboxService } from "../domain-events/outbox.service";
-import { AuditService } from "../services/audit.service";
+import { AuditService } from "../shared/audit.service";
 import { WS_EVENTS } from "../../../packages/ws-contracts";
 
 @Injectable()

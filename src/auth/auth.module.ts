@@ -14,7 +14,7 @@ import { PolicyGuard } from "./policy.guard";
 import { PermissionInjectionMiddleware } from "./permission-injection.middleware";
 import { AuthorizationAuditService } from "./authorization-audit.service";
 import { AuthorizationModule } from "../authorization/authorization.module";
-import { ServicesModule } from "../services/services.module";
+import { ServicesModule } from "../shared/services.module";
 import { City } from "../entities/city.entity";
 
 @Module({

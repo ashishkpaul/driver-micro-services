@@ -8,11 +8,11 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { AuthGuard } from "@nestjs/passport";
-import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
-import { Permission } from "../auth/permissions";
+import { PolicyGuard, RequirePermissions } from "../../auth/policy.guard";
+import { Permission } from "../../auth/permissions";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { City } from "../entities/city.entity";
+import { City } from "../../entities/city.entity";
 import { IsString, IsNotEmpty, IsOptional, IsNumber } from "class-validator";
 
 class CreateCityDto {

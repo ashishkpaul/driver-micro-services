@@ -17,8 +17,8 @@ import {
 } from "@nestjs/swagger";
 import { ThrottlerGuard } from "@nestjs/throttler";
 import { AuthService } from "./auth.service";
-import { AdminLoginDto } from "../dto/admin.dto";
-import { AuditService } from "../services/audit.service";
+import { AdminLoginDto } from "../admin/dto/admin.dto";
+import { AuditService } from "../shared/audit.service";
 import { Request } from "express";
 import { ConfigService } from "@nestjs/config";
 import { ApiResponseDto } from "../common/dto/api-response.dto";

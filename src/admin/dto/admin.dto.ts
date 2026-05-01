@@ -10,8 +10,8 @@ import {
   Min,
   Max,
 } from "class-validator";
-import { Role } from "../auth/roles.enum";
-import { AdminRole } from "../entities/admin-user.entity";
+import { Role } from "../../auth/roles.enum";
+import { AdminRole } from "../../entities/admin-user.entity";
 
 export class CreateAdminDto {
   @IsEmail()

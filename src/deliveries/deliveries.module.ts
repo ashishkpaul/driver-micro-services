@@ -13,7 +13,7 @@ import { DeliveryStateMachine } from "./delivery-state-machine.service";
 import { SlaMonitorService } from "./sla-monitor.service";
 import { RedisModule } from "../redis/redis.module";
 import { DomainEventsModule } from "../domain-events/domain-events.module";
-import { ServicesModule } from "../services/services.module";
+import { ServicesModule } from "../shared/services.module";
 import { DeliveryIntelligenceModule } from "../delivery-intelligence/delivery-intelligence.module";
 
 @Module({

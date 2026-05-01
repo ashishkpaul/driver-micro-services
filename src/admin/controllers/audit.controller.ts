@@ -10,12 +10,12 @@ import {
   BadRequestException,
   VERSION_NEUTRAL,
 } from "@nestjs/common";
-import { AuditService } from "../services/audit.service";
+import { AuditService } from "../../shared/audit.service";
 import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
-import { PolicyGuard, RequirePermissions } from "../auth/policy.guard";
-import { Permission } from "../auth/permissions";
-import { AuthenticatedUser } from "../auth/auth.types";
+import { PolicyGuard, RequirePermissions } from "../../auth/policy.guard";
+import { Permission } from "../../auth/permissions";
+import { AuthenticatedUser } from "../../auth/auth.types";
 
 @Controller({ path: "admin/audit-logs", version: VERSION_NEUTRAL })
 @UseGuards(AuthGuard("jwt"), PolicyGuard)

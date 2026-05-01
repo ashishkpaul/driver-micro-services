@@ -17,7 +17,7 @@ import { AdminUser } from '../src/entities/admin-user.entity';
 import { City } from '../src/entities/city.entity';
 import { Zone } from '../src/entities/zone.entity';
 import { AuditLog } from '../src/entities/audit-log.entity';
-import { PasswordService } from '../src/services/password.service';
+import { PasswordService } from '../src/shared/password.service';
 
 async function initializeSuperAdmin() {
   console.log('🚀 Initializing Superadmin...\n');

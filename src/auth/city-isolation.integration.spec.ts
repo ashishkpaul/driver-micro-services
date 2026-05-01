@@ -2,7 +2,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Driver } from '../drivers/entities/driver.entity';
 import { AdminUser, AdminRole } from '../entities/admin-user.entity';
 import { DriversService } from '../drivers/drivers.service';
-import { AdminService } from '../services/admin.service';
+import { AdminService } from '../shared/admin.service';
 
 describe('City Isolation Integration Tests', () => {
   describe('DriversService - City Isolation', () => {
