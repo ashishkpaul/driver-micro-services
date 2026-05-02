@@ -331,21 +331,26 @@ export class OffersService {
     delivery: Delivery,
     driver: Driver,
   ): Promise<any> {
-    // Simplified offer payload calculation
-    const estimatedPickupTimeMin = 10; // Simplified
-    const estimatedEarning = 100; // Simplified
+    const estimatedPickupTimeMin = 10;
+    const estimatedEarning = 100;
 
     return {
       pickupLocation: {
         lat: Number(delivery.pickupLat),
         lon: Number(delivery.pickupLon),
+        sellerName: delivery.sellerName ?? 'Store',
+        sellerAddress: delivery.sellerAddress ?? null,
       },
-      pickupStoreName: "Store Name", // Simplified
+      dropLocation: {
+        lat: Number(delivery.dropLat),
+        lon: Number(delivery.dropLon),
+      },
+      pickupStoreName: delivery.sellerName ?? 'Store',
       estimatedPickupTimeMin,
       estimatedDeliveryTime: new Date(
         Date.now() + (estimatedPickupTimeMin + 10) * 60000,
       ).toISOString(),
-      estimatedDistanceKm: 5, // Simplified
+      estimatedDistanceKm: 5,
       estimatedEarning,
     };
   }

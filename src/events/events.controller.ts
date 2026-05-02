@@ -29,6 +29,14 @@ class PickupLocationDto {
 
   @IsNumber()
   lon!: number;
+
+  @IsOptional()
+  @IsString()
+  sellerName?: string;
+
+  @IsOptional()
+  @IsString()
+  sellerAddress?: string;
 }
 
 class DropLocationDto {
@@ -138,6 +146,8 @@ export class EventsController {
           channelId: payload.channelId,
           pickupLat: payload.pickup.lat,
           pickupLon: payload.pickup.lon,
+          sellerName: payload.pickup.sellerName,
+          sellerAddress: payload.pickup.sellerAddress,
           dropLat: payload.drop.lat,
           dropLon: payload.drop.lon,
         });

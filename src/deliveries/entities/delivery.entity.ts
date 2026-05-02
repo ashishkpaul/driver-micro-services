@@ -77,6 +77,16 @@ export class Delivery {
   @IsNumber()
   pickupLon!: number;
 
+  @Column({ type: "varchar", nullable: true })
+  @IsOptional()
+  @IsString()
+  sellerName?: string;
+
+  @Column({ type: "varchar", nullable: true })
+  @IsOptional()
+  @IsString()
+  sellerAddress?: string;
+
   @Column("decimal", { precision: 10, scale: 8 })
   @IsNumber()
   dropLat!: number;

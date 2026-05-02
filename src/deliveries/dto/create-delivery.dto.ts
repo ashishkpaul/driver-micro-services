@@ -15,6 +15,14 @@ export class CreateDeliveryDto {
   @IsNumber()
   pickupLon!: number;
 
+  @IsOptional()
+  @IsString()
+  sellerName?: string;
+
+  @IsOptional()
+  @IsString()
+  sellerAddress?: string;
+
   @IsNumber()
   dropLat!: number;
 
