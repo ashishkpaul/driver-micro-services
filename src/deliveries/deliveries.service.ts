@@ -43,6 +43,12 @@ type VendureStatus =
   | "FAILED"
   | "CANCELLED";
 
+/** TypeORM returns `decimal` columns as strings at runtime; cast to number. */
+const toCoords = (lat: unknown, lon: unknown) => ({
+  lat: Number(lat),
+  lon: Number(lon),
+});
+
 @Injectable()
 export class DeliveriesService {
   private readonly logger = new Logger(DeliveriesService.name);
@@ -147,6 +153,22 @@ export class DeliveriesService {
       throw new NotFoundException(`Delivery with ID ${id} not found`);
     }
 
+    return this.normalizeCoordinates(delivery);
+  }
+
+  /** Ensure pg decimal strings are cast to numbers and nested location objects are present. */
+  private normalizeCoordinates(delivery: Delivery): Delivery {
+    if (delivery.pickupLat != null) delivery.pickupLat = Number(delivery.pickupLat);
+    if (delivery.pickupLon != null) delivery.pickupLon = Number(delivery.pickupLon);
+    if (delivery.dropLat != null)   delivery.dropLat   = Number(delivery.dropLat);
+    if (delivery.dropLon != null)   delivery.dropLon   = Number(delivery.dropLon);
+    // Attach nested shape expected by the driver PWA
+    (delivery as any).pickupLocation = delivery.pickupLat != null
+      ? { lat: delivery.pickupLat, lon: delivery.pickupLon }
+      : null;
+    (delivery as any).dropLocation = delivery.dropLat != null
+      ? { lat: delivery.dropLat, lon: delivery.dropLon }
+      : null;
     return delivery;
   }
 
@@ -218,10 +240,10 @@ export class DeliveriesService {
             assignedAt: delivery.assignedAt.toISOString(),
             // Include locations for immediate PWA map rendering
             pickupLocation: {
-              lat: delivery.pickupLat,
-              lon: delivery.pickupLon,
+              lat: Number(delivery.pickupLat),
+              lon: Number(delivery.pickupLon),
             },
-            dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
+            dropLocation: { lat: Number(delivery.dropLat), lon: Number(delivery.dropLon) },
           });
         } catch (wsErr) {
           this.logger.warn(
@@ -242,8 +264,8 @@ export class DeliveriesService {
           assignmentId,
           assignedAt:
             delivery.assignedAt?.toISOString() ?? new Date().toISOString(),
-          pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
-          dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
+          pickupLocation: { lat: Number(delivery.pickupLat), lon: Number(delivery.pickupLon) },
+          dropLocation: { lat: Number(delivery.dropLat), lon: Number(delivery.dropLon) },
         });
 
         return delivery;
@@ -635,7 +657,7 @@ export class DeliveriesService {
   }
 
   async findActiveForDriver(driverId: string): Promise<Delivery | null> {
-    return await this.deliveryRepository.findOne({
+    const delivery = await this.deliveryRepository.findOne({
       where: [
         { driverId, status: DeliveryStatus.ASSIGNED },
         { driverId, status: DeliveryStatus.PICKED_UP },
@@ -644,6 +666,8 @@ export class DeliveriesService {
       relations: ["events"],
       order: { assignedAt: "DESC" },
     });
+
+    return delivery ? this.normalizeCoordinates(delivery) : null;
   }
 
   // ---------------------------------------------------------------------------

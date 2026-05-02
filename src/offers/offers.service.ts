@@ -250,8 +250,8 @@ export class OffersService {
         driverId,
         assignmentId: savedAssignment.id,
         assignedAt: new Date().toISOString(),
-        pickupLocation: { lat: delivery.pickupLat, lon: delivery.pickupLon },
-        dropLocation: { lat: delivery.dropLat, lon: delivery.dropLon },
+        pickupLocation: { lat: Number(delivery.pickupLat), lon: Number(delivery.pickupLon) },
+        dropLocation: { lat: Number(delivery.dropLat), lon: Number(delivery.dropLon) },
       });
 
       return {
@@ -337,8 +337,8 @@ export class OffersService {
 
     return {
       pickupLocation: {
-        lat: delivery.pickupLat,
-        lon: delivery.pickupLon,
+        lat: Number(delivery.pickupLat),
+        lon: Number(delivery.pickupLon),
       },
       pickupStoreName: "Store Name", // Simplified
       estimatedPickupTimeMin,

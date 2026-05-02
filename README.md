@@ -342,29 +342,41 @@ npm run db:deploy         # Full deploy: validate → simulate → run → verif
 
 ```
 src/
-├── auth/                  # JWT, Google SSO, OTP, guards, ABAC permissions
-├── drivers/               # Driver entity, registration, capability, scoring
-├── deliveries/            # Delivery FSM, SLA monitor, OTP verification
-├── offers/                # Offer creation, acceptance, expiry
+├── admin/                 # Admin application layer
+│   ├── controllers/       # Admin REST controllers
+│   └── dto/               # Admin request DTOs
 ├── assignment/            # Driver assignment authorization
-├── websocket/             # Socket.IO gateway, proof handler, presence
-├── domain-events/         # Outbox worker, handlers, circuit breaker, DLQ
-├── dispatch-scoring/      # Multi-factor driver scoring
-├── safe-dispatch/         # Canary dispatch with scoring rollout
-├── delivery-intelligence/ # Delivery metrics, driver stats
-├── webhooks/              # Inbound Vendure webhook receiver
-├── events/                # Seller order event controller
-├── admin/                 # Admin user management
-├── controllers/           # Admin REST controllers
-├── health/                # Health checks and dashboard
-├── schema/                # Schema control plane, drift detection
-├── observability/         # OpenTelemetry, Winston, request context
-├── redis/                 # Redis service with circuit breaker
-├── push/                  # Firebase push notifications
+├── auth/                  # JWT, Google SSO, OTP, guards
+├── authorization/         # ABAC policies and authorization types
 ├── bootstrap/             # Startup orchestration, Swagger
+├── cli/                   # Internal CLI entrypoints
+├── common/                # Shared Nest helpers and utilities
 ├── config/                # TypeORM data source, naming strategies
+├── deliveries/            # Delivery FSM, SLA monitor, OTP verification
+├── delivery-intelligence/ # Delivery metrics and driver analytics
+├── dispatch-scoring/      # Multi-factor driver scoring
+├── domain-events/         # Outbox worker, handlers, circuit breaker, DLQ
+├── drivers/               # Driver entity, registration, capability, scoring
+├── entities/              # Cross-module persistence entities
+├── events/                # Vendure seller-order event controllers
+├── health/                # Health checks and dashboard
+├── interceptors/          # Request/response interceptors
 ├── migrations/            # TypeORM migration files
-└── worker/                # Standalone outbox worker entry point
+├── modules/               # Composite module wiring
+├── observability/         # OpenTelemetry, Winston, request context
+├── offers/                # Offer creation, acceptance, expiry
+├── push/                  # Firebase push notifications
+├── redis/                 # Redis service with circuit breaker
+├── safe-dispatch/         # Canary dispatch with scoring rollout
+├── schema/                # Schema control plane, drift detection
+├── shared/                # Shared constants, DTOs, and helpers
+├── test/                  # Test-only helpers and fixtures
+├── webhooks/              # Inbound Vendure webhook receiver
+├── websocket/             # Socket.IO gateway, proof handler, presence
+├── worker/                # Standalone outbox worker entry point
+├── app.module.ts          # Root Nest module
+├── main.ts                # HTTP bootstrap entrypoint
+└── worker.ts              # Standalone worker bootstrap
 ```
 
 ---
