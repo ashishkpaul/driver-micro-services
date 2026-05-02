@@ -1,62 +1,73 @@
-import { Controller, Post, Body, Get, Param, Patch, VERSION_NEUTRAL } from "@nestjs/common";
 import {
-  ApiTags,
-  ApiOkResponse,
-  ApiExtraModels,
-  getSchemaPath,
-} from "@nestjs/swagger";
-import { ApiResponseDto } from "../common/dto/api-response.dto";
+  Controller,
+  Post,
+  Body,
+  Get,
+  Param,
+  Patch,
+  Version,
+  VERSION_NEUTRAL,
+} from "@nestjs/common";
 import { OffersService } from "./offers.service";
 import { CreateOfferDto } from "./dto/create-offer.dto";
 import { AcceptOfferDto } from "./dto/accept-offer.dto";
 import { RejectOfferDto } from "./dto/reject-offer.dto";
-import { DriverOffer } from "./entities/driver-offer.entity";
 
-@ApiTags("Offers")
-@ApiExtraModels(ApiResponseDto, DriverOffer)
-@Controller({ path: "offers", version: VERSION_NEUTRAL })
+@Controller({ version: VERSION_NEUTRAL })
 export class OffersController {
   constructor(private readonly offersService: OffersService) {}
 
-  @Post()
-  @ApiOkResponse({
-    schema: {
-      allOf: [
-        { $ref: getSchemaPath(ApiResponseDto) },
-        {
-          properties: {
-            data: { $ref: getSchemaPath(DriverOffer) },
-          },
-        },
-      ],
-    },
-  })
-  async createOffer(@Body() createOfferDto: CreateOfferDto) {
-    return this.offersService.createOfferForDriver(createOfferDto);
+  @Version("2")
+  @Post("deliveries/:deliveryId/offers")
+  async createOffer(
+    @Param("deliveryId") deliveryId: string,
+    @Body() createOfferDto: CreateOfferDto,
+  ) {
+    // Override deliveryId from path parameter
+    return this.offersService.createOfferForDriver({
+      ...createOfferDto,
+      deliveryId,
+    });
   }
 
-  @Patch(":offerId/accept")
+  @Version("2")
+  @Post("drivers/:driverId/offers/:offerId/accept")
   async acceptOffer(
+    @Param("driverId") driverId: string,
     @Param("offerId") offerId: string,
     @Body() acceptOfferDto: AcceptOfferDto,
   ) {
-    return this.offersService.acceptOffer(acceptOfferDto);
+    // Override driverId from path parameter
+    return this.offersService.acceptOffer({
+      ...acceptOfferDto,
+      offerId,
+      driverId,
+    });
   }
 
-  @Patch(":offerId/reject")
+  @Version("2")
+  @Patch("drivers/:driverId/offers/:offerId/reject")
   async rejectOffer(
+    @Param("driverId") driverId: string,
     @Param("offerId") offerId: string,
     @Body() rejectOfferDto: RejectOfferDto,
   ) {
-    return this.offersService.rejectOffer(rejectOfferDto);
+    // Override driverId and offerId from path parameters
+    return this.offersService.rejectOffer({
+      ...rejectOfferDto,
+      offerId,
+      driverId,
+    });
   }
 
-  @Get("driver/:driverId")
+  @Version("2")
+  @Get("drivers/:driverId/offers")
   async getDriverOffers(@Param("driverId") driverId: string) {
     return this.offersService.getDriverOffers(driverId);
   }
 
-  @Get("delivery/:deliveryId")
+  @Version("2")
+  @Get("deliveries/:deliveryId/offers")
   async getDeliveryOffers(@Param("deliveryId") deliveryId: string) {
     return this.offersService.getDeliveryOffers(deliveryId);
   }

@@ -5,8 +5,8 @@ import { DriversModule } from "../drivers/drivers.module";
 import { DomainEventsModule } from "../domain-events/domain-events.module"; // ADDED
 
 // Controllers
+
 import { OffersController } from "./offers.controller";
-import { V2OffersController } from "./v2-offers.controller";
 
 // Services
 import { OffersService } from "./offers.service";
@@ -24,7 +24,7 @@ import { Assignment } from "../assignment/entities/assignment.entity";
     DriversModule,
     forwardRef(() => DomainEventsModule), // ADDED - wrapped in forwardRef to break circular dependency
   ],
-  controllers: [OffersController, V2OffersController],
+  controllers: [OffersController],
   providers: [OffersService],
   exports: [OffersService],
 })
