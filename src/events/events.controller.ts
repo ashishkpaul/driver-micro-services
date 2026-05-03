@@ -15,6 +15,7 @@ import { SafeDispatchService } from "../safe-dispatch/safe-dispatch.service"; //
 import { ConfigService } from "@nestjs/config";
 import {
   IsNumber,
+  IsOptional,
   ValidateNested,
   IsString,
   IsNotEmpty,
