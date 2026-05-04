@@ -172,22 +172,11 @@ export class DispatchScoringService {
     try {
       const driverStats = await this.driverStatsService.getStats(driverId);
       if (!driverStats) {
-        return false;
+        // New driver with no stats — eligible by default (bootstrap)
+        return true;
       }
 
       const thresholds = await this.getThresholds(driverId);
-
-      // Check minimum assignments threshold
-      const totalAssignments =
-        driverStats.acceptanceCount +
-        driverStats.failedDeliveries +
-        driverStats.cancelledDeliveries;
-      if (totalAssignments < thresholds.minimumAssignments) {
-        this.logger.debug(
-          `Driver ${driverId} below minimum assignments: ${totalAssignments} < ${thresholds.minimumAssignments}`,
-        );
-        return false;
-      }
 
       // Check minimum score threshold
       const currentScore = await this.getCurrentScore(driverId);
@@ -234,17 +223,8 @@ export class DispatchScoringService {
         const driverStats = allStats.get(driverId);
 
         if (!driverStats) {
-          result.set(driverId, false);
-          continue;
-        }
-
-        // Check minimum assignments threshold
-        const totalAssignments =
-          driverStats.acceptanceCount +
-          driverStats.failedDeliveries +
-          driverStats.cancelledDeliveries;
-        if (totalAssignments < thresholds.minimumAssignments) {
-          result.set(driverId, false);
+          // New driver with no stats — eligible by default (bootstrap)
+          result.set(driverId, true);
           continue;
         }
 

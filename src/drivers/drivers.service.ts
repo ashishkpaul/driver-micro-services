@@ -262,7 +262,13 @@ export class DriversService {
           `[findAvailable] Redis geo query | lat=${lat} lon=${lon} radius=${radiusKm || 5}km | redisDrivers=${redisDrivers.length} | ids=${JSON.stringify(redisDrivers.map(d => d.driverId))}`,
         );
 
-        if (!redisDrivers.length) return [];
+        if (!redisDrivers.length) {
+          // Redis has no drivers — fall back to DB with haversine distance filter
+          this.logger.warn(
+            `[findAvailable] Redis empty, falling back to DB geo query | lat=${lat} lon=${lon} radius=${radiusKm || 5}km`,
+          );
+          return this.findAvailableFromDb(lat, lon, radiusKm || 5, limit);
+        }
 
         const ids = redisDrivers.map((d) => d.driverId);
 
@@ -305,6 +311,45 @@ export class DriversService {
   async findNearestAvailable(lat: number, lon: number): Promise<Driver | null> {
     const available = await this.findAvailable(lat, lon, 5); // 5km radius
     return available.length > 0 ? available[0] : null;
+  }
+
+  private async findAvailableFromDb(
+    lat: number,
+    lon: number,
+    radiusKm: number,
+    limit: number,
+  ): Promise<Driver[]> {
+    // Haversine via raw SQL — works on any Postgres version
+    const drivers = await this.driverRepository
+      .createQueryBuilder('driver')
+      .where('driver.isActive = true')
+      .andWhere('driver.status = :status', { status: DriverStatus.AVAILABLE })
+      .andWhere('driver.registrationStatus = :rs', { rs: 'APPROVED' })
+      .andWhere('driver.currentLat IS NOT NULL')
+      .andWhere('driver.currentLon IS NOT NULL')
+      .andWhere(
+        `(6371 * acos(
+          cos(radians(:lat)) * cos(radians(driver.currentLat)) *
+          cos(radians(driver.currentLon) - radians(:lon)) +
+          sin(radians(:lat)) * sin(radians(driver.currentLat))
+        )) <= :radius`,
+        { lat, lon, radius: radiusKm },
+      )
+      .orderBy(
+        `(6371 * acos(
+          cos(radians(${lat})) * cos(radians(driver.currentLat)) *
+          cos(radians(driver.currentLon) - radians(${lon})) +
+          sin(radians(${lat})) * sin(radians(driver.currentLat))
+        ))`,
+        'ASC',
+      )
+      .take(limit)
+      .getMany();
+
+    this.logger.log(
+      `[findAvailable] DB fallback result | count=${drivers.length} | ids=${JSON.stringify(drivers.map(d => d.id))}`,
+    );
+    return drivers;
   }
 
   async getStats(driverId: string): Promise<DriverStats | null> {
